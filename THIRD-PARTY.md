@@ -4,7 +4,11 @@
 
 | 依赖 | 版本 | 许可证 | 用途 |
 |---|---|---|---|
-| _（尚无依赖；引入第一个依赖时在此登记）_ | | | |
+| [Kotlin](https://github.com/JetBrains/kotlin/blob/v2.4.20/license/LICENSE.txt)（stdlib，由 Kotlin JVM 插件带入） | 2.4.20 | Apache-2.0 | 语言运行时 |
+| [kotlin-test](https://github.com/JetBrains/kotlin/blob/v2.4.20/license/LICENSE.txt) | 2.4.20 | Apache-2.0 | `ir` 的工具链冒烟测试 |
+| [JUnit Jupiter](https://www.eclipse.org/legal/epl-2.0/)（`kotlin-test-junit5` 的测试期传递依赖，不打包进产物） | 5.10.1 | EPL-2.0 | 测试运行器 |
+
+catalog 里锁定、但尚未进入 classpath 的库（Ktor、Clikt、JSqlParser、Calcite、jOOQ 等）不在本表登记。真正添加时再补行，并以上游许可证原文为准。
 
 ## 登记规则
 

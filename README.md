@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**骨架阶段**（仓库刚建，代码未落）。路线图与设计见仓库 `docs/`。
+> 状态：**构建骨架已落地**（多模块 Gradle 可编译；引擎与血缘尚未接入）。
 
 ## 它要解决什么
 
@@ -22,7 +22,11 @@ ozml impact  --on db.t.c --depth 3          # 影响面分析
 ozml convert --from mysql --to postgresql   # 方言转换
 ```
 
-`ozml` = **ozmoz** + **lineage**。命令在 M0 落地。
+`ozml` = **ozmoz** + **lineage**。命令在 M0 落地。当前可运行的是构建本身：
+
+```bash
+./gradlew build
+```
 
 ## 设计原则
 
