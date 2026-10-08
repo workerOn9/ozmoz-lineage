@@ -15,5 +15,13 @@ subprojects {
         extensions.configure<BasePluginExtension>("base") {
             archivesName.set("ozmoz-lineage-${project.name}")
         }
+
+        // 测试约定：所有 JVM 模块共用 kotlin-test + JUnit Platform，模块脚本不必重复声明。
+        dependencies {
+            add("testImplementation", libs.kotlin.test)
+        }
+        tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+            useJUnitPlatform()
+        }
     }
 }
