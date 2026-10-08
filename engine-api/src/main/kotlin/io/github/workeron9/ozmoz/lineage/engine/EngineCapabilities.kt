@@ -23,6 +23,13 @@ public enum class Feature {
     /** 字段级血缘。 */
     FIELD_LINEAGE,
 
+    /**
+     * 可产出**引擎无关的语句语义模型**（`semantics.SemanticStatement`）——
+     * 即「作用域 / 来源 / 输出列 / 表达式」的结构化描述，供 `lineage` 模块消费。
+     * 这是列级血缘的原料，比 `AST_EXPORT` 更结构化、更少。
+     */
+    SEMANTIC_MODEL,
+
     /** 美化输出。 */
     PRETTY_PRINT,
 

@@ -5,8 +5,10 @@ import io.github.workeron9.ozmoz.lineage.engine.Feature
 import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
+import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
+import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.ir.TableRef
 import net.sf.jsqlparser.JSQLParserException
 import net.sf.jsqlparser.parser.CCJSqlParserUtil
@@ -34,6 +36,7 @@ public class JSqlParserEngine : SqlEngine {
         features = setOf(
             Feature.PARSE,
             Feature.EXTRACT_TABLES,
+            Feature.SEMANTIC_MODEL,
             Feature.PRETTY_PRINT,
             Feature.AST_EXPORT,
         ),
@@ -72,6 +75,39 @@ public class JSqlParserEngine : SqlEngine {
             root = root,
         )
     }
+
+    /**
+     * 提取**引擎无关的语句语义模型**（[SemanticStatement]）。
+     *
+     * 与 [parse] 一致：解析或提取失败**不抛异常**——解析失败返回 `Resolved.Unknown`，
+     * 不支持语义提取的语句种类（如 `MERGE`）也返回 `Resolved.Unknown`（Never-wrong）。
+     * 认不出的子表达式落进 `SqlExpr.Unknown`，提取不全时附 `jsqlparser.semantic_partial` 诊断。
+     */
+    override fun analyze(sql: String, request: ParseRequest): Resolved<SemanticStatement> {
+        if (sql.isBlank()) return Resolved.Unknown("SQL 为空，无可提取内容")
+
+        val statement: Statement = try {
+            CCJSqlParserUtil.parse(sql)
+        } catch (e: JSQLParserException) {
+            return Resolved.Unknown(parseFailureReason(sql, e), parseFailureSpan(sql, e))
+        } catch (e: RuntimeException) {
+            // 解析器内部偶发运行期异常也不得外抛（Never-wrong）。
+            return Resolved.Unknown("解析失败: ${firstLine(e.message) ?: e.javaClass.simpleName}")
+        }
+
+        return SemanticExtractor(sql).extract(statement)
+    }
+
+    /** 解析失败的机器可读原因，复用 [parse] 的位置提取逻辑。 */
+    private fun parseFailureReason(sql: String, e: JSQLParserException): String {
+        val message = e.findParseException()?.let { firstLine(it.message) }
+            ?: firstLine(e.message)
+            ?: "解析失败"
+        return "解析失败: $message"
+    }
+
+    private fun parseFailureSpan(sql: String, e: JSQLParserException) =
+        e.findParseException()?.let { JsSqlSpan.ofParseException(sql, it) }
 
     /** 解析失败：**不抛异常**，返回带 ERROR 诊断与位置的 [ParseOutcome]（Never-wrong / Lossless）。 */
     private fun failure(sql: String, e: JSQLParserException): ParseOutcome {

@@ -1,5 +1,6 @@
 package io.github.workeron9.ozmoz.lineage.engine
 
+import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 
 /**
@@ -41,4 +42,16 @@ public interface SqlEngine {
         val reason = capabilities.reason(Feature.DIALECT_RENDER) ?: "unsupported"
         return Resolved.Unknown(reason)
     }
+
+    /**
+     * 提取**语句语义模型**（作用域 / 来源 / 输出列 / 表达式）。**可选**能力。
+     *
+     * 这是 `lineage` 模块的原料：比 [parse] 的归一化树更结构化、更少，
+     * 只保留血缘需要的信息，认不出的部分落进 `SqlExpr.Unknown`，**绝不猜**。
+     *
+     * 与 [parse] 一致：解析或提取失败**不抛异常**，返回 `Resolved.Unknown(reason)`
+     * 或带诊断的模型。默认实现用类型表达「不支持」。
+     */
+    public fun analyze(sql: String, request: ParseRequest = ParseRequest.DEFAULT): Resolved<SemanticStatement> =
+        Resolved.Unknown(capabilities.reason(Feature.SEMANTIC_MODEL) ?: "unsupported")
 }
