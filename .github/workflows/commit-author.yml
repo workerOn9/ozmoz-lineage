@@ -1,0 +1,42 @@
+name: commit-author
+
+# 硬约束：提交的作者邮箱必须是 GitHub 账号的 noreply 地址。
+# 提交历史永久公开——一旦带公司邮箱提交，无法事后清理（改写历史会污染下游引用）。
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  author-email:
+    name: 校验提交作者邮箱
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 校验作者邮箱
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            range="HEAD"
+          else
+            range="${base}..HEAD"
+          fi
+          echo "检查范围：$range"
+          echo "提交列表："
+          git log --format='  %h  %an <%ae>  %s' "$range"
+          bad="$(git log --format='%H %an <%ae>' "$range" | grep -v '@users\.noreply\.github\.com>$' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::下列提交的作者邮箱不合规（必须为 *@users.noreply.github.com）："
+            echo "$bad"
+            exit 1
+          fi
+          echo "✓ 全部提交作者邮箱合规"
