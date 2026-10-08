@@ -19,9 +19,11 @@
 
 ### JSqlParser 许可证说明（重要）
 
-上游 5.4 的 POM 同时列出两份许可证，上游 README 明确写「Take your pick」（二选一）。
+上游 5.4 的 POM 同时列出两份许可证，上游 README 明确写「Dual licensed under LGPL 2.1 or the Apache License, Version 2.0. **Take your pick.**」（[README@jsqlparser-5.4](https://github.com/JSQLParser/JSqlParser/blob/jsqlparser-5.4/README.md)）。
 **本项目择 Apache-2.0 分支**，因此以**未修改的独立依赖**方式使用即可，无需 LGPL 的替换义务。
 若将来要 fork 或内联改写，必须重新评估。
+
+> 说明：该判定依据为上游 POM 双 `<license>` 节点 + README 声明 + 两份 LICENSE 全文（`LICENSE_APACHEV2` / `LICENSE_LGPLV21`）；jar 内不含许可文件，故不能只看 jar。注意上游现主推另一坐标（Manticore 构建），本项目用的是 `com.github.jsqlparser:jsqlparser`，**换坐标必须重新核许可证**。
 
 ## 测试期依赖（不打包进产物）
 
