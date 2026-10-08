@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.ir
 
+import kotlinx.serialization.Serializable
+
 /**
  * 边的类型：一条列血缘边**为什么**存在。
  *
@@ -10,6 +12,7 @@ package io.github.workeron9.ozmoz.lineage.ir
  * - [GROUP_BY] / [ORDER_BY]：分组与排序引用。
  * - [SOURCE]：表/子查询作为数据来源被整体引用（表级血缘的边）。
  */
+@Serializable
 public enum class EdgeKind {
     OUTPUT,
     PREDICATE,
@@ -25,6 +28,7 @@ public enum class EdgeKind {
  * 这是让血缘**有用**而不只是**有**的关键——下游可以据此判断「改上游会不会改变输出」
  * 「这条边是否携带条件」「样本集合是怎么被切出来的」。
  */
+@Serializable
 public enum class TransformKind {
     /** `a -> a`：直传。 */
     DIRECT,
@@ -60,6 +64,7 @@ public enum class TransformKind {
  * [confidence] 只有两种取值：**1.0**（可从权威来源确知）或通过 [Resolved.Unknown]
  * 表达的显式未知。**不存在 0.7 这种中间猜测**——这正是 Never-wrong 原则。
  */
+@Serializable
 public data class LineageEdge(
     val id: String,
     val fromColumn: ColumnRef,
@@ -75,6 +80,7 @@ public data class LineageEdge(
 }
 
 /** 作用域树里的一个作用域：一个 SELECT（或 CTE / UNION 分支）的独立命名空间。 */
+@Serializable
 public data class ScopeNode(
     val id: String,
     val kind: ScopeKind,
@@ -89,6 +95,7 @@ public data class ScopeNode(
 }
 
 /** 作用域的种类。 */
+@Serializable
 public enum class ScopeKind {
     SELECT,
     CTE,
@@ -104,6 +111,7 @@ public enum class ScopeKind {
 }
 
 /** 血缘图里的一个列节点。 */
+@Serializable
 public data class ColumnNode(
     val column: ColumnRef,
     val scopeId: String? = null,
@@ -111,6 +119,7 @@ public data class ColumnNode(
 )
 
 /** 一次分析运行的元信息，用于溯源与复现。 */
+@Serializable
 public data class Meta(
     val engineId: String? = null,
     val dialect: String? = null,
@@ -125,6 +134,7 @@ public data class Meta(
  * [unknowns] 是显式的未知集合，**公开可统计**（对应质量指标里的 unknown 率）。
  * 它不会被悄悄丢弃，也不会被猜测值填补。
  */
+@Serializable
 public data class LineageModel(
     val meta: Meta = Meta(),
     val scopes: List<ScopeNode> = emptyList(),

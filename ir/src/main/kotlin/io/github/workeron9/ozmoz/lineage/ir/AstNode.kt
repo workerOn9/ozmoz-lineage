@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.ir
 
+import kotlinx.serialization.Serializable
+
 /**
  * **归一化树**——为可视化对比而生，不是「统一 AST」。
  *
@@ -13,6 +15,7 @@ package io.github.workeron9.ozmoz.lineage.ir
  *
  * 用它做 diff 只需要 diff 两个 JSON 树，对比模块无需理解任何引擎。
  */
+@Serializable
 public data class AstNode(
     val type: String,
     val text: String,

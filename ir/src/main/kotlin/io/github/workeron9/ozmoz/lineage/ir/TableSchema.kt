@@ -1,9 +1,12 @@
 package io.github.workeron9.ozmoz.lineage.ir
 
+import kotlinx.serialization.Serializable
+
 /**
  * 一列的 schema 定义。这是**外部元数据**（JDBC / DDL / manifest）给出的权威事实，
  * 不是从 SQL 猜出来的——血缘引擎靠它做 `*` 展开、歧义消解与类型补全。
  */
+@Serializable
 public data class ColumnSchema(
     val name: String,
     val type: String? = null,
@@ -21,6 +24,7 @@ public data class ColumnSchema(
  *
  * [id] 是折叠后的稳定标识，与 [TableRef.id] 同构，用于在血缘图里对齐。
  */
+@Serializable
 public data class TableSchema(
     val table: TableRef,
     val columns: List<ColumnSchema> = emptyList(),
