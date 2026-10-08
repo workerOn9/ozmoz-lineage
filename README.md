@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**契约编码中**（`ir` 与 `engine-api` 的公共模型与 SPI 已落地并有测试；四个引擎适配器与血缘尚未接入）。
+> 状态：**解析链路已打通**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `ozml parse` 可运行；血缘、方言转换、Web UI 尚未接入）。
 
 ## 它要解决什么
 
@@ -14,19 +14,24 @@
 - **标准输出**：OpenLineage、Mermaid、Graphviz DOT、Cypher、稳定 JSON。
 - **可插拔语义层**：物理表 → 指标 → API → 报表 那一层，用插件接入。
 
-## 命令行（规划中）
+## 命令行
 
 ```bash
-ozml lineage -f sql/ --format mermaid       # 目录级血缘 → Mermaid
-ozml impact  --on db.t.c --depth 3          # 影响面分析
-ozml convert --from mysql --to postgresql   # 方言转换
+ozml parse   -f q.sql --format json|tree|ast   # 解析 → 归一化树（当前可用）
+ozml lineage -f sql/  --format mermaid         # 目录级血缘 → Mermaid（规划中）
+ozml impact  --on db.t.c --depth 3             # 影响面分析（规划中）
+ozml convert --from mysql --to postgresql      # 方言转换（规划中）
 ```
 
-`ozml` = **ozmoz** + **lineage**。命令在 M0 落地。当前可运行的是构建本身：
+`ozml` = **ozmoz** + **lineage**。
 
 ```bash
-./gradlew build
+# 从源码运行（当前可跑通）
+./gradlew :cli:installDist
+./cli/build/install/ozml/bin/ozml parse -f q.sql --format json
 ```
+
+解析失败时返回非零退出码，并把带位置（行列）的诊断打到 stderr——不会静默给出一个猜测的结果。
 
 ## 设计原则
 

@@ -1,9 +1,12 @@
 package io.github.workeron9.ozmoz.lineage.ir
 
+import kotlinx.serialization.Serializable
+
 /**
  * 表引用。同一张表在 SQL 里可能以不同写法出现（`T` / `t` / `"T"` / `db.t`），
  * [raw] 保留**原始拼写**（Lossless），[canonical] 是折叠后的规范形式（用于匹配）。
  */
+@Serializable
 public data class TableRef(
     val raw: String,
     val canonical: String,
@@ -30,6 +33,7 @@ public data class TableRef(
 /**
  * 列引用。与 [TableRef] 同理，[raw] 保原始拼写，[canonical] 供匹配。
  */
+@Serializable
 public data class ColumnRef(
     val raw: String,
     val canonical: String,

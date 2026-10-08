@@ -1,8 +1,11 @@
 package io.github.workeron9.ozmoz.lineage.ir
 
+import kotlinx.serialization.Serializable
+
 /**
  * 诊断的严重级别。
  */
+@Serializable
 public enum class Severity {
     INFO,
     WARNING,
@@ -15,6 +18,7 @@ public enum class Severity {
  * [code] 是稳定的机器可读标识（如 `parse.unexpected_token`），调用方按它分支，
  * 不要按 [message] 的文案分支。文案可以改，[code] 一旦发布即视为契约。
  */
+@Serializable
 public data class Diagnostic(
     val severity: Severity,
     val code: String,

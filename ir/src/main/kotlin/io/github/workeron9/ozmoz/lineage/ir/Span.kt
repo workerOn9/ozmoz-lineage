@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.ir
 
+import kotlinx.serialization.Serializable
+
 /**
  * 源文本中的一个位置。
  *
@@ -8,6 +10,7 @@ package io.github.workeron9.ozmoz.lineage.ir
  *
  * 这些坐标用于把诊断、边、AST 节点映射回原始 SQL（Lossless 原则）。
  */
+@Serializable
 public data class Position(
     val offset: Int,
     val line: Int,
@@ -25,6 +28,7 @@ public data class Position(
  *
  * 为 null 表示**位置未知**：调用方不得把 null 当作「从 0 开始」，也不得凭空补一个位置。
  */
+@Serializable
 public data class Span(
     val start: Position,
     val end: Position,

@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.ir
 
+import kotlinx.serialization.Serializable
+
 /**
  * Never-wrong 的类型化载体：**宁可 Unknown，也不给猜测值**。
  *
@@ -7,15 +9,18 @@ package io.github.workeron9.ozmoz.lineage.ir
  * 都必须返回 [Unknown]，而不是 null、空串或一个看起来合理的默认值。
  * 调用方的 `when` 因此被迫处理未知分支——未知不会在传播中悄悄丢失。
  */
+@Serializable
 public sealed interface Resolved<out T> {
 
     /** 已确知的结果。 */
+    @Serializable
     public data class Known<out T>(val value: T) : Resolved<T>
 
     /**
      * 明确放弃推断。[reason] 必须说明**为什么**推不出来（如 `schema 缺失`、
      * `列名有歧义: id 出现在 a, b`），它会被聚合成公开的 unknown 率指标。
      */
+    @Serializable
     public data class Unknown(
         val reason: String,
         val span: Span? = null,
