@@ -13,7 +13,7 @@
 ./gradlew :cli:test    # 只跑 CLI 模块
 ```
 
-> 构建脚本仍在落地中，本节随 M0 更新。
+JDK 由本机或 CI 提供。构建不会自动下载 JDK。依赖只从 Maven Central 与 Gradle Plugin Portal 解析；镜像若需要，放在本机 Gradle 初始化脚本里，不要写进仓库。
 
 ## 提交规范
 
