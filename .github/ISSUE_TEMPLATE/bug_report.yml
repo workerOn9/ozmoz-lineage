@@ -1,0 +1,32 @@
+name: Bug 报告
+description: 报告一个可复现的问题
+labels: ["bug"]
+body:
+  - type: textarea
+    id: phenomenon
+    attributes:
+      label: 现象与期望
+      description: 实际发生了什么？你期望发生什么？
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / commit
+      placeholder: 例如 0.1.0 或 2b8da03
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 最小复现（SQL + 命令）
+      render: sql
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境
+      placeholder: 操作系统 / JDK 版本 / 使用的引擎与方言
+    validations:
+      required: false
