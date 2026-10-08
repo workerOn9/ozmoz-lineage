@@ -1,0 +1,29 @@
+[versions]
+kotlin = "2.4.20"
+jdk = "21"
+ktor = "3.5.2"
+clikt = "5.1.0"
+serialization = "1.11.0"
+jsqlparser = "5.4"
+calcite = "1.42.0"
+antlr = "4.13.2"
+jooq = "3.21.9"
+jgrapht = "1.5.3"
+jmh = "1.37"
+
+[libraries]
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
+ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
+ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
+clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
+serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+jsqlparser = { module = "com.github.jsqlparser:jsqlparser", version.ref = "jsqlparser" }
+calcite-core = { module = "org.apache.calcite:calcite-core", version.ref = "calcite" }
+antlr-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr" }
+jooq = { module = "org.jooq:jooq", version.ref = "jooq" }
+jgrapht-core = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
+jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
