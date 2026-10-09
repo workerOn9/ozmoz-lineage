@@ -56,6 +56,15 @@ public enum class TransformKind {
 
     /** 显式放弃推断，配合 [Resolved.Unknown]。 */
     UNKNOWN,
+
+    /** `GROUP BY col`：只决定分组，不改变输出值本身。 */
+    GROUPING,
+
+    /** `ORDER BY col`：只决定行序，不改变输出值本身。 */
+    ORDERING,
+
+    /** 表 / CTE 作为**整体**被引用（表级血缘的哨兵边），不指向某个具体列。 */
+    SOURCE,
 }
 
 /**
