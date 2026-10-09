@@ -84,7 +84,7 @@ public data class Cycle(val nodeIds: List<String>)
  * 最短路径在等长时按字典序取先者。golden 测试与 UI diff 都依赖这一点。
  */
 public class LineageGraph private constructor(
-    private val edges: List<GraphEdge>,
+    private val graphEdges: List<GraphEdge>,
     /** 列 id → 列引用（用于展示名）；含表级哨兵。 */
     public val columns: Map<String, ColumnRef>,
     /** 输出列 id 集合。 */
@@ -92,10 +92,14 @@ public class LineageGraph private constructor(
 ) {
 
     /** JGraphT 支撑的邻接结构（实现细节，不出现在公共签名里）。 */
-    private val internals: GraphInternals = GraphInternals(columns.keys, edges)
+    private val internals: GraphInternals = GraphInternals(columns.keys, graphEdges)
 
     /** 全部节点 id（列 + 表级哨兵），稳定顺序（首次出现序）。 */
     public val nodeIds: Set<String> get() = columns.keys
+
+    /** 全部边，稳定顺序（按边 id、from、to、kind 排序）。 */
+    public val edges: List<GraphEdge>
+        get() = graphEdges.sortedWith(compareBy({ it.id }, { it.from }, { it.to }, { it.kind.name }))
 
     /** 该节点的展示名（列引用原文）；未知节点返回其 id。 */
     public fun label(columnId: String): String = columns[columnId]?.qualifiedName ?: columnId
@@ -105,11 +109,11 @@ public class LineageGraph private constructor(
 
     /** 出边（按边 id 升序）。 */
     public fun outgoing(columnId: String): List<GraphEdge> =
-        edges.filter { it.from == columnId }.sortedBy { it.id }
+        graphEdges.filter { it.from == columnId }.sortedBy { it.id }
 
     /** 入边（按边 id 升序）。 */
     public fun incoming(columnId: String): List<GraphEdge> =
-        edges.filter { it.to == columnId }.sortedBy { it.id }
+        graphEdges.filter { it.to == columnId }.sortedBy { it.id }
 
     /**
      * 从 [origin] 出发按 [direction] 做**广度优先**可达性 / 影响面，[depth] 限制层数（null 不限）。
@@ -165,7 +169,7 @@ public class LineageGraph private constructor(
             if (scc.size > 1) result += Cycle(normalizeCycle(scc))
         }
         // 自环（a → a）：SCC 里是单点分量，需单独补上。同一节点多条自环只算一个环。
-        val selfLoopNodes = edges.asSequence()
+        val selfLoopNodes = graphEdges.asSequence()
             .filter { it.from == it.to }
             .map { it.from }
             .distinct()

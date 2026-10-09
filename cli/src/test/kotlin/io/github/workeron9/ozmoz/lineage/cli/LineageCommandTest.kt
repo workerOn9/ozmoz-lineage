@@ -83,11 +83,11 @@ class LineageCommandTest {
 
     @Test
     fun `MERGE 端到端非零退出且不猜`() {
-        // MERGE 不建模为 SemanticStatement：analyze 返回 Unknown，CLI 以非零码退出。
+        // MERGE 不建模为 SemanticStatement：analyzeAll 跳过它，输入里没有可建模语句 → 非零退出。
         val f = tempSql("MERGE INTO t USING s ON t.id = s.id")
         val result = command.test("--file ${f.absolutePath}")
         assertEquals(1, result.statusCode)
-        assertContains(result.stderr, "semantic_unavailable")
+        assertContains(result.stderr, "no_modelable_statement")
     }
 
     @Test
