@@ -69,12 +69,13 @@ class LineageBuilderSchemaTest {
     fun `物理表星号按 schema 列清单展开为 DIRECT 边`() {
         val model = LineageBuilder.build(selectStarFrom(table("t")), schemaOf("t" to listOf("a", "b")))
 
-        assertEquals(2, model.edges.size)
-        assertTrue(model.edges.all { it.kind == EdgeKind.OUTPUT && it.transform == TransformKind.DIRECT })
-        assertEquals("t.a", model.edges[0].fromColumn.qualifiedName)
-        assertEquals("a", model.edges[0].toColumn.qualifiedName)
-        assertEquals("t.b", model.edges[1].fromColumn.qualifiedName)
-        assertEquals("*", model.edges[0].expression) // 星号原文（Lossless）
+        // 2 条 OUTPUT（星号展开）+ 2 条 SOURCE（t -> a、t -> b）。
+        assertEquals(4, model.edges.size)
+        val outputs = model.edges.filter { it.kind == EdgeKind.OUTPUT }
+        assertTrue(outputs.all { it.transform == TransformKind.DIRECT })
+        assertEquals(listOf("t.a", "t.b"), outputs.map { it.fromColumn.qualifiedName })
+        assertEquals(listOf("a", "b"), outputs.map { it.toColumn.qualifiedName })
+        assertEquals("*", outputs[0].expression) // 星号原文（Lossless）
         assertTrue(model.unknowns.none { it.reason.contains("SchemaProvider") })
     }
 
@@ -85,9 +86,11 @@ class LineageBuilderSchemaTest {
             schemaOf("s" to listOf("x"), "u" to listOf("y")),
         )
 
-        // 无限定 `*` 按来源顺序展开两张物理表。
-        assertEquals(2, model.edges.size)
-        assertEquals(listOf("s.x", "u.y"), model.edges.map { it.fromColumn.qualifiedName })
+        // 无限定 `*` 按来源顺序展开两张物理表；另有 4 条 SOURCE（s / u 各自 -> x、y）。
+        assertEquals(6, model.edges.size)
+        val outputs = model.edges.filter { it.kind == EdgeKind.OUTPUT }
+        assertEquals(listOf("s.x", "u.y"), outputs.map { it.fromColumn.qualifiedName })
+        assertEquals(4, model.edges.count { it.kind == EdgeKind.SOURCE })
     }
 
     @Test
@@ -126,12 +129,15 @@ class LineageBuilderSchemaTest {
 
         val model = LineageBuilder.build(stmt, schemaOf("t" to listOf("a")))
 
-        // 链：t.a -> c.a（CTE 体星号）、c.a -> a（顶层星号）。
+        // 链：t.a -> c.a（CTE 体星号）、c.a -> a（顶层星号）；
+        // 另有 2 条 SOURCE（t -> c.a、c -> a）。
         // 不断言边的先后顺序（那是作用域 id 分配顺序的实现细节）。
-        assertEquals(2, model.edges.size)
-        val byFrom = model.edges.associateBy { it.fromColumn.qualifiedName }
+        assertEquals(4, model.edges.size)
+        val outputs = model.edges.filter { it.kind == EdgeKind.OUTPUT }
+        val byFrom = outputs.associateBy { it.fromColumn.qualifiedName }
         assertEquals("c.a", byFrom.getValue("t.a").toColumn.qualifiedName)
         assertEquals("a", byFrom.getValue("c.a").toColumn.qualifiedName)
+        assertEquals(2, model.edges.count { it.kind == EdgeKind.SOURCE })
     }
 
     // ——— 规则 B：裸列歧义消解（schema 可证伪） ———
@@ -151,12 +157,13 @@ class LineageBuilderSchemaTest {
         )
 
         val ambiguous = LineageBuilder.build(stmt) // 无 schema：两物理来源恒为候选 → 歧义
-        assertTrue(ambiguous.edges.isEmpty())
+        // 裸列歧义 → 无 OUTPUT 边，但两个物理来源仍各发 1 条 SOURCE 边（t1 -> c、t2 -> c）。
+        assertTrue(ambiguous.edges.none { it.kind == EdgeKind.OUTPUT })
         assertTrue(ambiguous.unknowns.any { it.reason.contains("无法唯一归属") })
 
         val resolved = LineageBuilder.build(stmt, schemaOf("t1" to listOf("a"), "t2" to listOf("b", "c")))
-        assertEquals(1, resolved.edges.size)
-        assertEquals("t2.c", resolved.edges.single().fromColumn.qualifiedName)
+        val output = resolved.edges.single { it.kind == EdgeKind.OUTPUT }
+        assertEquals("t2.c", output.fromColumn.qualifiedName)
         assertTrue(resolved.unknowns.none { it.reason.contains("无法唯一归属") })
     }
 
@@ -175,7 +182,8 @@ class LineageBuilderSchemaTest {
         )
 
         val model = LineageBuilder.build(stmt, schemaOf("t1" to listOf("id"), "t2" to listOf("id")))
-        assertTrue(model.edges.isEmpty())
+        // 两张表都有该列 → 不猜，无 OUTPUT 边；SOURCE 边仍照发。
+        assertTrue(model.edges.none { it.kind == EdgeKind.OUTPUT })
         assertTrue(model.unknowns.any { it.reason.contains("无法唯一归属") })
     }
 
@@ -194,7 +202,8 @@ class LineageBuilderSchemaTest {
         )
 
         val model = LineageBuilder.build(stmt, schemaOf("t1" to listOf("a")))
-        assertTrue(model.edges.isEmpty())
+        // 裸列零候选 → 无 OUTPUT 边；物理来源仍发 1 条 SOURCE 边（t1 -> zzz）。
+        assertTrue(model.edges.none { it.kind == EdgeKind.OUTPUT })
         assertTrue(model.unknowns.any { it.reason == "来源没有列: zzz" })
     }
 
@@ -213,12 +222,13 @@ class LineageBuilderSchemaTest {
         )
 
         val model = LineageBuilder.build(stmt, schemaOf("t1" to listOf("a")))
-        assertTrue(model.edges.isEmpty())
+        // 限定引用被 schema 证伪 → 无 OUTPUT 边；物理来源仍发 1 条 SOURCE 边（t1 -> zzz）。
+        assertTrue(model.edges.none { it.kind == EdgeKind.OUTPUT })
         assertTrue(model.unknowns.any { it.reason == "来源 t1 没有列 zzz" })
 
         // 对照：schema 未收录 t1 → 无法证伪，沿用「唯一物理来源直接归属」。
         val unknownTable = LineageBuilder.build(stmt, schemaOf("other" to listOf("a")))
-        assertEquals(1, unknownTable.edges.size)
+        assertEquals(1, unknownTable.edges.count { it.kind == EdgeKind.OUTPUT })
     }
 
     // ——— 规则 A：INSERT 未声明目标列按表列定义序对齐 ———
@@ -240,9 +250,11 @@ class LineageBuilderSchemaTest {
 
         val model = LineageBuilder.build(stmt, schemaOf("src" to listOf("a", "b"), "tgt" to listOf("x", "y")))
 
-        assertEquals(2, model.edges.size)
-        assertEquals(listOf("src.a", "src.b"), model.edges.map { it.fromColumn.qualifiedName })
-        assertEquals(listOf("tgt.x", "tgt.y"), model.edges.map { it.toColumn.qualifiedName })
+        // 2 条 OUTPUT（src -> tgt.x / tgt.y）+ 2 条 SOURCE（src -> tgt.x / tgt.y）。
+        assertEquals(4, model.edges.size)
+        val outputs = model.edges.filter { it.kind == EdgeKind.OUTPUT }
+        assertEquals(listOf("src.a", "src.b"), outputs.map { it.fromColumn.qualifiedName })
+        assertEquals(listOf("tgt.x", "tgt.y"), outputs.map { it.toColumn.qualifiedName })
         assertTrue(model.unknowns.none { it.reason.contains("未声明目标列") })
     }
 
