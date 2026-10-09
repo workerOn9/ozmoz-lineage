@@ -84,7 +84,7 @@ class LineageCommandTest {
         val f = tempSql("MERGE INTO t USING s ON t.id = s.id")
         val result = command.test("--file ${f.absolutePath}")
         assertEquals(1, result.statusCode)
-        assertContains(result.stderr, "semantic_unsupported")
+        assertContains(result.stderr, "semantic_unavailable")
     }
 
     @Test

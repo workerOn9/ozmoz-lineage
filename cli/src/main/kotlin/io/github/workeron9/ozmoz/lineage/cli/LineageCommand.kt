@@ -49,7 +49,7 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         val model = when (semantic) {
             is Resolved.Known -> LineageBuilder.build(semantic.value)
             is Resolved.Unknown -> { // 引擎不支持语义提取（或解析失败）：不猜，非零码退出。
-                echo("ERROR semantic_unsupported: ${semantic.reason}", err = true)
+                echo("ERROR semantic_unavailable: ${semantic.reason}", err = true)
                 throw ProgramResult(1)
             }
         }

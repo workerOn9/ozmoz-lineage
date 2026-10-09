@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**解析链路已打通**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `ozml parse` 可运行；血缘、方言转换、Web UI 尚未接入）。
+> 状态：**列级血缘已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与三类边 + `ozml parse` / `ozml lineage` 可运行；`SchemaProvider`、方言转换、Web UI 尚未接入）。
 
 ## 它要解决什么
 
@@ -18,7 +18,7 @@
 
 ```bash
 ozml parse   -f q.sql --format json|tree|ast   # 解析 → 归一化树（当前可用）
-ozml lineage -f sql/  --format mermaid         # 目录级血缘 → Mermaid（规划中）
+ozml lineage -f q.sql --format json|edges|summary  # 列级血缘模型（当前可用）
 ozml impact  --on db.t.c --depth 3             # 影响面分析（规划中）
 ozml convert --from mysql --to postgresql      # 方言转换（规划中）
 ```
@@ -28,10 +28,22 @@ ozml convert --from mysql --to postgresql      # 方言转换（规划中）
 ```bash
 # 从源码运行（当前可跑通）
 ./gradlew :cli:installDist
-./cli/build/install/ozml/bin/ozml parse -f q.sql --format json
+./cli/build/install/ozml/bin/ozml parse   -f q.sql --format json
+./cli/build/install/ozml/bin/ozml lineage -f q.sql --format edges
 ```
 
-解析失败时返回非零退出码，并把带位置（行列）的诊断打到 stderr——不会静默给出一个猜测的结果。
+`ozml lineage` 输出列级血缘模型：`OUTPUT`（输出列的值从哪来）、`PREDICATE`（WHERE / HAVING 引用，只影响结果集）、`JOIN_KEY`（`a.id = b.id` 连接键传递）三类边，每条边带 `TransformKind`（`DIRECT` / `EXPRESSION` / `AGGREGATE` / `WINDOW` / `CASE_BRANCH` / `CONSTANT` / `JOIN_KEY` / `FILTER_PREDICATE`）：
+
+```text
+$ cat q.sql
+WITH c AS (SELECT a AS x FROM s) SELECT x FROM c
+
+$ ozml lineage -f q.sql --format edges
+e0  OUTPUT  c.x -> x  [DIRECT]  «x»
+e1  OUTPUT  s.a -> c.x  [DIRECT]  «a»
+```
+
+解析失败、或引擎不支持该语句的语义提取（如 `MERGE`）时返回非零退出码，并把带位置（行列）的诊断打到 stderr——不会静默给出一个猜测的结果。
 
 ## 设计原则
 
