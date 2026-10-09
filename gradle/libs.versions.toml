@@ -5,6 +5,7 @@ ktor = "3.5.2"
 clikt = "5.1.0"
 serialization = "1.11.0"
 jsqlparser = "5.4"
+h2         = "2.3.232"
 calcite = "1.42.0"
 antlr = "4.13.2"
 jooq = "3.21.9"
@@ -19,6 +20,7 @@ ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor"
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
 serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 jsqlparser = { module = "com.github.jsqlparser:jsqlparser", version.ref = "jsqlparser" }
+h2         = { module = "com.h2database:h2", version.ref = "h2" }
 calcite-core = { module = "org.apache.calcite:calcite-core", version.ref = "calcite" }
 antlr-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr" }
 jooq = { module = "org.jooq:jooq", version.ref = "jooq" }

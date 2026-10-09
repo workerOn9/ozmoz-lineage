@@ -10,6 +10,7 @@ import io.github.workeron9.ozmoz.lineage.engine.semantics.SelectQuery
 import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
 import io.github.workeron9.ozmoz.lineage.engine.semantics.SetOperationQuery
 import io.github.workeron9.ozmoz.lineage.engine.semantics.SourceSpec
+import io.github.workeron9.ozmoz.lineage.engine.semantics.SqlExpr
 import io.github.workeron9.ozmoz.lineage.engine.semantics.SubquerySource
 import io.github.workeron9.ozmoz.lineage.engine.semantics.TableSource
 import io.github.workeron9.ozmoz.lineage.ir.ColumnRef
@@ -358,9 +359,14 @@ private class Builder {
         }
     }
 
-    /** SELECT 列表 → 输出列。没有显式名字的输出**不猜**：跳过并记一条 [UnknownEntry]。 */
+    /**
+     * SELECT 列表 → 输出列。没有显式名字的输出**不猜**：跳过并记一条 [UnknownEntry]。
+     * `SqlExpr.Star` 例外——星号输出列的名字由**下游展开**决定（CTE / 派生的有效输出名，
+     * 或 schema 提供方的列清单），在作用域树层记「无名」只会与展开结果矛盾。
+     */
     private fun mapOutputs(outputs: List<OutputItem>): List<ColumnRef> = buildList {
         for (output in outputs) {
+            if (output.expr is SqlExpr.Star) continue
             val name = output.explicitName
             if (name == null) {
                 unknowns += UnknownEntry(reason = "输出列没有名字", span = output.span)

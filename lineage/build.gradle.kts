@@ -6,5 +6,6 @@ plugins {
 dependencies {
     api(project(":ir"))
     api(project(":engine-api"))
+    api(project(":schema"))
     implementation(libs.serialization.json)
 }

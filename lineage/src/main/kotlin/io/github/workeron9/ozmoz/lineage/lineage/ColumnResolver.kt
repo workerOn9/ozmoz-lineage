@@ -3,6 +3,7 @@ package io.github.workeron9.ozmoz.lineage.lineage
 import io.github.workeron9.ozmoz.lineage.ir.ColumnRef
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.ir.Span
+import io.github.workeron9.ozmoz.lineage.schema.SchemaProvider
 
 /**
  * 规则 B：限定符（已折叠）是否命中该来源。
@@ -37,6 +38,8 @@ internal fun matchesQualifier(source: SourcePlan, foldedQualifier: String): Bool
 internal class ColumnResolver(
     /** 集合运算容器的「有效输出」= 首个分支的有效输出（规则 A）。 */
     private val effectiveOutputs: (scopeId: String) -> List<OutputSlot>,
+    /** 可选的 schema 提供方：收录了物理来源时其列清单可**证伪**（Never-wrong 的前提）。 */
+    private val schema: SchemaProvider? = null,
 ) {
 
     /** 规则 B 的完整入口：带限定走 [resolveQualified]，裸列名走 [resolveBareAmong]。 */
@@ -63,9 +66,10 @@ internal class ColumnResolver(
     }
 
     /**
-     * 裸列名：候选 = 所有物理来源（无法证伪，恒为候选）+ 拥有该名列的
-     * CTE / 派生来源（按有效输出判定）。恰 1 候选 → 归属它（含「唯一来源是
-     * 物理表」的情形）；≥2 → Unknown「列名无法唯一归属」；0 → Unknown「来源没有列」。
+     * 裸列名：候选 = 所有物理来源 + 拥有该名列的 CTE / 派生来源（按有效输出判定）。
+     * **schema 参与消歧**：物理来源被提供方收录（列清单已知）且其中没有该列时，
+     * 不再是候选（可证伪）；未收录（查不到）的物理来源仍是候选（无法证伪，同旧规则）。
+     * 恰 1 候选 → 归属它；≥2 → Unknown「列名无法唯一归属」；0 → Unknown「来源没有列」。
      *
      * `sources` 是候选来源集合：整作用域解析传 `scope.sourcePlans`；
      * JOIN `USING` 左侧解析传「该 JOIN 之前的来源」（规则 E）。
@@ -88,9 +92,10 @@ internal class ColumnResolver(
     fun resolveInSource(name: String, span: Span?, source: SourcePlan): Resolved<ColumnRef> =
         endpointInSource(name, name, span, source)
 
-    /** 裸列名的候选判定：物理表恒为候选；CTE / 派生只有拥有该名列（按有效输出）才是候选。 */
+    /** 裸列名的候选判定：物理表恒为候选（schema 收录且没有该列时可证伪，排除）；
+     *  CTE / 派生只有拥有该名列（按有效输出）才是候选。 */
     private fun isBareCandidate(source: SourcePlan, foldedName: String): Boolean = when (source) {
-        is TableSourcePlan -> true
+        is TableSourcePlan -> schema?.table(source.table)?.let { it.column(foldedName) != null } ?: true
         is CteSourcePlan -> hasColumn(source.body.id, foldedName)
         is DerivedSourcePlan -> hasColumn(source.body.id, foldedName)
     }
@@ -100,21 +105,30 @@ internal class ColumnResolver(
 
     /**
      * 恰一命中来源 → 端点：
-     * - 物理表 → 端点 = `ColumnRef(raw=引用原文, canonical=fold(表限定名.列名), name=列名, table=表限定名)`；
+     * - 物理表 → schema 收录该表且**没有**该列 → Unknown「来源 X 没有列 Y」（可证伪）；
+     *   否则端点 = `ColumnRef(raw=引用原文, canonical=fold(表限定名.列名), name=列名, table=表限定名)`
+     *   （schema 未收录时沿用「无法证伪、直接归属」的旧规则）；
      * - CTE / 派生 → 在其 body 的有效输出里按名找（折叠）：未命中 → Unknown「来源 X 没有列 Y」；
      *   命中 → 端点 = 该输出槽的 consumerRef。
      */
     private fun endpointInSource(name: String, raw: String, span: Span?, source: SourcePlan): Resolved<ColumnRef> =
         when (source) {
-            is TableSourcePlan -> Resolved.Known(
-                ColumnRef(
-                    raw = raw,
-                    canonical = (source.table.qualifiedName + "." + name).lowercase(),
-                    name = name,
-                    table = source.table.qualifiedName,
-                    span = span,
-                ),
-            )
+            is TableSourcePlan -> {
+                val known = schema?.table(source.table)
+                if (known != null && known.column(name) == null) {
+                    Resolved.Unknown("来源 ${source.table.qualifiedName} 没有列 $name", span)
+                } else {
+                    Resolved.Known(
+                        ColumnRef(
+                            raw = raw,
+                            canonical = (source.table.qualifiedName + "." + name).lowercase(),
+                            name = name,
+                            table = source.table.qualifiedName,
+                            span = span,
+                        ),
+                    )
+                }
+            }
 
             is CteSourcePlan -> outputEndpoint(name, span, displayName = source.source.name, bodyId = source.body.id)
             is DerivedSourcePlan -> outputEndpoint(name, span, displayName = source.source.alias ?: "无别名派生表", bodyId = source.body.id)

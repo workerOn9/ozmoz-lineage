@@ -14,7 +14,10 @@ import io.github.workeron9.ozmoz.lineage.ir.EdgeKind
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.lineage.LineageBuilder
+import io.github.workeron9.ozmoz.lineage.schema.DdlFileSchemaProvider
 import java.io.File
+import java.nio.file.Path
+import kotlin.io.path.Path
 
 /**
  * `ozml lineage` —— 把一条 SQL 解析成**列级血缘模型**（`ir.LineageModel`）。
@@ -38,6 +41,11 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         .choice("json", "edges", "summary")
         .default("json")
 
+    private val schemaPath: String? by option(
+        "--schema",
+        help = "DDL 文件路径（含 CREATE TABLE），用于物理表 `*` 展开、裸列消歧与 INSERT 目标列对齐",
+    )
+
     override fun help(context: Context): String =
         "解析一条 SQL 并输出列级血缘模型（OUTPUT / PREDICATE / JOIN_KEY 三类边）。"
 
@@ -45,9 +53,10 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         val sql = readSql(file)
         val engine = engineFor(engineId)
         val semantic = engine.analyze(sql, ParseRequest(dialect = dialect))
+        val schema = schemaPath?.let { DdlFileSchemaProvider.fromFiles(id = "ddl", Path(it)) }
 
         val model = when (semantic) {
-            is Resolved.Known -> LineageBuilder.build(semantic.value)
+            is Resolved.Known -> LineageBuilder.build(semantic.value, schema)
             is Resolved.Unknown -> { // 引擎不支持语义提取（或解析失败）：不猜，非零码退出。
                 echo("ERROR semantic_unavailable: ${semantic.reason}", err = true)
                 throw ProgramResult(1)
