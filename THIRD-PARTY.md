@@ -15,6 +15,9 @@
 | [Mordant](https://github.com/ajalt/mordant)（Clikt 传递） | 3.0.2 | Apache-2.0 | 终端渲染 |
 | [colormath](https://github.com/ajalt/colormath)（Mordant 传递） | 3.6.0 | MIT | 终端颜色计算 |
 | [JNA](https://github.com/java-native-access/jna)（Mordant 传递） | 5.14.0 | LGPL-2.1-or-later / Apache-2.0 双许可 | 终端原生调用 |
+| [JGraphT core](https://github.com/jgrapht/jgrapht)（`graph`） | 1.5.3 | **LGPL-2.1 / EPL-2.0 双许可（二选一）** | 图算法（强连通分量 / 最短路 / 邻接结构） |
+| [JHeaps](https://github.com/d-michail/jheaps)（JGraphT 传递） | 0.14 | Apache-2.0 | 堆 / 优先队列（JGraphT 内部） |
+| [Apfloat](https://github.com/mtommila/apfloat)（JGraphT 传递） | 1.14.0 | MIT | 任意精度浮点（JGraphT 内部） |
 | [JetBrains annotations](https://github.com/JetBrains/java-annotations)（kotlin-stdlib 传递） | 13.0 | Apache-2.0 | 编译期注解 |
 
 ### JSqlParser 许可证说明（重要）
@@ -25,6 +28,14 @@
 
 > 说明：该判定依据为上游 POM 双 `<license>` 节点 + README 声明 + 两份 LICENSE 全文（`LICENSE_APACHEV2` / `LICENSE_LGPLV21`）；jar 内不含许可文件，故不能只看 jar。注意上游现主推另一坐标（Manticore 构建），本项目用的是 `com.github.jsqlparser:jsqlparser`，**换坐标必须重新核许可证**。
 
+### JGraphT 许可证说明（重要）
+
+上游 1.5.3 的 POM 同时列出 **LGPL-2.1** 与 **EPL-2.0** 两份许可证（[jgrapht-core-1.5.3.pom](https://repo1.maven.org/maven2/org/jgrapht/jgrapht-core/1.5.3/jgrapht-core-1.5.3.pom)）。
+**本项目择 EPL-2.0 分支**（与 JSqlParser 的 Apache-2.0 选择同理：优先非 copyleft 分支），以**未修改的独立依赖**方式使用，且 JGraphT 类型**全部封装在 `graph` 模块的 `internal` 实现里**（公共签名零 JGraphT 泄漏），
+因此既不构成衍生作品、也不影响本项目的 Apache-2.0 授权。
+
+> 与 ADR-0007「优先 Apache-2.0 以最大化内网采用」的口径**存在张力**：EPL-2.0 是弱 copyleft（文件级），本项目未修改其源码、只做依赖引用，故可用；但若将来要 fork JGraphT 或把它内联进本仓库，必须重新评估并走 ADR。这是引入 JGraphT 时明确记录下来的代价。
+
 ## 测试期依赖（不打包进产物）
 
 | 依赖 | 版本 | 许可证 | 用途 |
@@ -33,7 +44,7 @@
 | [JUnit Jupiter](https://www.eclipse.org/legal/epl-2.0/)（`kotlin-test-junit5` 传递） | 5.10.1 | EPL-2.0 | 测试运行器 |
 | [H2](https://h2database.com/html/license.html) | 2.3.232 | **MPL 2.0 / EPL 1.0 双许可（二选一）** | `schema` 的 `JdbcSchemaProvider` 实测（仅测试期，不打包） |
 
-catalog 里锁定、但尚未进入 classpath 的库（Ktor、Calcite、jOOQ、JGraphT、JMH、ANTLR 等）不在本表登记。真正添加时再补行，并以上游许可证原文为准。
+catalog 里锁定、但尚未进入 classpath 的库（Ktor、Calcite、jOOQ、JMH、ANTLR 等）不在本表登记。真正添加时再补行，并以上游许可证原文为准。
 
 ## 登记规则
 
