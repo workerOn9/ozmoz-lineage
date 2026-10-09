@@ -8,11 +8,9 @@ dependencies {
     implementation(project(":ir"))
     implementation(project(":engine-api"))
     implementation(project(":engine-jsqlparser"))
+    implementation(project(":lineage"))
     implementation(libs.clikt)
     implementation(libs.serialization.json)
-
-    // 端到端测试：真实引擎产出语义模型 → lineage 建作用域树。仅测试作用域使用。
-    testImplementation(project(":lineage"))
 }
 
 application {

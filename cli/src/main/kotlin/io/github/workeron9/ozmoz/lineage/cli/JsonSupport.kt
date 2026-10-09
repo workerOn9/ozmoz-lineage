@@ -3,6 +3,7 @@ package io.github.workeron9.ozmoz.lineage.cli
 import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
+import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.TableRef
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -23,6 +24,9 @@ internal object JsonSupport {
 
     fun encodeParseReport(outcome: ParseOutcome): String =
         json.encodeToString(ParseReport.serializer(), ParseReport.from(outcome))
+
+    fun encodeLineageModel(model: LineageModel): String =
+        json.encodeToString(LineageModel.serializer(), model)
 }
 
 /** `ozml parse --format json` 的稳定输出形状。 */
