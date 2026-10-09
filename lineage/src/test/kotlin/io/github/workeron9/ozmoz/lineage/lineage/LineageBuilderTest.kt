@@ -84,11 +84,15 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(stmt)
 
-        assertEquals(1, model.edges.size)
+        // 1 条 OUTPUT（t.a -> a）+ 1 条 SOURCE（表级哨兵 t -> a）。
+        assertEquals(2, model.edges.size)
         val edge = edgeOf(model, "t.a", "a")
         assertEquals(EdgeKind.OUTPUT, edge.kind)
         assertEquals(TransformKind.DIRECT, edge.transform)
         assertEquals("a", edge.expression)
+        val source = model.edges.single { it.kind == EdgeKind.SOURCE }
+        assertEquals("t", source.fromColumn.id)
+        assertNull(source.fromColumn.table) // 表级哨兵无列限定
 
         val output = model.columns.single { it.column.id == "a" }
         assertTrue(output.isOutput)
@@ -117,7 +121,8 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(stmt)
 
-        assertEquals(2, model.edges.size)
+        // 2 条 OUTPUT + 1 条 SOURCE（t -> x）。
+        assertEquals(3, model.edges.size)
         for (from in listOf("t.a", "t.b")) {
             val edge = edgeOf(model, from, "x")
             assertEquals(EdgeKind.OUTPUT, edge.kind)
@@ -149,7 +154,7 @@ class LineageBuilderTest {
         assertEquals("SUM(b)", sumEdge.expression)
 
         // COUNT(*)：聚合与上游无关，`*` 不给上游 → 无 OUTPUT 边，但列节点仍在。
-        assertTrue(model.edges.none { it.toColumn.id == "c" })
+        assertTrue(model.edges.none { it.kind == EdgeKind.OUTPUT && it.toColumn.id == "c" })
         val node = model.columns.single { it.column.id == "c" }
         assertTrue(node.isOutput)
     }
@@ -175,7 +180,8 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(stmt)
 
-        assertEquals(2, model.edges.size)
+        // 2 条 OUTPUT + 1 条 SOURCE（t -> rn）。
+        assertEquals(3, model.edges.size)
         for (from in listOf("t.d", "t.o")) {
             val edge = edgeOf(model, from, "rn")
             assertEquals(TransformKind.WINDOW, edge.transform)
@@ -209,7 +215,8 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(stmt)
 
-        assertEquals(3, model.edges.size)
+        // 3 条 OUTPUT + 1 条 SOURCE（t -> x）。
+        assertEquals(4, model.edges.size)
         for (from in listOf("t.a", "t.b", "t.c")) {
             val edge = edgeOf(model, from, "x")
             assertEquals(TransformKind.CASE_BRANCH, edge.transform)
@@ -231,7 +238,9 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(stmt)
 
-        assertEquals(0, model.edges.size)
+        // 字面量无 OUTPUT 边，但来源表仍发 1 条 SOURCE 边（t -> x）。
+        assertEquals(1, model.edges.size)
+        assertEquals(EdgeKind.SOURCE, model.edges.single().kind)
         val node = model.columns.single { it.column.id == "x" }
         assertTrue(node.isOutput)
         assertEquals("s0", node.scopeId)
@@ -259,8 +268,9 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(SemanticStatement(kind = StatementKind.SELECT, query = outer))
 
-        assertEquals(2, model.edges.size)
-        for (edge in model.edges) {
+        // 2 条 OUTPUT 链 + 2 条 SOURCE（t -> c.x、c -> x）。
+        assertEquals(4, model.edges.size)
+        for (edge in model.edges.filter { it.kind == EdgeKind.OUTPUT }) {
             assertEquals(TransformKind.DIRECT, edge.transform)
         }
         edgeOf(model, "t.a", "c.x")
@@ -294,7 +304,8 @@ class LineageBuilderTest {
         )
         val alignedModel = LineageBuilder.build(SemanticStatement(kind = StatementKind.SELECT, query = alignedOuter))
 
-        assertEquals(2, alignedModel.edges.count { it.toColumn.id == "c.p" })
+        // 两条 OUTPUT 边到 c.p（t.a / t.b）；SOURCE 边也指向 c.p，需按 kind 过滤。
+        assertEquals(2, alignedModel.edges.count { it.kind == EdgeKind.OUTPUT && it.toColumn.id == "c.p" })
         val expression = edgeOf(alignedModel, "t.a", "c.p")
         assertEquals(TransformKind.EXPRESSION, expression.transform)
         assertEquals("c.p", expression.toColumn.canonical)
@@ -345,7 +356,8 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(SemanticStatement(kind = StatementKind.SELECT, query = outer))
 
-        assertEquals(2, model.edges.size)
+        // 2 条 OUTPUT 链 + 1 条 SOURCE（t -> d.x；派生表来源 d 无表身份，不发 SOURCE）。
+        assertEquals(3, model.edges.size)
         edgeOf(model, "t.a", "d.x")
         val expansion = edgeOf(model, "d.x", "x")
         assertEquals(TransformKind.DIRECT, expansion.transform)
@@ -473,8 +485,9 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(stmt)
 
-        assertEquals(2, model.edges.size)
-        assertEquals(listOf("e0", "e1"), model.edges.map { it.id })
+        // 2 条 OUTPUT + 2 条 SOURCE（src -> tgt.x、src -> tgt.y）。OUTPUT 仍占 e0、e1。
+        assertEquals(4, model.edges.size)
+        assertEquals(listOf("e0", "e1"), model.edges.filter { it.kind == EdgeKind.OUTPUT }.map { it.id })
         val first = edgeOf(model, "src.a", "tgt.x")
         assertEquals(EdgeKind.OUTPUT, first.kind)
         assertEquals(TransformKind.DIRECT, first.transform)
@@ -549,7 +562,8 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(stmt)
 
-        assertEquals(4, model.edges.size)
+        // 4 条 OUTPUT + 4 条 SOURCE（每分支 src -> tgt.x / tgt.y）。
+        assertEquals(8, model.edges.size)
         edgeOf(model, "src1.a", "tgt.x")
         edgeOf(model, "src1.b", "tgt.y")
         edgeOf(model, "src2.c", "tgt.x")
@@ -590,7 +604,8 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(SemanticStatement(kind = StatementKind.SELECT, query = outer))
 
-        assertEquals(2, model.edges.count { it.toColumn.id == "c.a" })
+        // 两条 OUTPUT 边到 c.a（t1.a / t2.b）；SOURCE 边也指向 c.a，需按 kind 过滤。
+        assertEquals(2, model.edges.count { it.kind == EdgeKind.OUTPUT && it.toColumn.id == "c.a" })
         edgeOf(model, "t1.a", "c.a")
         edgeOf(model, "t2.b", "c.a")
         edgeOf(model, "c.a", "a")
@@ -728,7 +743,8 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(stmt)
 
-        assertEquals(3, model.edges.size)
+        // 2 OUTPUT + 1 JOIN_KEY + 4 SOURCE（x / y 各自 -> a、b）。
+        assertEquals(7, model.edges.size)
         val joinEdge = model.edges.single { it.kind == EdgeKind.JOIN_KEY }
         assertEquals("x.id", joinEdge.fromColumn.id)
         assertEquals("y.id", joinEdge.toColumn.id)
@@ -818,7 +834,8 @@ class LineageBuilderTest {
 
         val model = LineageBuilder.build(stmt)
 
-        assertEquals(3, model.edges.size)
+        // 1 OUTPUT + 2 PREDICATE + 2 SOURCE（t / t2 -> x）。
+        assertEquals(5, model.edges.size)
         assertTrue(model.edges.none { it.kind == EdgeKind.JOIN_KEY })
         val predicates = model.edges.filter { it.kind == EdgeKind.PREDICATE }
         assertEquals(setOf("t.a", "t2.b"), predicates.map { it.fromColumn.id }.toSet())
@@ -869,7 +886,7 @@ class LineageBuilderTest {
                 ),
             ),
         )
-        assertEquals("t.a", sole.edges.single().fromColumn.id)
+        assertEquals("t.a", sole.edges.single { it.kind == EdgeKind.OUTPUT }.fromColumn.id)
     }
 
     @Test
@@ -888,8 +905,10 @@ class LineageBuilderTest {
         val model = LineageBuilder.build(stmt)
 
         assertTrue(model.unknowns.any { it.reason == "限定名未命中来源: z" })
-        assertEquals(1, model.edges.size)
-        assertEquals(EdgeKind.OUTPUT, model.edges.single().kind)
+        // 1 条 OUTPUT + 1 条 SOURCE（t -> x）；失败的 WHERE 引用不发 PREDICATE 边。
+        assertEquals(2, model.edges.size)
+        assertEquals(EdgeKind.OUTPUT, model.edges.single { it.kind == EdgeKind.OUTPUT }.kind)
+        assertTrue(model.edges.none { it.kind == EdgeKind.PREDICATE })
     }
 
     // ——— 规则 F / G：组装与确定性 ———
@@ -941,5 +960,211 @@ class LineageBuilderTest {
         assertEquals(first, second)
         // 边 id 按分配顺序严格递增。
         assertEquals(first.edges.map { it.id }, first.edges.indices.map { "e$it" })
+    }
+
+    // ——— 规则 E：GROUP_BY / ORDER_BY / SOURCE 三类边 ———
+
+    @Test
+    fun `GROUP BY 引用列连到全部输出列 标 GROUPING`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = select(
+                ScopeSpec(
+                    kind = ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t"))),
+                    groupBy = listOf(SqlExpr.Column(col("a"))),
+                    outputs = listOf(
+                        OutputItem(SqlExpr.Column(col("a"))),
+                        OutputItem(SqlExpr.Function("SUM", listOf(SqlExpr.Column(col("b"))), raw = "SUM(b)", span = null), alias = "s"),
+                    ),
+                ),
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt)
+
+        // 每个 GROUP BY 引用端点 → 对每个有名输出列各 1 条（a 与 s 两条）。
+        val groupEdges = model.edges.filter { it.kind == EdgeKind.GROUP_BY }
+        assertEquals(2, groupEdges.size)
+        assertEquals(setOf("a", "s"), groupEdges.map { it.toColumn.id }.toSet())
+        assertTrue(groupEdges.all { it.fromColumn.id == "t.a" && it.transform == TransformKind.GROUPING })
+        assertTrue(groupEdges.all { it.expression == "a" })
+    }
+
+    @Test
+    fun `ORDER BY 引用列连到全部输出列 标 ORDERING`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = select(
+                ScopeSpec(
+                    kind = ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t"))),
+                    orderBy = listOf(SqlExpr.Column(col("a"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a")))),
+                ),
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt)
+
+        val orderEdges = model.edges.filter { it.kind == EdgeKind.ORDER_BY }
+        assertEquals(1, orderEdges.size)
+        assertEquals("t.a", orderEdges.single().fromColumn.id)
+        assertEquals("a", orderEdges.single().toColumn.id)
+        assertEquals(TransformKind.ORDERING, orderEdges.single().transform)
+    }
+
+    @Test
+    fun `GROUP BY 引用解析失败 记 Unknown 不发 GROUP_BY 边`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = select(
+                ScopeSpec(
+                    kind = ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t"))),
+                    groupBy = listOf(SqlExpr.Column(col("z", table = "z"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a")))),
+                ),
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt)
+
+        assertTrue(model.edges.none { it.kind == EdgeKind.GROUP_BY })
+        assertTrue(model.unknowns.any { it.reason == "限定名未命中来源: z" })
+        // 失败不影响 OUTPUT / SOURCE：值血缘与表级血缘照发。
+        assertEquals(1, model.edges.count { it.kind == EdgeKind.OUTPUT })
+        assertEquals(1, model.edges.count { it.kind == EdgeKind.SOURCE })
+    }
+
+    @Test
+    fun `物理表来源产 SOURCE 表级哨兵边 哨兵不是列节点`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = select(
+                selectScope(
+                    sources = listOf(TableSource(table("t"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a")))),
+                ),
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt)
+
+        val source = model.edges.single { it.kind == EdgeKind.SOURCE }
+        assertEquals(TransformKind.SOURCE, source.transform)
+        assertEquals("t", source.fromColumn.id)
+        assertNull(source.fromColumn.table) // 表级哨兵无列限定
+        assertEquals("a", source.toColumn.id)
+        // 哨兵是表不是列 → 不得出现在 columns 里。
+        assertTrue(model.columns.none { it.column.id == "t" })
+    }
+
+    @Test
+    fun `CTE 引用产 SOURCE 边 派生表不发 SOURCE`() {
+        val cteBody = select(
+            selectScope(
+                kind = ScopeKind.CTE,
+                sources = listOf(TableSource(table("s"))),
+                outputs = listOf(OutputItem(SqlExpr.Column(col("a")), alias = "x")),
+            ),
+            raw = "SELECT a AS x FROM s",
+        )
+        val cteStmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = select(
+                selectScope(
+                    sources = listOf(TableSource(table("c"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("x")))),
+                ),
+                ctes = listOf(CteSpec(name = "c", query = cteBody)),
+            ),
+        )
+        val cteModel = LineageBuilder.build(cteStmt)
+
+        // CTE 体：s -> c.x；顶层：c -> x。CTE 引用有表身份，两条 SOURCE 都发。
+        assertEquals(2, cteModel.edges.count { it.kind == EdgeKind.SOURCE })
+        assertEquals(setOf("s", "c"), cteModel.edges.filter { it.kind == EdgeKind.SOURCE }.map { it.fromColumn.id }.toSet())
+
+        // 派生表：顶层来源无表身份 → 不发 SOURCE；只有派生体里的 t 发一条。
+        val derivedStmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = select(
+                selectScope(
+                    sources = listOf(
+                        SubquerySource(
+                            query = select(
+                                selectScope(
+                                    sources = listOf(TableSource(table("t"))),
+                                    outputs = listOf(OutputItem(SqlExpr.Column(col("a")), alias = "x")),
+                                ),
+                                raw = "SELECT a AS x FROM t",
+                            ),
+                            alias = "d",
+                            raw = "(SELECT a AS x FROM t) AS d",
+                        ),
+                    ),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("x")))),
+                ),
+            ),
+        )
+        val derivedModel = LineageBuilder.build(derivedStmt)
+
+        val derivedSourceEdges = derivedModel.edges.filter { it.kind == EdgeKind.SOURCE }
+        assertEquals(1, derivedSourceEdges.size)
+        assertEquals("t", derivedSourceEdges.single().fromColumn.id)
+    }
+
+    @Test
+    fun `自连接 SOURCE 边按哨兵去重`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = select(
+                selectScope(
+                    sources = listOf(TableSource(table("t", alias = "x")), TableSource(table("t", alias = "y"))),
+                    joins = listOf(
+                        JoinSpec(
+                            type = "INNER",
+                            right = TableSource(table("t", alias = "y")),
+                            on = listOf(SqlExpr.BinaryOp("=", SqlExpr.Column(col("id", "x")), SqlExpr.Column(col("id", "y")), raw = "x.id = y.id", span = null)),
+                        ),
+                    ),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a", "x")))),
+                ),
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt)
+
+        // x 与 y 的哨兵限定名同为 t → 同「哨兵 → 输出」只发 1 条。
+        assertEquals(1, model.edges.count { it.kind == EdgeKind.SOURCE })
+    }
+
+    @Test
+    fun `集合运算容器承载 ORDER BY 无输出不发 ORDER_BY 边`() {
+        fun branch(alias: String) = select(
+            selectScope(
+                kind = ScopeKind.UNION_BRANCH,
+                sources = listOf(TableSource(table(alias))),
+                outputs = listOf(OutputItem(SqlExpr.Column(col("a")))),
+            ),
+            raw = "SELECT a FROM $alias",
+        )
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SetOperationQuery(
+                op = "UNION ALL",
+                branches = listOf(branch("t1"), branch("t2")),
+                orderBy = listOf(SqlExpr.Column(col("a"))),
+                raw = "SELECT a FROM t1 UNION ALL SELECT a FROM t2 ORDER BY a",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt)
+
+        // 容器无输出 → 不发 ORDER_BY 边（容器无源，解析亦无从命中）。
+        assertTrue(model.edges.none { it.kind == EdgeKind.ORDER_BY })
+        // 两个分支各自发 SOURCE。
+        assertEquals(2, model.edges.count { it.kind == EdgeKind.SOURCE })
     }
 }

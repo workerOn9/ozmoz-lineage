@@ -56,6 +56,15 @@ public enum class TransformKind {
 
     /** 显式放弃推断，配合 [Resolved.Unknown]。 */
     UNKNOWN,
+
+    /** `GROUP BY col`：只决定分组，不改变输出值本身。 */
+    GROUPING,
+
+    /** `ORDER BY col`：只决定行序，不改变输出值本身。 */
+    ORDERING,
+
+    /** 表 / CTE 作为**整体**被引用（表级血缘的哨兵边），不指向某个具体列。 */
+    SOURCE,
 }
 
 /**
@@ -110,12 +119,21 @@ public enum class ScopeKind {
     ROOT,
 }
 
-/** 血缘图里的一个列节点。 */
+/**
+ * 血缘图里的一个列节点。
+ *
+ * [type] / [nullable] 是**元数据补全**：只有在 [io.github.workeron9.ozmoz.lineage.schema.SchemaProvider]
+ * 明确收录了该列时才有值，其余一律为 null——**不从 SQL 猜类型**（Never-wrong）。
+ */
 @Serializable
 public data class ColumnNode(
     val column: ColumnRef,
     val scopeId: String? = null,
     val isOutput: Boolean = false,
+    /** 权威来源给出的列类型（如 `INT` / `DECIMAL (7, 2)`）；未知为 null。 */
+    val type: String? = null,
+    /** 权威来源给出的可空性；未知为 null。 */
+    val nullable: Boolean? = null,
 )
 
 /** 一次分析运行的元信息，用于溯源与复现。 */

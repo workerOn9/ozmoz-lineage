@@ -18,6 +18,6 @@ public class OzmlCommand : CliktCommand(name = "ozml") {
 
 public fun main(args: Array<String>) {
     OzmlCommand()
-        .subcommands(ParseCommand(), LineageCommand())
+        .subcommands(ParseCommand(), LineageCommand(), ImpactCommand())
         .main(args)
 }

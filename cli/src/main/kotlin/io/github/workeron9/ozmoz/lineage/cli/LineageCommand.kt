@@ -10,6 +10,7 @@ import com.github.ajalt.clikt.parameters.types.choice
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
+import io.github.workeron9.ozmoz.lineage.format.LineageExporters
 import io.github.workeron9.ozmoz.lineage.ir.EdgeKind
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
@@ -37,8 +38,11 @@ public class LineageCommand : CliktCommand(name = "lineage") {
     private val file: String by option("-f", "--file", help = "SQL 文件路径，`-` 表示从标准输入读取")
         .required()
 
-    private val format: String by option("--format", help = "输出格式：json / edges / summary")
-        .choice("json", "edges", "summary")
+    private val format: String by option(
+        "--format",
+        help = "输出格式：json / edges / summary / openlineage / mermaid / dot / cypher",
+    )
+        .choice("json", "edges", "summary", "openlineage", "mermaid", "dot", "cypher")
         .default("json")
 
     private val schemaPath: String? by option(
@@ -47,7 +51,7 @@ public class LineageCommand : CliktCommand(name = "lineage") {
     )
 
     override fun help(context: Context): String =
-        "解析一条 SQL 并输出列级血缘模型（OUTPUT / PREDICATE / JOIN_KEY 三类边）。"
+        "解析一条 SQL 并输出列级血缘模型（OUTPUT / PREDICATE / JOIN_KEY / GROUP_BY / ORDER_BY / SOURCE 六类边）。"
 
     override fun run() {
         val sql = readSql(file)
@@ -66,7 +70,16 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         when (format) {
             "edges" -> echo(renderEdges(model))
             "summary" -> echo(renderSummary(model))
-            else -> echo(JsonSupport.encodeLineageModel(model))
+            "json" -> echo(JsonSupport.encodeLineageModel(model))
+            // 其余交给 format 模块的导出器注册表（id 与 --format 取值同名）。
+            else -> {
+                val exporter = LineageExporters.byId(format)
+                if (exporter == null) {
+                    echo("ERROR unknown_format: $format", err = true)
+                    throw ProgramResult(1)
+                }
+                echo(exporter.exporter.export(model))
+            }
         }
     }
 

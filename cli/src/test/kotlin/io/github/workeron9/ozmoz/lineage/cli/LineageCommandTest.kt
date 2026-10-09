@@ -38,10 +38,11 @@ class LineageCommandTest {
     fun `CTE 端到端产 DIRECT 链与列节点`() {
         val model = analyze("WITH c AS (SELECT a AS x FROM s) SELECT x FROM c")
 
-        // 两条 DIRECT 边成链：s.a -> c.x（CTE 体）、c.x -> x（顶层）。
-        assertEquals(2, model.edges.size)
-        assertTrue(model.edges.all { it.kind == EdgeKind.OUTPUT && it.transform == TransformKind.DIRECT })
-        val chain = model.edges.associateBy { it.fromColumn.qualifiedName }
+        // 两条 DIRECT 边成链：s.a -> c.x（CTE 体）、c.x -> x（顶层）；另有 2 条 SOURCE 边。
+        val outputs = model.edges.filter { it.kind == EdgeKind.OUTPUT }
+        assertEquals(2, outputs.size)
+        assertTrue(outputs.all { it.transform == TransformKind.DIRECT })
+        val chain = outputs.associateBy { it.fromColumn.qualifiedName }
         assertEquals("c.x", chain.getValue("s.a").toColumn.qualifiedName)
         assertEquals("x", chain.getValue("c.x").toColumn.qualifiedName)
         assertTrue(model.columns.any { it.column.qualifiedName == "s.a" })
@@ -52,10 +53,11 @@ class LineageCommandTest {
     fun `星号展开 CTE 端到端产链`() {
         val model = analyze("WITH c AS (SELECT a FROM s) SELECT * FROM c")
 
-        // 展开成链：s.a -> c.a（CTE 体）、c.a -> a（顶层，星号原文）。
-        assertEquals(2, model.edges.size)
-        assertTrue(model.edges.all { it.transform == TransformKind.DIRECT })
-        assertEquals("*", model.edges.single { it.fromColumn.qualifiedName == "c.a" }.expression)
+        // 展开成链：s.a -> c.a（CTE 体）、c.a -> a（顶层，星号原文）；另有 2 条 SOURCE 边。
+        val outputs = model.edges.filter { it.kind == EdgeKind.OUTPUT }
+        assertEquals(2, outputs.size)
+        assertTrue(outputs.all { it.transform == TransformKind.DIRECT })
+        assertEquals("*", outputs.single { it.fromColumn.qualifiedName == "c.a" }.expression)
     }
 
     @Test
@@ -115,10 +117,10 @@ class LineageCommandTest {
 
         val model = analyze("SELECT * FROM store_sales", schemaDdl = ddl)
 
-        // 星号展开成两条 DIRECT 边，不再记「需要 SchemaProvider」的 unknown。
-        assertEquals(2, model.edges.size)
+        // 星号展开成两条 DIRECT 边（另有 2 条 SOURCE），不再记「需要 SchemaProvider」的 unknown。
+        val outputs = model.edges.filter { it.kind == EdgeKind.OUTPUT }
         assertEquals(listOf("store_sales.ss_sold_date_sk", "store_sales.ss_quantity"),
-            model.edges.map { it.fromColumn.qualifiedName })
+            outputs.map { it.fromColumn.qualifiedName })
         assertTrue(model.unknowns.none { it.reason.contains("SchemaProvider") })
     }
 
@@ -129,8 +131,39 @@ class LineageCommandTest {
         val result = command.test("--file ${sql.absolutePath} --schema ${ddl.absolutePath} --format summary")
 
         assertEquals(0, result.statusCode)
-        assertContains(result.stdout, "edges: 1")
+        assertContains(result.stdout, "edges: 2") // 1 OUTPUT + 1 SOURCE
         assertContains(result.stdout, "unknowns: 0")
+    }
+
+    @Test
+    fun `format 模块导出器经 --format 可用`() {
+        val sql = tempSql("SELECT a FROM t")
+
+        val mermaid = command.test("--file ${sql.absolutePath} --format mermaid")
+        assertEquals(0, mermaid.statusCode)
+        assertContains(mermaid.stdout, "flowchart LR")
+        assertContains(mermaid.stdout, "OUTPUT/DIRECT")
+
+        val dot = command.test("--file ${sql.absolutePath} --format dot")
+        assertEquals(0, dot.statusCode)
+        assertContains(dot.stdout, "digraph lineage")
+
+        val cypher = command.test("--file ${sql.absolutePath} --format cypher")
+        assertEquals(0, cypher.statusCode)
+        assertContains(cypher.stdout, "MERGE")
+
+        val openlineage = command.test("--file ${tempSql("INSERT INTO tgt (x) SELECT a FROM t").absolutePath} --format openlineage")
+        assertEquals(0, openlineage.statusCode)
+        assertContains(openlineage.stdout, "columnLineage")
+        assertContains(openlineage.stdout, "\"subtype\": \"IDENTITY\"")
+    }
+
+    @Test
+    fun `未知 format 非零退出`() {
+        val sql = tempSql("SELECT a FROM t")
+        val result = command.test("--file ${sql.absolutePath} --format nosuch")
+        // Clikt 的 choice 校验会先拦下未注册值，退出码非 0。
+        assertTrue(result.statusCode != 0)
     }
 
     /** 真实引擎分析 → 列级血缘模型（与 LineagePipelineTest 同一组合根模式）。 */

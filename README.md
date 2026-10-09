@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与三类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `ozml parse` / `ozml lineage` 可运行；方言转换、Web UI 尚未接入）。
+> 状态：**列级血缘 + 图算法 + 导出已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` 可运行；方言转换、Web UI 尚未接入）。
 
 ## 它要解决什么
 
@@ -17,11 +17,12 @@
 ## 命令行
 
 ```bash
-ozml parse   -f q.sql --format json|tree|ast   # 解析 → 归一化树（当前可用）
-ozml lineage -f q.sql --format json|edges|summary  # 列级血缘模型（当前可用）
-ozml lineage -f q.sql --schema schema.sql      # 喂 DDL 元数据：物理表 * 展开、列消歧、INSERT 对齐（当前可用）
-ozml impact  --on db.t.c --depth 3             # 影响面分析（规划中）
-ozml convert --from mysql --to postgresql      # 方言转换（规划中）
+ozml parse   -f q.sql --format json|tree|ast          # 解析 → 归一化树（当前可用）
+ozml lineage -f q.sql --format json|edges|summary     # 列级血缘模型（当前可用）
+ozml lineage -f q.sql --format openlineage|mermaid|dot|cypher  # 导出（当前可用）
+ozml lineage -f q.sql --schema schema.sql             # 喂 DDL 元数据：物理表 * 展开、列消歧、INSERT 对齐（当前可用）
+ozml impact  -f q.sql --on db.t.c --depth 3           # 上溯 / 下溯 / 影响面（当前可用）
+ozml convert --from mysql --to postgresql             # 方言转换（规划中）
 ```
 
 `ozml` = **ozmoz** + **lineage**。
@@ -31,18 +32,28 @@ ozml convert --from mysql --to postgresql      # 方言转换（规划中）
 ./gradlew :cli:installDist
 ./cli/build/install/ozml/bin/ozml parse   -f q.sql --format json
 ./cli/build/install/ozml/bin/ozml lineage -f q.sql --format edges
+./cli/build/install/ozml/bin/ozml lineage -f q.sql --format mermaid
+./cli/build/install/ozml/bin/ozml impact  -f q.sql --on db.t.c --direction upstream
 ```
 
-`ozml lineage` 输出列级血缘模型：`OUTPUT`（输出列的值从哪来）、`PREDICATE`（WHERE / HAVING 引用，只影响结果集）、`JOIN_KEY`（`a.id = b.id` 连接键传递）三类边，每条边带 `TransformKind`（`DIRECT` / `EXPRESSION` / `AGGREGATE` / `WINDOW` / `CASE_BRANCH` / `CONSTANT` / `JOIN_KEY` / `FILTER_PREDICATE`）：
+`ozml lineage` 输出列级血缘模型，共**六类边**：`OUTPUT`（输出列的值从哪来）、`PREDICATE`（WHERE / HAVING 引用，只影响结果集）、`JOIN_KEY`（`a.id = b.id` 连接键传递）、`GROUP_BY`（分组引用）、`ORDER_BY`（排序引用）、`SOURCE`（表级血缘：表 / CTE 作为整体被引用）。每条边带 `TransformKind`（`DIRECT` / `EXPRESSION` / `AGGREGATE` / `WINDOW` / `CASE_BRANCH` / `CONSTANT` / `JOIN_KEY` / `FILTER_PREDICATE` / `GROUPING` / `ORDERING` / `SOURCE`）：
 
 ```text
 $ cat q.sql
 WITH c AS (SELECT a AS x FROM s) SELECT x FROM c
 
 $ ozml lineage -f q.sql --format edges
-e0  OUTPUT  c.x -> x  [DIRECT]  «x»
-e1  OUTPUT  s.a -> c.x  [DIRECT]  «a»
+e0  OUTPUT  s.a -> c.x  [DIRECT]  «a»
+e1  OUTPUT  c.x -> x  [DIRECT]  «x»
+e2  SOURCE  s -> c.x  [SOURCE]
+e3  SOURCE  c -> x  [SOURCE]
 ```
+
+`GROUP_BY` / `ORDER_BY` 与 `PREDICATE` 同形：表达式引用的列 → 本作用域每个有名输出列各一条边。`SOURCE` 是**表级血缘**——每个有表身份的来源（物理表 / CTE 引用）经一个表级哨兵节点连到输出列（派生表无表身份，不发 `SOURCE` 边）。列节点还会在 `SchemaProvider` 明确收录「表 + 列」时补上 `type` / `nullable`，否则留空（不猜类型）。
+
+`ozml lineage --format openlineage|mermaid|dot|cypher` 走 `format` 模块的导出器注册表：OpenLineage 输出 `RunEvent` + `ColumnLineageDatasetFacet`（`TransformKind` 按 OpenLineage 规范原文映射到 `DIRECT`/`INDIRECT` + 子类型），Mermaid / DOT / Cypher 输出可视图与建图语句。
+
+`ozml impact` 在 `graph` 模块的 `LineageGraph` 上做**上溯 / 下溯 / 影响面**（`--direction upstream|downstream|both`，`--depth` 限层）与环检测；目标列不在图里时非零退出，不猜相近列。
 
 解析失败、或引擎不支持该语句的语义提取（如 `MERGE`）时返回非零退出码，并把带位置（行列）的诊断打到 stderr——不会静默给出一个猜测的结果。
 

@@ -55,18 +55,26 @@ import io.github.workeron9.ozmoz.lineage.schema.SchemaProvider
  * ## E. 边生成（确定性）
  * 边 id `e0`、`e1`…按分配顺序；全局顺序 = 作用域按 id 升序；作用域内：
  * 输出项（含 `*` 展开槽）→ JOIN（按 JoinPlan 顺序，先 USING 列后 ON 表达式）
- * → WHERE → HAVING。OUTPUT：每个有名槽且上游非空的每个上游端点 → 1 条边
- * （CONSTANT / UNKNOWN 槽无边）；JOIN_KEY：`USING` 列或 `ON` 的等值双列（折叠
- * 比较 `=`），expression=null、span=join.span；PREDICATE：WHERE / HAVING（及 ON
- * 里不构成 JOIN_KEY 的其余列引用）每个列引用端点 → 对本作用域每个有名输出槽的
- * consumerRef 各发 1 条边；作用域无名输出（如 DELETE）→ 不发。
- * **GROUP_BY / ORDER_BY / SOURCE 边本轮不做**（EdgeKind 已有枚举值，留待下一轮）。
+ * → WHERE → HAVING → GROUP_BY → ORDER_BY → SOURCE。OUTPUT：每个有名槽且上游非空的
+ * 每个上游端点 → 1 条边（CONSTANT / UNKNOWN 槽无边）；JOIN_KEY：`USING` 列或 `ON`
+ * 的等值双列（折叠比较 `=`），expression=null、span=join.span；PREDICATE：WHERE /
+ * HAVING（及 ON 里不构成 JOIN_KEY 的其余列引用）每个列引用端点 → 对本作用域每个有名
+ * 输出槽的 consumerRef 各发 1 条边；作用域无名输出（如 DELETE）→ 不发。
+ * GROUP_BY / ORDER_BY：与 PREDICATE 完全同形——每个 groupBy / orderBy 表达式
+ * `referencedColumns()` 的每个列引用端点 → 对本作用域每个有名输出槽的 consumerRef
+ * 各发 1 条边（GROUP_BY / GROUPING、ORDER_BY / ORDERING，expression=表达式原文、
+ * span=表达式 span）；集合运算容器承载 `SetOperationQuery.orderBy`（容器无输出）→ 不发。
+ * SOURCE（表级血缘）：本作用域每个**有表身份**的来源（物理表 / CTE 引用；派生表无表
+ * 身份不发）→ 一个表级哨兵 [ColumnRef]（`table = null`）→ 对本作用域每个有名输出槽的
+ * consumerRef 各发 1 条边（SOURCE / SOURCE，expression=null、span=来源 span）；
+ * 同一作用域内同一「哨兵 id → 输出 id」只发 1 条（自连接合并）。
  *
  * ## F. 模型组装
  * scopes：物理 [TableRef] + CTE 的 TableRef（**派生来源无表身份，不进 sources**；
  * UPDATE 作用域 outputs = assignment refs）；columns：全部边的 from / to + 全部
  * 有名输出槽的 consumerRef，按 column.id 去重（先出现者胜；isOutput / scopeId
- * 按输出槽归属优先，否则取首个引用它的作用域）；unknowns：作用域树的 unknowns
+ * 按输出槽归属优先，否则取首个引用它的作用域）——**SOURCE 边的 from 是表级哨兵，
+ * 不是列，不进 columns**；unknowns：作用域树的 unknowns
  * （保持原顺序）+ 本轮新增（按生成顺序）；diagnostics 原样透传。
  *
  * ## G. 确定性
@@ -119,6 +127,9 @@ private class Assembler(
     /** 列节点候选（ref → 首个引用它的作用域），先边后槽（规则 F），可能重复。 */
     private val columnCandidates = mutableListOf<Pair<ColumnRef, String>>()
 
+    /** SOURCE 边的去重集合（哨兵 id → 输出 id），保证同作用域内同表同列只发 1 条。 */
+    private val sourceEdgeSeen = LinkedHashSet<Pair<String, String>>()
+
     private var edgeCounter = 0
 
     fun assemble(): LineageModel {
@@ -128,7 +139,8 @@ private class Assembler(
         // 阶段 1：全部作用域的输出槽（记忆化；`*` 展开 / 上游解析的 unknown 在此产生）。
         for (id in scopeIds) slotsEngine.slots(id)
 
-        // 阶段 2：按规则 E 的全局顺序产边（作用域内：输出项 → JOIN → WHERE → HAVING）。
+        // 阶段 2：按规则 E 的全局顺序产边（作用域内：输出项 → JOIN → WHERE → HAVING
+        // → GROUP_BY → ORDER_BY → SOURCE）。
         for (id in scopeIds) {
             val scope = plan.byId.getValue(id)
 
@@ -155,6 +167,12 @@ private class Assembler(
             for (filter in scope.filters) predicateEdges(filter, scope)
 
             for (having in scope.having) predicateEdges(having, scope)
+
+            for (groupBy in scope.groupBy) qualifierEdges(groupBy, scope, EdgeKind.GROUP_BY, TransformKind.GROUPING)
+
+            for (orderBy in scope.orderBy) qualifierEdges(orderBy, scope, EdgeKind.ORDER_BY, TransformKind.ORDERING)
+
+            sourceEdges(scope)
         }
 
         return LineageModel(
@@ -269,6 +287,93 @@ private class Assembler(
         }
     }
 
+    // ——— GROUP_BY / ORDER_BY（规则 E，形状与 PREDICATE 完全同形） ———
+
+    /**
+     * GROUP BY / ORDER BY：每个表达式 [referencedColumns] 的每个列引用 → 解析端点 →
+     * 对本作用域**每个有名输出槽的 consumerRef** 各发 1 条边（[kind] / [transform]
+     * 由调用方给出，expression=表达式原文 raw，span=表达式 span）。
+     * 解析失败 → 记 Unknown（不猜）；作用域无名输出 → 不发边（但解析仍尝试）。
+     */
+    private fun qualifierEdges(expr: SqlExpr, scope: ScopePlan, kind: EdgeKind, transform: TransformKind) {
+        for (ref in expr.referencedColumns()) {
+            when (val resolved = resolver.resolve(ref, scope)) {
+                is Resolved.Known -> qualifierFromEndpoint(resolved.value, expr, scope, kind, transform)
+                is Resolved.Unknown -> newUnknowns += resolved
+            }
+        }
+    }
+
+    private fun qualifierFromEndpoint(
+        endpoint: ColumnRef,
+        expr: SqlExpr,
+        scope: ScopePlan,
+        kind: EdgeKind,
+        transform: TransformKind,
+    ) {
+        for (consumer in slotsEngine.slots(scope.id).mapNotNull { it.consumerRef }) {
+            emitEdge(
+                from = endpoint,
+                to = consumer,
+                kind = kind,
+                transform = transform,
+                expression = expr.raw,
+                span = expr.span,
+                scopeId = scope.id,
+            )
+        }
+    }
+
+    // ——— SOURCE（规则 E，表级血缘的哨兵边） ———
+
+    /**
+     * SOURCE：本作用域每个**有表身份**的来源（物理表 / CTE 引用；派生表无表身份，
+     * 不发）→ 一个表级哨兵 [ColumnRef]（`table = null`）→ 对本作用域每个有名输出槽的
+     * consumerRef 各发 1 条边。作用域无名输出 → 不发边。
+     *
+     * 去重：同一作用域内，同一「哨兵 id → 输出 id」只发 1 条（自连接 `t a JOIN t b`
+     * 两个来源哨兵限定名相同 → 合并），用 [sourceEdgeSeen] 保证确定性。
+     */
+    private fun sourceEdges(scope: ScopePlan) {
+        val consumers = slotsEngine.slots(scope.id).mapNotNull { it.consumerRef }
+        if (consumers.isEmpty()) return
+        for (source in scope.sourcePlans) {
+            val sentinel = sourceSentinel(source) ?: continue
+            for (consumer in consumers) {
+                if (!sourceEdgeSeen.add(sentinel.id to consumer.id)) continue
+                emitEdge(
+                    from = sentinel,
+                    to = consumer,
+                    kind = EdgeKind.SOURCE,
+                    transform = TransformKind.SOURCE,
+                    expression = null,
+                    span = sentinel.span,
+                    scopeId = scope.id,
+                )
+            }
+        }
+    }
+
+    /**
+     * 表级哨兵 [ColumnRef]：`raw` = 来源原始拼写、`name` = 限定名（物理表 `qualifiedName` /
+     * CTE 名）、`canonical` = `name` 折叠、`table = null`、`span` = 来源 span。
+     * 派生表（[DerivedSourcePlan]）无表身份 → null（不发边）。
+     */
+    private fun sourceSentinel(source: SourcePlan): ColumnRef? = when (source) {
+        is TableSourcePlan -> {
+            val name = source.table.qualifiedName
+            ColumnRef(raw = source.table.raw, canonical = name.lowercase(), name = name, table = null, span = source.table.span)
+        }
+
+        is CteSourcePlan -> {
+            // CTE 引用来源的原始 TableSource 未保留在计划里，拿不到引用 span → null。
+            val name = source.source.name
+            ColumnRef(raw = name, canonical = name.lowercase(), name = name, table = null, span = null)
+        }
+
+        is DerivedSourcePlan -> null
+    }
+
     // ——— 边与候选（规则 E：边 id 按分配顺序 e0、e1…） ———
 
     private fun emitEdge(
@@ -289,7 +394,9 @@ private class Assembler(
             expression = expression,
             span = span,
         )
-        columnCandidates += from to scopeId
+        // SOURCE 边的 from 是**表级哨兵**（表 / CTE 整体），不是列——不进列节点集合
+        // （规则 F 的 columns 只装列）。to 恒为输出列 consumerRef，照常登记。
+        if (kind != EdgeKind.SOURCE) columnCandidates += from to scopeId
         columnCandidates += to to scopeId
     }
 
@@ -342,12 +449,36 @@ private class Assembler(
         for ((ref, scopeId) in columnCandidates) {
             if (!seen.add(ref.id)) continue // 先出现者胜
             val owner = slotOwners[ref.id]
+            // 类型补全（Never-wrong）：只有 schema 明确收录了「表 + 列」才填 type/nullable，
+            // 否则留 null。别名 / CTE 输出 / 派生表输出的 table 不是物理表名 → 查不到 → null，
+            // 不猜。物理表端点与 INSERT / CREATE 目标列的 table 是限定名，可命中。
+            val columnSchema = ref.table?.let { schema?.table(tableRefOf(it))?.column(ref.name) }
             columns += ColumnNode(
                 column = ref,
                 scopeId = owner ?: scopeId, // 输出槽归属优先，否则取首个引用它的作用域
                 isOutput = owner != null,
+                type = columnSchema?.type,
+                nullable = columnSchema?.nullable,
             )
         }
         return columns
+    }
+
+    /**
+     * 把 `ColumnRef.table` 的限定名（`name` / `schema.name` / `catalog.schema.name`）
+     * 还原成 [TableRef]，供 schema 查询。折叠规则与各 [SchemaProvider] 实现一致（小写）。
+     */
+    private fun tableRefOf(qualified: String): TableRef {
+        val parts = qualified.split('.')
+        val name = parts.last()
+        val schema = parts.getOrNull(parts.size - 2)
+        val catalog = if (parts.size >= 3) parts.dropLast(2).joinToString(".") else null
+        return TableRef(
+            raw = qualified,
+            canonical = qualified.lowercase(),
+            catalog = catalog,
+            schema = schema,
+            name = name,
+        )
     }
 }
