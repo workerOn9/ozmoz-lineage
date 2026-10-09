@@ -63,6 +63,64 @@ class LineageBuilderSchemaTest {
             id = "test-schema",
         )
 
+    // ——— 类型补全：ColumnNode.type / nullable ———
+
+    @Test
+    fun `物理表端点的列节点补全类型与可空性 裸输出列留 null`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a")))),
+                ),
+                raw = "SELECT a FROM t",
+            ),
+        )
+        val schema = StaticSchemaProvider(
+            listOf(
+                TableSchema(
+                    table("t"),
+                    listOf(
+                        ColumnSchema("a", type = "INT", nullable = false, ordinal = 1),
+                        ColumnSchema("b", type = "DECIMAL (7, 2)", nullable = true, ordinal = 2),
+                    ),
+                ),
+            ),
+            id = "test-schema",
+        )
+
+        val model = LineageBuilder.build(stmt, schema)
+
+        val physical = model.columns.single { it.column.id == "t.a" }
+        assertEquals("INT", physical.type)
+        assertEquals(false, physical.nullable)
+        // 裸输出列没有表身份 → 查不到 → 留 null（Never-wrong：不猜类型）。
+        val bare = model.columns.single { it.column.id == "a" }
+        assertNull(bare.type)
+        assertNull(bare.nullable)
+    }
+
+    @Test
+    fun `无 schema 时列节点类型一律为 null`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a")))),
+                ),
+                raw = "SELECT a FROM t",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt)
+
+        assertTrue(model.columns.all { it.type == null && it.nullable == null })
+    }
+
     // ——— 规则 D：物理表 `*` 展开 ———
 
     @Test
