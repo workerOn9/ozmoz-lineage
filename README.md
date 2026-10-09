@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与三类边 + `ozml parse` / `ozml lineage` 可运行；`SchemaProvider`、方言转换、Web UI 尚未接入）。
+> 状态：**列级血缘已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与三类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `ozml parse` / `ozml lineage` 可运行；方言转换、Web UI 尚未接入）。
 
 ## 它要解决什么
 
@@ -19,6 +19,7 @@
 ```bash
 ozml parse   -f q.sql --format json|tree|ast   # 解析 → 归一化树（当前可用）
 ozml lineage -f q.sql --format json|edges|summary  # 列级血缘模型（当前可用）
+ozml lineage -f q.sql --schema schema.sql      # 喂 DDL 元数据：物理表 * 展开、列消歧、INSERT 对齐（当前可用）
 ozml impact  --on db.t.c --depth 3             # 影响面分析（规划中）
 ozml convert --from mysql --to postgresql      # 方言转换（规划中）
 ```
@@ -44,6 +45,8 @@ e1  OUTPUT  s.a -> c.x  [DIRECT]  «a»
 ```
 
 解析失败、或引擎不支持该语句的语义提取（如 `MERGE`）时返回非零退出码，并把带位置（行列）的诊断打到 stderr——不会静默给出一个猜测的结果。
+
+`--schema` 接一个含 `CREATE TABLE` 的 DDL 文件（`schema` 模块的 `DdlFileSchemaProvider`，另有 `StaticSchemaProvider` / `JdbcSchemaProvider` / `CompositeSchemaProvider` 可编程接入）：物理表的 `SELECT *` 按列清单展开、裸列名按「哪张表真有这一列」消歧、`INSERT INTO t SELECT …` 未声明目标列时按表列定义序对齐。元数据缺失的列一律显式记 `unknown`，不发明列名。
 
 ## 设计原则
 
