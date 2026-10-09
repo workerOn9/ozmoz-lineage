@@ -1,6 +1,8 @@
 package io.github.workeron9.ozmoz.lineage.cli
 
 import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
+import io.github.workeron9.ozmoz.lineage.graph.Direction
+import io.github.workeron9.ozmoz.lineage.graph.ImpactResult
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
@@ -27,6 +29,9 @@ internal object JsonSupport {
 
     fun encodeLineageModel(model: LineageModel): String =
         json.encodeToString(LineageModel.serializer(), model)
+
+    fun encodeImpactResult(result: ImpactResult, label: (String) -> String): String =
+        json.encodeToString(ImpactReport.serializer(), ImpactReport.from(result, label))
 }
 
 /** `ozml parse --format json` 的稳定输出形状。 */
@@ -41,6 +46,36 @@ internal data class ParseReport(
             root = outcome.root,
             tables = outcome.tables,
             diagnostics = outcome.diagnostics,
+        )
+    }
+}
+
+/** `ozml impact --format json` 的稳定输出形状（`graph` 模块的模型不含序列化注解，此处做 CLI 侧镜像）。 */
+@Serializable
+internal data class ImpactReport(
+    val origin: String,
+    val direction: String,
+    val depth: Int? = null,
+    val truncated: Boolean,
+    val nodes: List<ImpactReportNode>,
+) {
+    @Serializable
+    internal data class ImpactReportNode(
+        val id: String,
+        val label: String,
+        val distance: Int,
+        val isOutput: Boolean,
+    )
+
+    companion object {
+        fun from(result: ImpactResult, label: (String) -> String): ImpactReport = ImpactReport(
+            origin = result.origin,
+            direction = result.direction.name,
+            depth = result.depth,
+            truncated = result.truncated,
+            nodes = result.nodes.map {
+                ImpactReportNode(id = it.id, label = label(it.id), distance = it.distance, isOutput = it.isOutput)
+            },
         )
     }
 }

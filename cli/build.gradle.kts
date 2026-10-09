@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":lineage"))
     implementation(project(":schema"))
     implementation(project(":format"))
+    implementation(project(":graph"))
     implementation(libs.clikt)
     implementation(libs.serialization.json)
 }
