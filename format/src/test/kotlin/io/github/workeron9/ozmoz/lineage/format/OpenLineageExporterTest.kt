@@ -56,8 +56,8 @@ class OpenLineageExporterTest {
         assertEquals(OpenLineageExporter.PRODUCER, facet.getValue("_producer").jsonPrimitive.content)
         assertEquals(OpenLineageExporter.COLUMN_LINEAGE_SCHEMA_URL, facet.getValue("_schemaURL").jsonPrimitive.content)
         val fields = facet.getValue("fields").jsonObject
-        // 键 = 每条非 SOURCE 边的 toColumn.name（含 JOIN_KEY 边指向的 customer.c_customer_sk）
-        assertEquals(setOf("c_customer_sk", "sold_date", "total_qty"), fields.keys)
+        // 键 = 输出列名。JOIN_KEY 边的 to（customer.c_customer_sk）是输入列、非输出字段，不入 fields。
+        assertEquals(setOf("sold_date", "total_qty"), fields.keys)
     }
 
     @Test

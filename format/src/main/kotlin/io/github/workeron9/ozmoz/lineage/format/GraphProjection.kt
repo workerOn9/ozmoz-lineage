@@ -54,4 +54,14 @@ internal object GraphProjection {
             .mapNotNull { it.column.table }
             .distinct()
             .singleOrNull()
+
+    /**
+     * 全部**输出列**的 id 集合（`ColumnNode.isOutput == true`）。
+     *
+     * 供导出器判断「一条边的 `to` 是不是输出字段」——`JOIN_KEY` 边的 `to` 是**输入**表的
+     * 连接键列（如 `a.id = b.id` 的 `b.id`），不是输出字段，不能进 OpenLineage 的
+     * `fields`（那是输出数据集的字段表）。
+     */
+    fun outputColumnIds(model: LineageModel): Set<String> =
+        model.columns.filter { it.isOutput }.mapTo(LinkedHashSet()) { it.column.id }
 }

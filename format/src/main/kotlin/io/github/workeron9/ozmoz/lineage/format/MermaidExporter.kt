@@ -17,10 +17,12 @@ import io.github.workeron9.ozmoz.lineage.ir.LineageModel
  *
  * ## 边
  *
- * 同一对 `from → to` 若有多条边，**合并为一条**：label 用 `|` 连接去重后的
+ * 同一对 `from → to` 若有多条边，**合并为一条**：label 用 `, ` 连接去重后的
  * `kind/transform` 片段并按字符串排序。选择合并而非「不同箭头」是因为 Mermaid 的
  * 箭头种类有限且语义不含「多条边」的信息，合并后图更小、更稳定，也避免同一对
  * 节点间的多条边互相遮挡；每条边的语义仍完整保留在 label 里。
+ *
+ * 分隔符**不能**用 `|`——那正是 Mermaid `-->|label|` 的定界符，会让标签被截断。
  *
  * 空模型只产出一行 `flowchart LR`，不崩。
  */
@@ -56,7 +58,8 @@ public object MermaidExporter : LineageExporter {
 
     /**
      * 同一 `from → to` 合并成一条边：去重后的 `KIND/TRANSFORM` 片段按字符串排序后
-     * 用 `|` 连接。边的顺序按模型列表里**首次出现**的次序，保证确定性。
+     * 用 `, ` 连接（**不能**用 `|`——那是 Mermaid 标签定界符）。边的顺序按模型列表里
+     * **首次出现**的次序，保证确定性。
      */
     private fun mergedEdgeLines(edges: List<LineageEdge>): List<String> {
         val order = ArrayList<String>()
@@ -73,7 +76,7 @@ public object MermaidExporter : LineageExporter {
         }
         return order.map { key ->
             val (from, to) = key.split("\u0000")
-            "$from -->|${fragments.getValue(key).joinToString("|")}| $to"
+            "$from -->|${fragments.getValue(key).joinToString(", ")}| $to"
         }
     }
 

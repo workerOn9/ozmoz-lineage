@@ -157,18 +157,22 @@ public object OpenLineageExporter : LineageExporter {
     }
 
     /**
-     * `fields`：输出列名 → `inputFields`。
+     * `fields`：**输出列名** → `inputFields`。
      *
-     * 每个输入字段按（表名, 列名）去重后**排序**；同一字段的多种变换合并去重，
-     * 再按（type, subtype, description, masking）排序。输出列名按键升序，
-     * 保证逐字节确定性。`SOURCE` 边与 `fromColumn.table` 为空的边不参与
+     * 只有 `to` 是输出列（`ColumnNode.isOutput == true`）的边才进 `fields`——
+     * `JOIN_KEY` 边的 `to` 是输入表的连接键列，不是输出字段（否则会凭空多出一个
+     * 数据集里不存在的字段）。每个输入字段按（表名, 列名）去重后**排序**；同一字段的
+     * 多种变换合并去重，再按（type, subtype, description, masking）排序。输出列名按键
+     * 升序，保证逐字节确定性。`SOURCE` 边与 `fromColumn.table` 为空的边不参与
      * （前者是表级血缘，后者拿不到表名——不编）。
      */
     private fun buildFields(model: LineageModel, namespace: String): JsonObject {
+        val outputIds = GraphProjection.outputColumnIds(model)
         // 输出列名 → (表名, 列名) → 变换集合（LinkedHashMap 保留插入序，输出前显式排序）
         val byOutput = sortedMapOf<String, MutableMap<Pair<String, String>, MutableSet<JsonObject>>>()
         for (edge in model.edges) {
             if (edge.kind == EdgeKind.SOURCE) continue
+            if (edge.toColumn.id !in outputIds) continue
             val table = edge.fromColumn.table ?: continue
             val output = edge.toColumn.name
             val transformation = openLineageTransform(edge.transform, edge.expression) ?: continue

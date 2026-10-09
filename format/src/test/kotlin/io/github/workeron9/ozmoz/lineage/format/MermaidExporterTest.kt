@@ -31,15 +31,15 @@ class MermaidExporterTest {
     @Test
     fun `边 label 用 KIND TRANSFORM`() {
         // total_qty 有 AGGREGATE / EXPRESSION / WINDOW / FILTER / GROUP_BY，来自 store_sales.ss_quantity 的
-        // AGGREGATE 与 WINDOW 合并成一条，label 按字符串排序后用 | 连接。
+        // AGGREGATE 与 WINDOW 合并成一条，label 按字符串排序后用 ", " 连接（| 是 Mermaid 标签定界符，不可用）。
         assertContains(
             lines,
-            "    n_store_sales_ss_quantity -->|OUTPUT/AGGREGATE|OUTPUT/WINDOW| n_sales_summary_total_qty",
+            "    n_store_sales_ss_quantity -->|OUTPUT/AGGREGATE, OUTPUT/WINDOW| n_sales_summary_total_qty",
         )
         // sold_date 同时被 OUTPUT/DIRECT 与 ORDER_BY/ORDERING 引用 → 合并成一条，按字符串排序
         assertContains(
             lines,
-            "    n_store_sales_ss_sold_date_sk -->|ORDER_BY/ORDERING|OUTPUT/DIRECT| n_sales_summary_sold_date",
+            "    n_store_sales_ss_sold_date_sk -->|ORDER_BY/ORDERING, OUTPUT/DIRECT| n_sales_summary_sold_date",
         )
         assertContains(lines, "    n_store_sales -->|SOURCE/SOURCE| n_sales_summary_total_qty")
     }

@@ -135,6 +135,37 @@ class LineageCommandTest {
         assertContains(result.stdout, "unknowns: 0")
     }
 
+    @Test
+    fun `format 模块导出器经 --format 可用`() {
+        val sql = tempSql("SELECT a FROM t")
+
+        val mermaid = command.test("--file ${sql.absolutePath} --format mermaid")
+        assertEquals(0, mermaid.statusCode)
+        assertContains(mermaid.stdout, "flowchart LR")
+        assertContains(mermaid.stdout, "OUTPUT/DIRECT")
+
+        val dot = command.test("--file ${sql.absolutePath} --format dot")
+        assertEquals(0, dot.statusCode)
+        assertContains(dot.stdout, "digraph lineage")
+
+        val cypher = command.test("--file ${sql.absolutePath} --format cypher")
+        assertEquals(0, cypher.statusCode)
+        assertContains(cypher.stdout, "MERGE")
+
+        val openlineage = command.test("--file ${tempSql("INSERT INTO tgt (x) SELECT a FROM t").absolutePath} --format openlineage")
+        assertEquals(0, openlineage.statusCode)
+        assertContains(openlineage.stdout, "columnLineage")
+        assertContains(openlineage.stdout, "\"subtype\": \"IDENTITY\"")
+    }
+
+    @Test
+    fun `未知 format 非零退出`() {
+        val sql = tempSql("SELECT a FROM t")
+        val result = command.test("--file ${sql.absolutePath} --format nosuch")
+        // Clikt 的 choice 校验会先拦下未注册值，退出码非 0。
+        assertTrue(result.statusCode != 0)
+    }
+
     /** 真实引擎分析 → 列级血缘模型（与 LineagePipelineTest 同一组合根模式）。 */
     private fun analyze(sql: String, schemaDdl: File? = null): LineageModel {
         val semantic = JSqlParserEngine().analyze(sql)
