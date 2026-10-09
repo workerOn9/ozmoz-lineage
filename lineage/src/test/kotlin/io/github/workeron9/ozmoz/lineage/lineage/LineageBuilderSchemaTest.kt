@@ -1,0 +1,297 @@
+package io.github.workeron9.ozmoz.lineage.lineage
+
+import io.github.workeron9.ozmoz.lineage.engine.semantics.OutputItem
+import io.github.workeron9.ozmoz.lineage.engine.semantics.ScopeSpec
+import io.github.workeron9.ozmoz.lineage.engine.semantics.SelectQuery
+import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
+import io.github.workeron9.ozmoz.lineage.engine.semantics.SqlExpr
+import io.github.workeron9.ozmoz.lineage.engine.semantics.StatementKind
+import io.github.workeron9.ozmoz.lineage.engine.semantics.TableSource
+import io.github.workeron9.ozmoz.lineage.ir.ColumnRef
+import io.github.workeron9.ozmoz.lineage.ir.ColumnSchema
+import io.github.workeron9.ozmoz.lineage.ir.EdgeKind
+import io.github.workeron9.ozmoz.lineage.ir.TableRef
+import io.github.workeron9.ozmoz.lineage.ir.TableSchema
+import io.github.workeron9.ozmoz.lineage.ir.TransformKind
+import io.github.workeron9.ozmoz.lineage.schema.StaticSchemaProvider
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/**
+ * schema 提供方接入后的列级血缘行为（规则 B / D / A 的 schema 分支）：
+ * 物理表 `*` 展开、裸列歧义消解（可证伪）、限定引用可证伪、
+ * `INSERT` 未声明目标列按表列定义序对齐。
+ */
+class LineageBuilderSchemaTest {
+
+    private fun col(name: String, table: String? = null) = ColumnRef(
+        raw = name,
+        canonical = listOfNotNull(table, name).joinToString(".").lowercase(),
+        name = name,
+        table = table,
+    )
+
+    private fun table(name: String, alias: String? = null) = TableRef(
+        raw = name,
+        canonical = name.lowercase(),
+        name = name,
+        alias = alias,
+    )
+
+    private fun selectStarFrom(vararg sources: TableRef) = SemanticStatement(
+        kind = StatementKind.SELECT,
+        query = SelectQuery(
+            scope = ScopeSpec(
+                kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                sources = sources.map { TableSource(it) },
+                outputs = listOf(OutputItem(SqlExpr.Star(null, "*", null))),
+            ),
+            raw = "SELECT * FROM ...",
+        ),
+    )
+
+    private fun schemaOf(vararg tables: Pair<String, List<String>>): StaticSchemaProvider =
+        StaticSchemaProvider(
+            tables.map { (name, columns) ->
+                TableSchema(
+                    table(name),
+                    columns.mapIndexed { i, column -> ColumnSchema(column, ordinal = i + 1) },
+                )
+            },
+            id = "test-schema",
+        )
+
+    // ——— 规则 D：物理表 `*` 展开 ———
+
+    @Test
+    fun `物理表星号按 schema 列清单展开为 DIRECT 边`() {
+        val model = LineageBuilder.build(selectStarFrom(table("t")), schemaOf("t" to listOf("a", "b")))
+
+        assertEquals(2, model.edges.size)
+        assertTrue(model.edges.all { it.kind == EdgeKind.OUTPUT && it.transform == TransformKind.DIRECT })
+        assertEquals("t.a", model.edges[0].fromColumn.qualifiedName)
+        assertEquals("a", model.edges[0].toColumn.qualifiedName)
+        assertEquals("t.b", model.edges[1].fromColumn.qualifiedName)
+        assertEquals("*", model.edges[0].expression) // 星号原文（Lossless）
+        assertTrue(model.unknowns.none { it.reason.contains("SchemaProvider") })
+    }
+
+    @Test
+    fun `限定星号按 schema 展开且别名限定生效`() {
+        val model = LineageBuilder.build(
+            selectStarFrom(table("s", alias = "src"), table("u", alias = "dim")),
+            schemaOf("s" to listOf("x"), "u" to listOf("y")),
+        )
+
+        // 无限定 `*` 按来源顺序展开两张物理表。
+        assertEquals(2, model.edges.size)
+        assertEquals(listOf("s.x", "u.y"), model.edges.map { it.fromColumn.qualifiedName })
+    }
+
+    @Test
+    fun `schema 未收录该物理表 记未收录措辞 unknown 且不产边`() {
+        val model = LineageBuilder.build(selectStarFrom(table("missing")), schemaOf("t" to listOf("a")))
+
+        assertTrue(model.edges.isEmpty())
+        assertTrue(model.unknowns.any { it.reason.contains("不在 schema 提供方 test-schema 中") })
+    }
+
+    @Test
+    fun `CTE 内的物理表星号也能展开`() {
+        val cte = io.github.workeron9.ozmoz.lineage.engine.semantics.CteSpec(
+            name = "c",
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t"))),
+                    outputs = listOf(OutputItem(SqlExpr.Star(null, "*", null))),
+                ),
+                raw = "SELECT * FROM t",
+            ),
+        )
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("c"))),
+                    outputs = listOf(OutputItem(SqlExpr.Star(null, "*", null))),
+                ),
+                ctes = listOf(cte),
+                raw = "WITH c AS (...) SELECT * FROM c",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt, schemaOf("t" to listOf("a")))
+
+        // 链：t.a -> c.a（CTE 体星号）、c.a -> a（顶层星号）。
+        // 不断言边的先后顺序（那是作用域 id 分配顺序的实现细节）。
+        assertEquals(2, model.edges.size)
+        val byFrom = model.edges.associateBy { it.fromColumn.qualifiedName }
+        assertEquals("c.a", byFrom.getValue("t.a").toColumn.qualifiedName)
+        assertEquals("a", byFrom.getValue("c.a").toColumn.qualifiedName)
+    }
+
+    // ——— 规则 B：裸列歧义消解（schema 可证伪） ———
+
+    @Test
+    fun `裸列名只在一张物理表存在时消解歧义`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t1")), TableSource(table("t2"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("c")))),
+                ),
+                raw = "SELECT c FROM t1, t2",
+            ),
+        )
+
+        val ambiguous = LineageBuilder.build(stmt) // 无 schema：两物理来源恒为候选 → 歧义
+        assertTrue(ambiguous.edges.isEmpty())
+        assertTrue(ambiguous.unknowns.any { it.reason.contains("无法唯一归属") })
+
+        val resolved = LineageBuilder.build(stmt, schemaOf("t1" to listOf("a"), "t2" to listOf("b", "c")))
+        assertEquals(1, resolved.edges.size)
+        assertEquals("t2.c", resolved.edges.single().fromColumn.qualifiedName)
+        assertTrue(resolved.unknowns.none { it.reason.contains("无法唯一归属") })
+    }
+
+    @Test
+    fun `两张物理表都有该列时 schema 也不猜`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t1")), TableSource(table("t2"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("id")))),
+                ),
+                raw = "SELECT id FROM t1, t2",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt, schemaOf("t1" to listOf("id"), "t2" to listOf("id")))
+        assertTrue(model.edges.isEmpty())
+        assertTrue(model.unknowns.any { it.reason.contains("无法唯一归属") })
+    }
+
+    @Test
+    fun `schema 收录的表没有该列 裸列名零候选记没有列`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t1"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("zzz")))),
+                ),
+                raw = "SELECT zzz FROM t1",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt, schemaOf("t1" to listOf("a")))
+        assertTrue(model.edges.isEmpty())
+        assertTrue(model.unknowns.any { it.reason == "来源没有列: zzz" })
+    }
+
+    @Test
+    fun `限定引用 schema 可证伪 收录表没有该列记 unknown 不产边`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t1"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("zzz", table = "t1")))),
+                ),
+                raw = "SELECT t1.zzz FROM t1",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt, schemaOf("t1" to listOf("a")))
+        assertTrue(model.edges.isEmpty())
+        assertTrue(model.unknowns.any { it.reason == "来源 t1 没有列 zzz" })
+
+        // 对照：schema 未收录 t1 → 无法证伪，沿用「唯一物理来源直接归属」。
+        val unknownTable = LineageBuilder.build(stmt, schemaOf("other" to listOf("a")))
+        assertEquals(1, unknownTable.edges.size)
+    }
+
+    // ——— 规则 A：INSERT 未声明目标列按表列定义序对齐 ———
+
+    @Test
+    fun `INSERT 未声明目标列 按 schema 表列序对齐产边`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.INSERT,
+            target = table("tgt"),
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("src"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a"))), OutputItem(SqlExpr.Column(col("b")))),
+                ),
+                raw = "INSERT INTO tgt SELECT a, b FROM src",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt, schemaOf("src" to listOf("a", "b"), "tgt" to listOf("x", "y")))
+
+        assertEquals(2, model.edges.size)
+        assertEquals(listOf("src.a", "src.b"), model.edges.map { it.fromColumn.qualifiedName })
+        assertEquals(listOf("tgt.x", "tgt.y"), model.edges.map { it.toColumn.qualifiedName })
+        assertTrue(model.unknowns.none { it.reason.contains("未声明目标列") })
+    }
+
+    @Test
+    fun `INSERT 未声明目标列 表列数与输出数不一致记 Unknown 不发边`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.INSERT,
+            target = table("tgt"),
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("src"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a")))),
+                ),
+                raw = "INSERT INTO tgt SELECT a FROM src",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt, schemaOf("tgt" to listOf("x", "y")))
+        assertTrue(model.edges.isEmpty())
+        assertTrue(model.unknowns.any { it.reason == "INSERT 目标列数与查询输出数不一致" })
+    }
+
+    @Test
+    fun `INSERT 未声明目标列 schema 未收录目标表 沿用旧 unknown`() {
+        val stmt = SemanticStatement(
+            kind = StatementKind.INSERT,
+            target = table("tgt"),
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("src"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a")))),
+                ),
+                raw = "INSERT INTO tgt SELECT a FROM src",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt, schemaOf("src" to listOf("a")))
+        assertTrue(model.edges.isEmpty())
+        assertTrue(model.unknowns.any { it.reason == "INSERT 未声明目标列，需要 SchemaProvider" })
+    }
+
+    // ——— 溯源 ———
+
+    @Test
+    fun `传入 schema 时 meta 记录其 id 不传则为 null`() {
+        val stmt = selectStarFrom(table("t"))
+        assertEquals("test-schema", LineageBuilder.build(stmt, schemaOf("t" to listOf("a"))).meta.schemaSnapshotId)
+        assertNull(LineageBuilder.build(stmt).meta.schemaSnapshotId)
+    }
+}

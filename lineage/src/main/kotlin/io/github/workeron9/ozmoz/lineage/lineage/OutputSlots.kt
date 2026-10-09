@@ -9,6 +9,7 @@ import io.github.workeron9.ozmoz.lineage.ir.ColumnRef
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.ir.TableRef
 import io.github.workeron9.ozmoz.lineage.ir.TransformKind
+import io.github.workeron9.ozmoz.lineage.schema.SchemaProvider
 
 /**
  * 规则 A：一个**输出槽**——每个 [OutputItem] 对应一个（`*` 展开可对应多个）。
@@ -42,6 +43,7 @@ internal class SlotEngine(
     private val rootId: String?,
     private val resolver: ColumnResolver,
     private val unknowns: MutableList<Resolved.Unknown>,
+    private val schema: SchemaProvider? = null,
 ) {
 
     private val memo = LinkedHashMap<String, List<OutputSlot>>()
@@ -134,9 +136,9 @@ internal class SlotEngine(
      * - qualifier 非空：限定到唯一来源（解析同规则 B 的带限定规则：0 命中 → Unknown
      *   「限定名未命中来源」，≥2 → 「限定名歧义」）；CTE / 派生 → 逐个有效输出产槽
      *   （上游 = 来源槽的 consumerRef，DIRECT，expression = 星号原文）；物理表 →
-     *   Unknown「物理表 X 的列未知（`*` 展开需要 SchemaProvider）」。
-     * - qualifier 为空：按来源顺序展开全部 CTE / 派生来源；遇到物理来源 → 对该物理表
-     *   记 1 条 Unknown（同上措辞），继续展开其余来源。
+     *   [expandPhysicalSource]。
+     * - qualifier 为空：按来源顺序展开全部来源；物理来源无法展开时记 1 条 Unknown
+     *   后继续展开其余来源。
      * - 展开目标是集合运算容器 → 有效输出 = 首分支输出（[effectiveOutputs]）。
      */
     private fun expandStar(star: SqlExpr.Star, plan: ScopePlan): List<Pair<String?, List<ColumnRef>>> {
@@ -163,16 +165,38 @@ internal class SlotEngine(
     }
 
     private fun expandSource(source: SourcePlan, star: SqlExpr.Star): List<Pair<String?, List<ColumnRef>>> = when (source) {
-        is TableSourcePlan -> {
-            unknowns += Resolved.Unknown(
-                "物理表 ${source.table.qualifiedName} 的列未知（`*` 展开需要 SchemaProvider）",
-                star.span,
-            )
-            emptyList()
-        }
-
+        is TableSourcePlan -> expandPhysicalSource(source, star)
         is CteSourcePlan -> expandOutputs(source.body.id)
         is DerivedSourcePlan -> expandOutputs(source.body.id)
+    }
+
+    /**
+     * 规则 D：物理表的 `*` 展开。schema 提供方收录该表 → 按列清单（定义序）逐个产
+     * 槽（名字 = 列名，上游 = `表限定名.列名` 端点，DIRECT）；未提供 schema 或
+     * 提供方未收录 → 记 Unknown 且不产槽（两种情形措辞不同，便于排查是谁缺元数据）。
+     */
+    private fun expandPhysicalSource(source: TableSourcePlan, star: SqlExpr.Star): List<Pair<String?, List<ColumnRef>>> {
+        val tableSchema = schema?.table(source.table)
+        if (tableSchema == null) {
+            unknowns += Resolved.Unknown(
+                if (schema == null) {
+                    "物理表 ${source.table.qualifiedName} 的列未知（`*` 展开需要 SchemaProvider）"
+                } else {
+                    "物理表 ${source.table.qualifiedName} 不在 schema 提供方 ${schema.id} 中，无法展开 `*`"
+                },
+                star.span,
+            )
+            return emptyList()
+        }
+        return tableSchema.columns.map { column ->
+            val ref = ColumnRef(
+                raw = column.name,
+                canonical = (source.table.qualifiedName + "." + column.name).lowercase(),
+                name = column.name,
+                table = source.table.qualifiedName,
+            )
+            column.name to listOf(ref)
+        }
     }
 
     private fun expandOutputs(bodyId: String): List<Pair<String?, List<ColumnRef>>> =
@@ -240,14 +264,27 @@ internal class SlotEngine(
      * 规则 A：INSERT。
      * - 有 targetColumns → **逐位**对齐（consumerRef 的 table = target 限定名）；
      *   数量不一致 → 记 Unknown「INSERT 目标列数与查询输出数不一致」，该顶层不发 OUTPUT 边；
-     * - 无 targetColumns → 记 Unknown「INSERT 未声明目标列，需要 SchemaProvider」（每条语句一次），
-     *   顶层不发 OUTPUT 边；
+     * - 无 targetColumns → schema 提供方收录目标表 → 按**表列定义序**逐位对齐（同失配处理）；
+     *   未收录（或 schema 缺失）→ 记 Unknown「INSERT 未声明目标列，需要 SchemaProvider」
+     *   （每条语句一次），顶层不发 OUTPUT 边；
      * - 顶层是集合运算 → 每个分支各自逐位对齐 targetColumns（不依赖首分支）。
      */
     private fun insertSlots(plan: ScopePlan, raw: List<RawSlot>): List<OutputSlot> {
         val columns = statement.targetColumns
         val target = statement.target
         if (columns.isEmpty()) {
+            val tableSchema = target?.let { schema?.table(it) }
+            if (target != null && tableSchema != null) {
+                if (tableSchema.columns.size != raw.size) {
+                    unknowns += Resolved.Unknown("INSERT 目标列数与查询输出数不一致", plan.scope.span)
+                    return inertNamed(raw)
+                }
+                return raw.mapIndexed { i, slot ->
+                    val column = tableSchema.columns[i]
+                    val name = slot.starName ?: column.name
+                    slot.toSlot(name = name, consumerRef = targetConsumerRef(target, column.name, column.name))
+                }
+            }
             if (!insertNoTargetColumnsRecorded) {
                 insertNoTargetColumnsRecorded = true
                 unknowns += Resolved.Unknown("INSERT 未声明目标列，需要 SchemaProvider", plan.scope.span)

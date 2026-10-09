@@ -14,6 +14,7 @@ import io.github.workeron9.ozmoz.lineage.ir.ScopeNode
 import io.github.workeron9.ozmoz.lineage.ir.Span
 import io.github.workeron9.ozmoz.lineage.ir.TableRef
 import io.github.workeron9.ozmoz.lineage.ir.TransformKind
+import io.github.workeron9.ozmoz.lineage.schema.SchemaProvider
 
 /**
  * 列级血缘构建器：把 [SemanticStatement]（`engine-api` 的语义模型）变成
@@ -46,9 +47,10 @@ import io.github.workeron9.ozmoz.lineage.ir.TransformKind
  *
  * ## D. `*` 展开（`OutputSlots.kt` 的 expandStar）
  * 输出项顶层的 `SqlExpr.Star`：qualifier 非空限定到唯一来源；CTE / 派生逐个
- * 有效输出产槽（DIRECT）；物理表记 Unknown「物理表 X 的列未知（`*` 展开需要
- * SchemaProvider）」。qualifier 为空按来源顺序展开，物理来源各记一条 Unknown
- * 后继续。函数实参里的 `*`（如 `COUNT(*)`）不贡献上游。
+ * 有效输出产槽（DIRECT）；物理表 → 有 [io.github.workeron9.ozmoz.lineage.schema.SchemaProvider]
+ * 且收录该表 → 按 schema 列清单逐个产槽（DIRECT）；否则记 Unknown（schema 缺失与
+ * schema 未收录是两条不同措辞）。qualifier 为空按来源顺序展开，物理来源无法展开时
+ * 记 Unknown 后继续。函数实参里的 `*`（如 `COUNT(*)`）不贡献上游。
  *
  * ## E. 边生成（确定性）
  * 边 id `e0`、`e1`…按分配顺序；全局顺序 = 作用域按 id 升序；作用域内：
@@ -70,26 +72,35 @@ import io.github.workeron9.ozmoz.lineage.ir.TransformKind
  * ## G. 确定性
  * 同一输入永远产出同一模型（无随机、无无序集合影响顺序），记忆化不改变结果。
  *
- * `meta` 默认 `Meta()`，由调用方（CLI / 服务层）按运行环境填充。
+ * `meta` 由调用方（CLI / 服务层）填充引擎与耗时；传入 schema 提供方时自动记录其 id
+ * 到 `Meta.schemaSnapshotId`。
  */
 public object LineageBuilder {
 
-    /** 解析一条语句并构建列级血缘模型。空语句（只有诊断）产出空模型，不崩。 */
+    /**
+     * 解析一条语句并构建列级血缘模型。空语句（只有诊断）产出空模型，不崩。
+     *
+     * @param schema 可选的 [io.github.workeron9.ozmoz.lineage.schema.SchemaProvider]：
+     * 物理表 `*` 展开、裸列歧义消解（可证伪的物理来源不再恒为候选）、`INSERT` 未声明
+     * 目标列的逐位对齐都靠它；为 null 时全部退回显式 unknown（行为与本轮之前一致）。
+     */
     @JvmStatic
-    public fun build(statement: SemanticStatement): LineageModel =
-        Assembler(ScopeTreeBuilder.plan(statement), statement).assemble()
+    @JvmOverloads
+    public fun build(statement: SemanticStatement, schema: SchemaProvider? = null): LineageModel =
+        Assembler(ScopeTreeBuilder.plan(statement), statement, schema).assemble()
 }
 
 /** 单次构建的全部状态（阶段 1 输出槽 → 阶段 2 边 → 阶段 3 组装，规则 E / F）。 */
 private class Assembler(
     private val plan: ScopeTreePlan,
     private val statement: SemanticStatement,
+    private val schema: SchemaProvider?,
 ) {
 
     private val newUnknowns = mutableListOf<Resolved.Unknown>()
 
     private val resolver: ColumnResolver by lazy {
-        ColumnResolver(effectiveOutputs = { scopeId -> slotsEngine.effectiveOutputs(scopeId) })
+        ColumnResolver(effectiveOutputs = { scopeId -> slotsEngine.effectiveOutputs(scopeId) }, schema = schema)
     }
 
     private val slotsEngine: SlotEngine by lazy {
@@ -99,6 +110,7 @@ private class Assembler(
             rootId = plan.root?.id,
             resolver = resolver,
             unknowns = newUnknowns,
+            schema = schema,
         )
     }
 
@@ -146,7 +158,7 @@ private class Assembler(
         }
 
         return LineageModel(
-            meta = Meta(), // 默认元信息，由调用方填充（规则 F）
+            meta = Meta(schemaSnapshotId = schema?.id), // 提供 schema 时记录其 id 供溯源
             scopes = scopeNodes(scopeIds),
             columns = columnNodes(scopeIds),
             edges = edges.toList(),
