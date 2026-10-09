@@ -31,6 +31,7 @@
 |---|---|---|---|
 | [kotlin-test](https://github.com/JetBrains/kotlin/blob/v2.4.20/license/LICENSE.txt) | 2.4.20 | Apache-2.0 | 单元测试 |
 | [JUnit Jupiter](https://www.eclipse.org/legal/epl-2.0/)（`kotlin-test-junit5` 传递） | 5.10.1 | EPL-2.0 | 测试运行器 |
+| [H2](https://h2database.com/html/license.html) | 2.3.232 | **MPL 2.0 / EPL 1.0 双许可（二选一）** | `schema` 的 `JdbcSchemaProvider` 实测（仅测试期，不打包） |
 
 catalog 里锁定、但尚未进入 classpath 的库（Ktor、Calcite、jOOQ、JGraphT、JMH、ANTLR 等）不在本表登记。真正添加时再补行，并以上游许可证原文为准。
 
