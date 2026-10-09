@@ -38,6 +38,13 @@ public enum class Feature {
 
     /** 可导出归一化 AST。 */
     AST_EXPORT,
+
+    /**
+     * 可产出**多语句脚本**的语义模型——把一段 SQL 里的多条语句分别提取为
+     * `SemanticStatement` 列表（无法建模的语句跳过，整脚本语法错误才失败）。
+     * 未声明时 [SqlEngine.analyzeAll] 退化为单语句 [SqlEngine.analyze]。
+     */
+    MULTI_STATEMENT,
 }
 
 /**

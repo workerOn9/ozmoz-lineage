@@ -251,6 +251,40 @@ class SemanticExtractorTest {
         assertContains(result.reason, "不支持提取语义的语句")
     }
 
+    // ——— 多语句脚本 ———
+
+    @Test
+    fun `声明 MULTI_STATEMENT 能力`() {
+        assertTrue(engine.capabilities.supports(Feature.MULTI_STATEMENT))
+    }
+
+    @Test
+    fun `多语句脚本逐条提取 跳过不可建模语句`() {
+        val sql = """
+            CREATE TABLE t (a INT, b INT);
+            SELECT a FROM t;
+            INSERT INTO u (a) SELECT a FROM t
+        """.trimIndent()
+
+        val result = engine.analyzeAll(sql)
+        assertIs<Resolved.Known<List<io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement>>>(result)
+        // 纯 DDL 被跳过；剩下 SELECT 与 INSERT，顺序与源脚本一致。
+        assertEquals(
+            listOf(StatementKind.SELECT, StatementKind.INSERT),
+            result.value.map { it.kind },
+        )
+    }
+
+    @Test
+    fun `多语句脚本语法错误整段 Unknown`() {
+        assertIs<Resolved.Unknown>(engine.analyzeAll("SELECT a FROM t; SELECT * FROM"))
+    }
+
+    @Test
+    fun `多语句空输入 Unknown`() {
+        assertIs<Resolved.Unknown>(engine.analyzeAll("   "))
+    }
+
     @Test
     fun `未知子表达式落进 Unknown 而非猜测`() {
         // `a IN (1, 2)` 的 IN 谓词本适配器不建模为已知表达式，应是 Unknown 而非猜一个形状

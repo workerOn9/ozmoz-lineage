@@ -37,6 +37,7 @@ public class JSqlParserEngine : SqlEngine {
             Feature.PARSE,
             Feature.EXTRACT_TABLES,
             Feature.SEMANTIC_MODEL,
+            Feature.MULTI_STATEMENT,
             Feature.PRETTY_PRINT,
             Feature.AST_EXPORT,
         ),
@@ -96,6 +97,39 @@ public class JSqlParserEngine : SqlEngine {
         }
 
         return SemanticExtractor(sql).extract(statement)
+    }
+
+    /**
+     * 提取**多语句脚本**的语义模型（[Feature.MULTI_STATEMENT]）。
+     *
+     * 用 `CCJSqlParserUtil.parseStatements` 一次性解析整段脚本，再对**每条语句**单独
+     * 提取；无法建模的语句（纯 DDL / `MERGE` / `VALUES` 等）**跳过**，不让整脚本失败。
+     * 只有整段脚本**语法解析失败**才返回 [Resolved.Unknown]（带原因与位置）。
+     *
+     * 说明：JSqlParser 的 `parseStatements` 遇到任意一条坏语句会整段抛异常，
+     * 因此本轮不做「逐语句容错」——那属于 `ERROR_TOLERANT`，v1 明确不支持。
+     */
+    override fun analyzeAll(sql: String, request: ParseRequest): Resolved<List<SemanticStatement>> {
+        if (sql.isBlank()) return Resolved.Unknown("SQL 为空，无可提取内容")
+
+        val statements: List<Statement> = try {
+            CCJSqlParserUtil.parseStatements(sql).toList()
+        } catch (e: JSQLParserException) {
+            return Resolved.Unknown(parseFailureReason(sql, e), parseFailureSpan(sql, e))
+        } catch (e: RuntimeException) {
+            return Resolved.Unknown("解析失败: ${firstLine(e.message) ?: e.javaClass.simpleName}")
+        }
+
+        val extracted = ArrayList<SemanticStatement>(statements.size)
+        for (statement in statements) {
+            // 每条语句用**独立的** extractor：SemanticExtractor 内的 diagnostics 是累积的，
+            // 复用会把上一条的诊断带进下一条。
+            when (val result = SemanticExtractor(sql).extract(statement)) {
+                is Resolved.Known -> extracted += result.value
+                is Resolved.Unknown -> Unit // 跳过无法建模的语句（DDL / MERGE…），Never-wrong 不硬塞。
+            }
+        }
+        return Resolved.Known(extracted)
     }
 
     /** 解析失败的机器可读原因，复用 [parse] 的位置提取逻辑。 */
