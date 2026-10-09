@@ -9,6 +9,7 @@ dependencies {
     implementation(project(":engine-api"))
     implementation(project(":engine-jsqlparser"))
     implementation(project(":lineage"))
+    implementation(project(":schema"))
     implementation(libs.clikt)
     implementation(libs.serialization.json)
 }

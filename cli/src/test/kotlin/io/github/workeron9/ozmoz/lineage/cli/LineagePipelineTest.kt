@@ -66,13 +66,14 @@ class LineagePipelineTest {
     }
 
     @Test
-    fun `星号输出端到端不猜列名`() {
+    fun `星号输出端到端不发明列名`() {
         val semantic = assertIs<Resolved.Known<*>>(engine.analyze("SELECT * FROM store_sales"))
         val tree = ScopeTreeBuilder.build(semantic.value as io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement)
 
         val root = assertNotNull(tree.rootScopeId?.let { tree.scope(it) })
-        // `*` 没有显式列名 → 不发明列名，且显式记一条 unknown。
+        // `*` 在作用域树层**不发明列名**；名字由 lineage 展开阶段决定（CTE/派生推导
+        // 或 schema 列清单），展开失败时的 unknown 也在那一层记（见 LineageCommandTest）。
         assertTrue(root.outputs.isEmpty())
-        assertTrue(tree.unknowns.any { it.reason.contains("没有名字") })
+        assertTrue(tree.unknowns.isEmpty())
     }
 }

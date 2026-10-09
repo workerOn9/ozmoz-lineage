@@ -8,6 +8,7 @@ import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.ir.TransformKind
 import io.github.workeron9.ozmoz.lineage.lineage.LineageBuilder
+import io.github.workeron9.ozmoz.lineage.schema.DdlFileSchemaProvider
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
@@ -103,14 +104,40 @@ class LineageCommandTest {
         val result = command.test("--file ${f.absolutePath} --format summary")
         assertEquals(0, result.statusCode)
         assertContains(result.stdout, "edges: 0") // 物理表星号不产边
-        assertContains(result.stdout, "unknowns: 2") // 无名输出 + 物理表列未知
+        assertContains(result.stdout, "unknowns: 1") // 仅物理表列未知（星号名字由展开决定，不再记「输出列没有名字」）
         assertContains(result.stdout, "SchemaProvider")
     }
 
+    @Test
+    fun `schema DDL 文件端到端展开物理表星号`() {
+        val sql = tempSql("SELECT * FROM store_sales")
+        val ddl = tempSql("CREATE TABLE store_sales (ss_sold_date_sk INT, ss_quantity DECIMAL(7,2))")
+
+        val model = analyze("SELECT * FROM store_sales", schemaDdl = ddl)
+
+        // 星号展开成两条 DIRECT 边，不再记「需要 SchemaProvider」的 unknown。
+        assertEquals(2, model.edges.size)
+        assertEquals(listOf("store_sales.ss_sold_date_sk", "store_sales.ss_quantity"),
+            model.edges.map { it.fromColumn.qualifiedName })
+        assertTrue(model.unknowns.none { it.reason.contains("SchemaProvider") })
+    }
+
+    @Test
+    fun `schema 参数经命令行传递且 meta 记录其 id`() {
+        val sql = tempSql("SELECT * FROM store_sales")
+        val ddl = tempSql("CREATE TABLE store_sales (ss_sold_date_sk INT)")
+        val result = command.test("--file ${sql.absolutePath} --schema ${ddl.absolutePath} --format summary")
+
+        assertEquals(0, result.statusCode)
+        assertContains(result.stdout, "edges: 1")
+        assertContains(result.stdout, "unknowns: 0")
+    }
+
     /** 真实引擎分析 → 列级血缘模型（与 LineagePipelineTest 同一组合根模式）。 */
-    private fun analyze(sql: String): LineageModel {
+    private fun analyze(sql: String, schemaDdl: File? = null): LineageModel {
         val semantic = JSqlParserEngine().analyze(sql)
         val statement = assertIs<Resolved.Known<SemanticStatement>>(semantic).value
-        return LineageBuilder.build(statement)
+        val schema = schemaDdl?.let { DdlFileSchemaProvider.fromFiles(id = "ddl", it.toPath()) }
+        return LineageBuilder.build(statement, schema)
     }
 }
