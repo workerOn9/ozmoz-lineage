@@ -91,6 +91,9 @@ public class LineageGraph private constructor(
     private val outputIds: Set<String>,
 ) {
 
+    /** JGraphT 支撑的邻接结构（实现细节，不出现在公共签名里）。 */
+    private val internals: GraphInternals = GraphInternals(columns.keys, edges)
+
     /** 全部节点 id（列 + 表级哨兵），稳定顺序（首次出现序）。 */
     public val nodeIds: Set<String> get() = columns.keys
 
@@ -101,10 +104,12 @@ public class LineageGraph private constructor(
     public fun isOutput(columnId: String): Boolean = columnId in outputIds
 
     /** 出边（按边 id 升序）。 */
-    public fun outgoing(columnId: String): List<GraphEdge> = TODO("实现：按 from 过滤，id 升序")
+    public fun outgoing(columnId: String): List<GraphEdge> =
+        edges.filter { it.from == columnId }.sortedBy { it.id }
 
     /** 入边（按边 id 升序）。 */
-    public fun incoming(columnId: String): List<GraphEdge> = TODO("实现：按 to 过滤，id 升序")
+    public fun incoming(columnId: String): List<GraphEdge> =
+        edges.filter { it.to == columnId }.sortedBy { it.id }
 
     /**
      * 从 [origin] 出发按 [direction] 做**广度优先**可达性 / 影响面，[depth] 限制层数（null 不限）。
@@ -114,8 +119,33 @@ public class LineageGraph private constructor(
      * - [Direction.BOTH]：两个方向都走（同层合并去重）。
      * - 未知 [origin] → 只含原点自身（distance 0）的结果，不崩。
      */
-    public fun impact(origin: String, direction: Direction = Direction.UPSTREAM, depth: Int? = null): ImpactResult =
-        TODO("实现：BFS，同层 id 升序，truncated = 有邻居未展开")
+    public fun impact(origin: String, direction: Direction = Direction.UPSTREAM, depth: Int? = null): ImpactResult {
+        val nodes = mutableListOf(ImpactNode(origin, 0, isOutput(origin)))
+        val visited = LinkedHashSet<String>()
+        visited += origin
+        // 用有序集合承载每一层：同层节点按 id 升序展开，不依赖 HashSet 遍历序。
+        var frontier: java.util.SortedSet<String> = sortedSetOf(origin)
+        var distance = 0
+        var truncated = false
+        while (frontier.isNotEmpty()) {
+            if (depth != null && distance >= depth) {
+                // 已到层数上限：还有未展开的邻居 → 截断（否则只是「恰好走到边界」）。
+                truncated = frontier.any { n -> neighbors(n, direction).any { it !in visited } }
+                break
+            }
+            val next = sortedSetOf<String>()
+            for (n in frontier) {
+                for (m in neighbors(n, direction)) {
+                    if (visited.add(m)) next.add(m)
+                }
+            }
+            if (next.isEmpty()) break
+            distance++
+            for (n in next) nodes += ImpactNode(n, distance, isOutput(n))
+            frontier = next
+        }
+        return ImpactResult(origin, direction, depth, nodes, truncated)
+    }
 
     /** 影响面 = 下溯（我改了会波及谁）。 */
     public fun downstream(origin: String, depth: Int? = null): ImpactResult =
@@ -129,7 +159,21 @@ public class LineageGraph private constructor(
      * 全部有向环（SCC 规模 > 1 的每个分量 + 全部自环），按 [Cycle.nodeIds] 的字符串表示排序。
      * 无环返回空列表。
      */
-    public fun cycles(): List<Cycle> = TODO("实现：JGraphT 强连通分量 + 自环")
+    public fun cycles(): List<Cycle> {
+        val result = mutableListOf<Cycle>()
+        for (scc in internals.stronglyConnectedSets()) {
+            if (scc.size > 1) result += Cycle(normalizeCycle(scc))
+        }
+        // 自环（a → a）：SCC 里是单点分量，需单独补上。同一节点多条自环只算一个环。
+        val selfLoopNodes = edges.asSequence()
+            .filter { it.from == it.to }
+            .map { it.from }
+            .distinct()
+            .sorted()
+            .toList()
+        for (id in selfLoopNodes) result += Cycle(listOf(id))
+        return result.sortedBy { it.nodeIds.toString() }
+    }
 
     /**
      * 两列之间的**最短路径**（按边数）；不可达返回 null。[from] == [to] 返回 `[from]`。
@@ -139,19 +183,109 @@ public class LineageGraph private constructor(
         from: String,
         to: String,
         direction: Direction = Direction.DOWNSTREAM,
-    ): List<String>? = TODO("实现：JGraphT 最短路（含等长字典序兜底）")
+    ): List<String>? {
+        if (from == to) return listOf(from)
+        // BFS 逐层推进；每层对同一节点收集所有候选路径，取字典序最小者。
+        // 因为到某节点的所有最短路径等长，前缀字典序最小者必能支配更长的后缀比较。
+        val best = HashMap<String, List<String>>()
+        best[from] = listOf(from)
+        val visited = HashSet<String>()
+        visited += from
+        var frontier: List<String> = listOf(from)
+        while (frontier.isNotEmpty()) {
+            val candidates = LinkedHashMap<String, MutableList<List<String>>>()
+            for (u in frontier) {
+                val prefix = best.getValue(u)
+                for (v in neighbors(u, direction)) {
+                    if (v in visited) continue
+                    candidates.getOrPut(v) { mutableListOf() } += prefix + v
+                }
+            }
+            if (candidates.isEmpty()) break
+            for ((v, paths) in candidates) {
+                best[v] = paths.reduce { acc, p -> if (lexLess(p, acc)) p else acc }
+                visited += v
+            }
+            best[to]?.let { return it }
+            frontier = candidates.keys.toList()
+        }
+        return null
+    }
+
+    /** 按 [direction] 取 [id] 的邻居（不保证顺序；调用方自行排序）。 */
+    private fun neighbors(id: String, direction: Direction): Collection<String> = when (direction) {
+        Direction.DOWNSTREAM -> internals.successors(id)
+        Direction.UPSTREAM -> internals.predecessors(id)
+        Direction.BOTH -> internals.successors(id) + internals.predecessors(id)
+    }
+
+    /** 环归一化：成员按 id 升序，最小者自然打头（循环右移量为 0）。 */
+    private fun normalizeCycle(members: Collection<String>): List<String> = members.sorted()
+
+    /** 列表字典序比较（[a] 严格小于 [b] 时为 true）。 */
+    private fun lexLess(a: List<String>, b: List<String>): Boolean {
+        val n = minOf(a.size, b.size)
+        for (i in 0 until n) {
+            val c = a[i].compareTo(b[i])
+            if (c != 0) return c < 0
+        }
+        return a.size < b.size
+    }
 
     public companion object {
 
         /** 单模型建图。 */
         @JvmStatic
-        public fun of(model: LineageModel): LineageGraph = TODO("实现")
+        public fun of(model: LineageModel): LineageGraph = build(listOf(model), dedupeEdges = false)
 
         /**
          * 多模型建图（一个 SQL 目录）：按节点 id 合并；边按 (from, to, kind, transform)
          * 去重后保留**首次出现**的边 id。**不跨模型缝合裸列名与限定名**（见类 KDoc）。
          */
         @JvmStatic
-        public fun of(models: Iterable<LineageModel>): LineageGraph = TODO("实现")
+        public fun of(models: Iterable<LineageModel>): LineageGraph = build(models, dedupeEdges = true)
+
+        private fun build(models: Iterable<LineageModel>, dedupeEdges: Boolean): LineageGraph {
+            val columns = LinkedHashMap<String, ColumnRef>()
+            val outputIds = LinkedHashSet<String>()
+            val edges = mutableListOf<GraphEdge>()
+            val seenEdgeKeys = HashSet<EdgeKey>()
+            for (model in models) {
+                // 先登记声明的列节点（首次出现者保留其列引用），再登记边端点（补齐表级哨兵）。
+                for (node in model.columns) {
+                    columns.putIfAbsent(node.column.id, node.column)
+                    if (node.isOutput) outputIds += node.column.id
+                }
+                for (edge in model.edges) {
+                    columns.putIfAbsent(edge.fromColumn.id, edge.fromColumn)
+                    columns.putIfAbsent(edge.toColumn.id, edge.toColumn)
+                    if (dedupeEdges) {
+                        val key = EdgeKey(
+                            edge.fromColumn.id,
+                            edge.toColumn.id,
+                            edge.kind,
+                            edge.transform,
+                        )
+                        if (!seenEdgeKeys.add(key)) continue
+                    }
+                    edges += GraphEdge(
+                        edge.id,
+                        edge.fromColumn.id,
+                        edge.toColumn.id,
+                        edge.kind,
+                        edge.transform,
+                    )
+                }
+            }
+            return LineageGraph(edges, columns, outputIds)
+        }
     }
 }
+
+/** 多模型边的去重键（不含 id：首次出现者保留自己的 id）。 */
+private data class EdgeKey(
+    val from: String,
+    val to: String,
+    val kind: EdgeKind,
+    val transform: TransformKind,
+)
