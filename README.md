@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` 可运行；方言转换、Web UI 尚未接入）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` 可运行；方言转换、Web UI 尚未接入）。
 
 ## 它要解决什么
 
@@ -21,7 +21,9 @@ ozml parse   -f q.sql --format json|tree|ast          # 解析 → 归一化树�
 ozml lineage -f q.sql --format json|edges|summary     # 列级血缘模型（当前可用）
 ozml lineage -f q.sql --format openlineage|mermaid|dot|cypher  # 导出（当前可用）
 ozml lineage -f q.sql --schema schema.sql             # 喂 DDL 元数据：物理表 * 展开、列消歧、INSERT 对齐（当前可用）
-ozml impact  -f q.sql --on db.t.c --depth 3           # 上溯 / 下溯 / 影响面（当前可用）
+ozml lineage -f sql/ --graph ./lineage.db             # 吃下一个 SQL 目录（含多语句脚本）→ 落库全库血缘图（当前可用）
+ozml impact  --graph ./lineage.db --on db.t.c --depth 3  # 从库查询上溯 / 下溯 / 影响面（当前可用）
+ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查（当前可用）
 ozml convert --from mysql --to postgresql             # 方言转换（规划中）
 ```
 
@@ -33,7 +35,8 @@ ozml convert --from mysql --to postgresql             # 方言转换（规划中
 ./cli/build/install/ozml/bin/ozml parse   -f q.sql --format json
 ./cli/build/install/ozml/bin/ozml lineage -f q.sql --format edges
 ./cli/build/install/ozml/bin/ozml lineage -f q.sql --format mermaid
-./cli/build/install/ozml/bin/ozml impact  -f q.sql --on db.t.c --direction upstream
+./cli/build/install/ozml/bin/ozml lineage -f sql/ --graph ./lineage.db
+./cli/build/install/ozml/bin/ozml impact  --graph ./lineage.db --on db.t.c --direction upstream
 ```
 
 `ozml lineage` 输出列级血缘模型，共**六类边**：`OUTPUT`（输出列的值从哪来）、`PREDICATE`（WHERE / HAVING 引用，只影响结果集）、`JOIN_KEY`（`a.id = b.id` 连接键传递）、`GROUP_BY`（分组引用）、`ORDER_BY`（排序引用）、`SOURCE`（表级血缘：表 / CTE 作为整体被引用）。每条边带 `TransformKind`（`DIRECT` / `EXPRESSION` / `AGGREGATE` / `WINDOW` / `CASE_BRANCH` / `CONSTANT` / `JOIN_KEY` / `FILTER_PREDICATE` / `GROUPING` / `ORDERING` / `SOURCE`）：
@@ -55,9 +58,20 @@ e3  SOURCE  c -> x  [SOURCE]
 
 `ozml impact` 在 `graph` 模块的 `LineageGraph` 上做**上溯 / 下溯 / 影响面**（`--direction upstream|downstream|both`，`--depth` 限层）与环检测；目标列不在图里时非零退出，不猜相近列。
 
+`ozml lineage -f <目录>` 递归读取目录下的 `*.sql`，并可把结果**落库**到 SQLite：
+
+```bash
+ozml lineage -f sql/ --graph ./lineage.db   # 每个文件可含多条语句；DDL / MERGE 等不产血缘的语句自动跳过
+ozml impact  --graph ./lineage.db --on db.t.c
+```
+
+- 多语句：引擎用 `parseStatements` 逐条提取；纯 DDL / `MERGE` 等不可建模的语句**跳过**，只有整段语法错误才失败。输入里没有任何可建模语句时非零退出（不假装成功）。
+- 落库：`graph` 模块的 `LineageStore` SPI（当前实现 `SqliteLineageStore`）把**每条语句的 `LineageModel`** 存进 `lineage.db`（Lossless：`unknown` / 诊断 / span 全保留）；`ozml impact --graph` 载入后由 `LineageGraph.of(models)` 现建图。跨文件的链（`INSERT … SELECT` → 后续 `INSERT`/`VIEW` 读该表）在库里自然缝合。
+- 不带 `--graph` 时，多文件 / 多语句可用 `--format summary` 或 `--format graph-json` 直接看合并后的图。
+
 解析失败、或引擎不支持该语句的语义提取（如 `MERGE`）时返回非零退出码，并把带位置（行列）的诊断打到 stderr——不会静默给出一个猜测的结果。
 
-`--schema` 接一个含 `CREATE TABLE` 的 DDL 文件（`schema` 模块的 `DdlFileSchemaProvider`，另有 `StaticSchemaProvider` / `JdbcSchemaProvider` / `CompositeSchemaProvider` 可编程接入）：物理表的 `SELECT *` 按列清单展开、裸列名按「哪张表真有这一列」消歧、`INSERT INTO t SELECT …` 未声明目标列时按表列定义序对齐。元数据缺失的列一律显式记 `unknown`，不发明列名。
+`--schema` 接一个含 `CREATE TABLE` 的 DDL 文件或目录（目录取其下全部 `*.sql`；`schema` 模块的 `DdlFileSchemaProvider`，另有 `StaticSchemaProvider` / `JdbcSchemaProvider` / `CompositeSchemaProvider` 可编程接入）：物理表的 `SELECT *` 按列清单展开、裸列名按「哪张表真有这一列」消歧、`INSERT INTO t SELECT …` 未声明目标列时按表列定义序对齐。元数据缺失的列一律显式记 `unknown`，不发明列名。
 
 ## 设计原则
 

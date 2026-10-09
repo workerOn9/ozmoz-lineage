@@ -18,6 +18,7 @@
 | [JGraphT core](https://github.com/jgrapht/jgrapht)（`graph`） | 1.5.3 | **LGPL-2.1 / EPL-2.0 双许可（二选一）** | 图算法（强连通分量 / 最短路 / 邻接结构） |
 | [JHeaps](https://github.com/d-michail/jheaps)（JGraphT 传递） | 0.14 | Apache-2.0 | 堆 / 优先队列（JGraphT 内部） |
 | [Apfloat](https://github.com/mtommila/apfloat)（JGraphT 传递） | 1.14.0 | MIT | 任意精度浮点（JGraphT 内部） |
+| [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（`graph`） | 3.53.4.0 | Apache-2.0 | 血缘图库的 SQLite 持久化（`ozml lineage --graph` / `ozml impact --graph`） |
 | [JetBrains annotations](https://github.com/JetBrains/java-annotations)（kotlin-stdlib 传递） | 13.0 | Apache-2.0 | 编译期注解 |
 
 ### JSqlParser 许可证说明（重要）
@@ -35,6 +36,10 @@
 因此既不构成衍生作品、也不影响本项目的 Apache-2.0 授权。
 
 > 与 ADR-0007「优先 Apache-2.0 以最大化内网采用」的口径**存在张力**：EPL-2.0 是弱 copyleft（文件级），本项目未修改其源码、只做依赖引用，故可用；但若将来要 fork JGraphT 或把它内联进本仓库，必须重新评估并走 ADR。这是引入 JGraphT 时明确记录下来的代价。
+
+### sqlite-jdbc 说明
+
+`sqlite-jdbc` 自身为 Apache-2.0（[POM](https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.53.4.0/sqlite-jdbc-3.53.4.0.pom)）；其内嵌的 SQLite 内核属 **Public Domain**。本项目以**未修改的独立依赖**方式使用（JDBC 驱动），不内联、不 fork。
 
 ## 测试期依赖（不打包进产物）
 

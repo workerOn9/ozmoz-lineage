@@ -54,4 +54,20 @@ public interface SqlEngine {
      */
     public fun analyze(sql: String, request: ParseRequest = ParseRequest.DEFAULT): Resolved<SemanticStatement> =
         Resolved.Unknown(capabilities.reason(Feature.SEMANTIC_MODEL) ?: "unsupported")
+
+    /**
+     * 提取**多条语句**的语义模型（多语句脚本 / 一个 SQL 目录）。**可选**能力
+     * （[Feature.MULTI_STATEMENT]）。
+     *
+     * 默认实现退化为单语句 [analyze] 并包成单元素列表——不覆写时行为确定。
+     * 覆写者应当遵守与 [analyze] 相同的 Never-wrong 约定：
+     * - 整段脚本**语法解析失败** → [Resolved.Unknown]（带原因与位置）；
+     * - 脚本里**无法建模**的语句（如纯 DDL / `MERGE`）→ **跳过**，不让整脚本失败；
+     * - 返回的列表只含**提取成功**的语句，顺序与源脚本一致。
+     */
+    public fun analyzeAll(sql: String, request: ParseRequest = ParseRequest.DEFAULT): Resolved<List<SemanticStatement>> =
+        when (val single = analyze(sql, request)) {
+            is Resolved.Known -> Resolved.Known(listOf(single.value))
+            is Resolved.Unknown -> single
+        }
 }

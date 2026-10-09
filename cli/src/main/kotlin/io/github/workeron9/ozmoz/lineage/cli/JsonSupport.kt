@@ -2,7 +2,9 @@ package io.github.workeron9.ozmoz.lineage.cli
 
 import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
 import io.github.workeron9.ozmoz.lineage.graph.Direction
+import io.github.workeron9.ozmoz.lineage.graph.GraphEdge
 import io.github.workeron9.ozmoz.lineage.graph.ImpactResult
+import io.github.workeron9.ozmoz.lineage.graph.LineageGraph
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
@@ -32,6 +34,9 @@ internal object JsonSupport {
 
     fun encodeImpactResult(result: ImpactResult, label: (String) -> String): String =
         json.encodeToString(ImpactReport.serializer(), ImpactReport.from(result, label))
+
+    fun encodeGraph(graph: LineageGraph): String =
+        json.encodeToString(GraphReport.serializer(), GraphReport.from(graph))
 }
 
 /** `ozml parse --format json` 的稳定输出形状。 */
@@ -75,6 +80,50 @@ internal data class ImpactReport(
             truncated = result.truncated,
             nodes = result.nodes.map {
                 ImpactReportNode(id = it.id, label = label(it.id), distance = it.distance, isOutput = it.isOutput)
+            },
+        )
+    }
+}
+
+/**
+ * `ozml lineage --format graph-json` 的稳定输出形状——**合并后的全库血缘图**
+ * （`graph` 模块的模型不含序列化注解，此处做 CLI 侧镜像，与 [ImpactReport] 同一约定）。
+ */
+@Serializable
+internal data class GraphReport(
+    val nodes: List<GraphReportNode>,
+    val edges: List<GraphReportEdge>,
+) {
+    @Serializable
+    internal data class GraphReportNode(
+        val id: String,
+        val label: String,
+        val isOutput: Boolean,
+    )
+
+    @Serializable
+    internal data class GraphReportEdge(
+        val id: String,
+        val from: String,
+        val to: String,
+        val kind: String,
+        val transform: String,
+    )
+
+    companion object {
+        fun from(graph: LineageGraph): GraphReport = GraphReport(
+            // nodeIds 保持首次出现序（确定性）；边取 LineageGraph.edges（已稳定排序）。
+            nodes = graph.nodeIds.map {
+                GraphReportNode(id = it, label = graph.label(it), isOutput = graph.isOutput(it))
+            },
+            edges = graph.edges.map { edge: GraphEdge ->
+                GraphReportEdge(
+                    id = edge.id,
+                    from = edge.from,
+                    to = edge.to,
+                    kind = edge.kind.name,
+                    transform = edge.transform.name,
+                )
             },
         )
     }

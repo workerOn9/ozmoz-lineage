@@ -5,4 +5,6 @@ plugins {
 dependencies {
     api(project(":ir"))
     implementation(libs.jgrapht.core)
+    implementation(libs.serialization.json)
+    implementation(libs.sqlite.jdbc)
 }
