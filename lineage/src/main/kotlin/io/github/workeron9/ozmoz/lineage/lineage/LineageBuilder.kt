@@ -449,12 +449,36 @@ private class Assembler(
         for ((ref, scopeId) in columnCandidates) {
             if (!seen.add(ref.id)) continue // 先出现者胜
             val owner = slotOwners[ref.id]
+            // 类型补全（Never-wrong）：只有 schema 明确收录了「表 + 列」才填 type/nullable，
+            // 否则留 null。别名 / CTE 输出 / 派生表输出的 table 不是物理表名 → 查不到 → null，
+            // 不猜。物理表端点与 INSERT / CREATE 目标列的 table 是限定名，可命中。
+            val columnSchema = ref.table?.let { schema?.table(tableRefOf(it))?.column(ref.name) }
             columns += ColumnNode(
                 column = ref,
                 scopeId = owner ?: scopeId, // 输出槽归属优先，否则取首个引用它的作用域
                 isOutput = owner != null,
+                type = columnSchema?.type,
+                nullable = columnSchema?.nullable,
             )
         }
         return columns
+    }
+
+    /**
+     * 把 `ColumnRef.table` 的限定名（`name` / `schema.name` / `catalog.schema.name`）
+     * 还原成 [TableRef]，供 schema 查询。折叠规则与各 [SchemaProvider] 实现一致（小写）。
+     */
+    private fun tableRefOf(qualified: String): TableRef {
+        val parts = qualified.split('.')
+        val name = parts.last()
+        val schema = parts.getOrNull(parts.size - 2)
+        val catalog = if (parts.size >= 3) parts.dropLast(2).joinToString(".") else null
+        return TableRef(
+            raw = qualified,
+            canonical = qualified.lowercase(),
+            catalog = catalog,
+            schema = schema,
+            name = name,
+        )
     }
 }
