@@ -51,3 +51,8 @@ target/
 /conformance/out/
 /local/
 *.log
+# 本地血缘图库（SQLite）及日志文件
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
