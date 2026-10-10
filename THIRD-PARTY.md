@@ -57,7 +57,24 @@
 
 `sqlite-jdbc` 自身为 Apache-2.0（[POM](https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.53.4.0/sqlite-jdbc-3.53.4.0.pom)）；其内嵌的 SQLite 内核属 **Public Domain**。本项目以**未修改的独立依赖**方式使用（JDBC 驱动），不内联、不 fork。
 
+## 前端运行时依赖（`web/`，2026-10-10 随 M4 引入）
+
+打进 `web/dist` 的浏览器端依赖（版本以 `web/package-lock.json` 为准，许可证逐条核对上游）：
+
+| 依赖 | 版本 | 许可证 | 用途 |
+|---|---|---|---|
+| [React / React DOM](https://github.com/facebook/react) | 19.3.0 | MIT | UI 框架 |
+| [@xyflow/react（React Flow）](https://github.com/xyflowxyflow/xyflow) | 12.12.0 | MIT | 血缘图画布（节点/边/平移缩放） |
+| [@dagrejs/dagre](https://github.com/dagrejs/dagre) | 3.1.1 | MIT | 血缘图分层布局（LR），可替换抽象见 `web/src/graph/layout.ts` |
+| [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.57.0 | MIT | SQL 编辑器内核（本地打包 + 本地 worker，不引 CDN，符合离线红线） |
+| [Zustand](https://github.com/pmndrs/zustand) | 5.0.15 | MIT | 轻量全局状态 |
+| [Zod](https://github.com/colinhacks/zod) | 4.6.5 | MIT | 契约夹具的运行时校验（`web/test/fixtures/`） |
+
+前端**构建期**依赖（Vite / TypeScript / Tailwind / Vitest 等，devDependencies）不进入产物，不逐条登记；如上游许可证扫描要求再补。
+
 ## 测试期依赖（不打包进产物）
+
+
 
 | 依赖 | 版本 | 许可证 | 用途 |
 |---|---|---|---|

@@ -29,12 +29,18 @@ public class ServeCommand : CliktCommand(name = "serve") {
         .int()
         .default(OzmlLineageServer.DEFAULT_PORT)
 
+    private val webRoot: String? by option(
+        "--web-root",
+        help = "静态托管 web/ 构建产物目录（SPA：未知非 /api 路径回落 index.html）",
+    )
+
     override fun help(context: Context): String =
         "启动本地 HTTP 服务（/api/health、/api/parse、/api/lineage、/api/impact、/api/path）。"
 
     override fun run() {
+        val root = webRoot?.let { java.nio.file.Path.of(it) }
         echo("ozml serve  http://$host:$port  （Ctrl+C 停止）")
         // wait = true：阻塞到进程退出；Ctrl+C 由 JVM/调用方终止（Netty 注册了关闭钩子）。
-        OzmlLineageServer.start(port = port, host = host, wait = true)
+        OzmlLineageServer.start(port = port, host = host, webRoot = root, wait = true)
     }
 }

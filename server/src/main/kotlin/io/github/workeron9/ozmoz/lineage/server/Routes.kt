@@ -15,9 +15,12 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.path
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondFile
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
@@ -36,8 +39,11 @@ import io.github.workeron9.ozmoz.lineage.graph.ImpactResult
  * - 图算法的权威实现只在 `graph` 模块（[LineageGraph]）；`cli` 与本模块都消费它，
  *   不在各自层里重写遍历。
  * - 离线红线：本模块**不代理任何外部服务**；schema 只接受请求体内的内联 DDL 文本。
+ *
+ * [webRoot] 非空时追加 SPA 静态托管（见文件尾部的 [staticWeb]）：
+ * `/api` 路由优先匹配，其余 GET 先找实体文件，找不到回落 `index.html`。
  */
-public fun Application.serverModule() {
+public fun Application.serverModule(webRoot: java.nio.file.Path? = null) {
     install(ContentNegotiation) {
         json(ServerJson.json)
     }
@@ -187,6 +193,43 @@ public fun Application.serverModule() {
                     path = path?.map { PathReportDto.PathNodeDto(id = it, label = graph.label(it)) },
                 ),
             )
+        }
+
+        // SPA 静态托管（仅 --web-root 给出时注册）：`/api` 路由优先，尾卡兜底只接非 /api。
+        if (webRoot != null) {
+            staticWeb(webRoot)
+        }
+    }
+}
+
+/**
+ * `web/` dist 的静态托管 + SPA 回落（web 设计稿 §6.4）。
+ *
+ * - 匹配顺序在 `/api` 路由**之后**：Ktor 路由按特异性选路，显式 `/api` 段优先于尾卡，
+ *   所以已知 `/api` 路径不会落到本兜底；但未知的 `/api/...` 仍会被尾卡接住——显式回 JSON 404，
+ *   **不回 index.html**（前端按错误体分支，而不是拿到 HTML 解析炸）。
+ * - 路径穿越防护：候选文件必须落在 [webRoot] 规范化后的目录树内。
+ * - 未知非 `/api` 路径（SPA 前端路由）回落 `index.html`；index.html 缺失才 404。
+ */
+private fun Route.staticWeb(webRoot: java.nio.file.Path) {
+    val root = webRoot.toAbsolutePath().normalize()
+    get("{static...}") {
+        if (call.request.path().startsWith("/api/")) {
+            call.respond(
+                HttpStatusCode.NotFound,
+                ErrorResponse(error = "not_found", reason = "未知端点：${call.request.path()}"),
+            )
+            return@get
+        }
+        val rel = call.parameters.getAll("static")?.joinToString("/") ?: ""
+        val candidate = root.resolve(rel).normalize()
+        val file = candidate
+            .takeIf { it.startsWith(root) && java.nio.file.Files.isRegularFile(it) }
+            ?.toFile()
+        when {
+            file != null -> call.respondFile(file)
+            root.resolve("index.html").toFile().isFile -> call.respondFile(root.resolve("index.html").toFile())
+            else -> call.respond(HttpStatusCode.NotFound)
         }
     }
 }
