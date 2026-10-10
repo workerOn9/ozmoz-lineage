@@ -19,11 +19,18 @@
 | [JHeaps](https://github.com/d-michail/jheaps)（JGraphT 传递） | 0.14 | Apache-2.0 | 堆 / 优先队列（JGraphT 内部） |
 | [Apfloat](https://github.com/mtommila/apfloat)（JGraphT 传递） | 1.14.0 | MIT | 任意精度浮点（JGraphT 内部） |
 | [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（`graph`） | 3.53.4.0 | Apache-2.0 | 血缘图库的 SQLite 持久化（`ozml lineage --graph` / `ozml impact --graph`） |
+| [Apache Calcite](https://github.com/apache/calcite)（`engine-calcite`） | 1.42.0 | Apache-2.0 | **方言转换主力**（`ozml convert`）：`SqlDialect` 渲染 + 按方言配解析器（ADR-0004 / 2026-10-10 引入 classpath） |
+| [calcite-linq4j](https://github.com/apache/calcite)（Calcite 同仓同版本） | 1.42.0 | Apache-2.0 | Calcite 传递依赖（与 calcite-core 同仓发布） |
+| [Avatica core / metrics](https://github.com/apache/calcite-avatica)（Calcite 传递） | 1.28.0 | Apache-2.0 | Calcite 传递依赖（JDBC 框架，本项目不用其 JDBC 能力） |
+| [Guava](https://github.com/google/guava) | 33.4.8-jre | Apache-2.0 | Calcite 的 Google Guava（JVM 工具集）；未破坏封装， CALCITE 私有类型（`SqlNode`/`SqlDialect`/`Lex`）不出本模块公共签名 |
 | [Ktor Server](https://github.com/ktorio/ktor)（core / netty / content-negotiation / serialization-kotlinx-json，`server`） | 3.5.2 | Apache-2.0 | 本地 HTTP `/api`（`ozml serve`）；锁定 3.5.2 与 ADR-0002 的版本口径一致 |
 | [Netty](https://github.com/netty/netty)（Ktor 传递，server 引擎） | 4.2.16.Final | Apache-2.0 | Ktor Netty 引擎（`ozml serve`） |
 | [kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines)（Ktor 传递） | 1.11.0 | Apache-2.0 | Ktor 运行时依赖 |
 | [kotlinx-io](https://github.com/Kotlin/kotlinx-io)（Ktor 传递） | 0.9.1 | Apache-2.0 | Ktor 运行时依赖 |
 | [JetBrains annotations](https://github.com/JetBrains/java-annotations)（kotlin-stdlib 传递） | 13.0 | Apache-2.0 | 编译期注解 |
+| [checker-qual / error-prone annotations / j2objc-annotations / jspecify / failureaccess / listenablefuture（Guava 传递）](https://github.com/google/guava/wiki/UseGuavaInYourBuild) | 3.10.0 / 2.36.0 / 3.0.0 / 1.0.0 / 1.0.3 / 9999.0-empty | Apache-2.0（checker-qual 为 MIT） | Guava / Calcite 的编译注解与工具传递依赖 |
+
+> Calcite 系运行时依赖的许可证均在上游 POM 核对（2026-10-10）：calcite-core / calcite-linq4j / avatica / guava 及其注解类传递依赖全为 Apache-2.0（checker-qual 为 MIT）；`calcite-core` 的 POM 同时声明 slf4j-api（MIT，见上表 SLF4J 行，版本 2.0.20 由 slf4j-nop 对齐）。
 | [SLF4J](https://github.com/qos-ch/slf4j)（slf4j-nop，`server`） | 2.0.20 | MIT | 静默 Netty / Ktor 启动时的「No SLF4J providers were found」告警；本地工具无日志需求，绑空实现是有意取舍（2026-10-10 开发记录踩坑 8） |
 
 ### JSqlParser 许可证说明（重要）
@@ -55,7 +62,7 @@
 | [H2](https://h2database.com/html/license.html) | 2.3.232 | **MPL 2.0 / EPL 1.0 双许可（二选一）** | `schema` 的 `JdbcSchemaProvider` 实测（仅测试期，不打包） |
 | [Ktor Server Test Host](https://github.com/ktorio/ktor) | 3.5.2 | Apache-2.0 | `server` 的 `/api` 端点测试（仅测试期，不打包） |
 
-catalog 里锁定、但尚未进入 classpath 的库（Ktor、Calcite、jOOQ、JMH、ANTLR 等）不在本表登记。真正添加时再补行，并以上游许可证原文为准。
+catalog 里锁定、但尚未进入 classpath 的库（jOOQ、JMH、ANTLR 等）不在本表登记。真正添加时再补行，并以上游许可证原文为准。
 
 ## 登记规则
 

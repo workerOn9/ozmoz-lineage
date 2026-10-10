@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.choice
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
+import io.github.workeron9.ozmoz.lineage.engine.calcite.CalciteEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Severity
@@ -21,7 +22,7 @@ import java.io.File
  */
 public class ParseCommand : CliktCommand(name = "parse") {
 
-    private val engineId: String by option("--engine", help = "解析引擎（当前仅 jsqlparser）")
+    private val engineId: String by option("--engine", help = "解析引擎（jsqlparser / calcite）")
         .choice(*SUPPORTED_ENGINES)
         .default(JSqlParserEngine.ID)
 
@@ -67,10 +68,7 @@ public class ParseCommand : CliktCommand(name = "parse") {
             f.readText()
         }
 
-    private fun engineFor(id: String): SqlEngine = when (id) {
-        JSqlParserEngine.ID -> JSqlParserEngine()
-        else -> error("未注册的引擎：$id")
-    }
+    private fun engineFor(id: String): SqlEngine = LineagePipeline.engine(id)
 
     private fun renderTree(root: AstNode): String = buildString {
         fun walk(node: AstNode, depth: Int) {
@@ -85,6 +83,6 @@ public class ParseCommand : CliktCommand(name = "parse") {
     }
 
     public companion object {
-        private val SUPPORTED_ENGINES = arrayOf(JSqlParserEngine.ID)
+        private val SUPPORTED_ENGINES = arrayOf(JSqlParserEngine.ID, CalciteEngine.ID)
     }
 }

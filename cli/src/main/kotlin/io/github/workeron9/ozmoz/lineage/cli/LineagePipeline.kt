@@ -2,6 +2,7 @@ package io.github.workeron9.ozmoz.lineage.cli
 
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
+import io.github.workeron9.ozmoz.lineage.engine.calcite.CalciteEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
 import io.github.workeron9.ozmoz.lineage.ir.EdgeKind
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
@@ -24,13 +25,20 @@ import kotlin.io.path.readText
  */
 internal object LineagePipeline {
 
-    /** 引擎 id → 实例；未注册直接报错（与能力表路由不同，这里只有必选引擎）。 */
+    /** 引擎 id → 实例；未注册直接报错（比能力表硬：注册 = 能在 CLI 里选中）。 */
     fun engine(id: String): SqlEngine = when (id) {
         JSqlParserEngine.ID -> JSqlParserEngine()
+        CalciteEngine.ID -> CalciteEngine()
         else -> error("未注册的引擎：$id")
     }
 
-    /** 当前注册的引擎 id 列表（`--engine` 的合法取值，也是 `matrix` 等多引擎入口的展开源）。 */
+    /**
+     * **血缘可用**的引擎 id 列表（`ozml lineage --engine` / `ozml matrix` 的展开源）。
+     *
+     * 注意与 [engine] 的差异：引擎注册了 ≠ 能跑血缘。`calcite` 本轮只做方言渲染
+     *（`ozml parse` / `ozml convert`，无 `SEMANTIC_MODEL` 能力），进不了血缘管线，
+     * 所以这里**有意只有 jsqlparser**；calcite 补语义模型时再加进来。
+     */
     val ENGINE_IDS: List<String> = listOf(JSqlParserEngine.ID)
 
     /** 注册的全部引擎实例（`ozml matrix` 等按列表逐个跑的入口用）。 */
