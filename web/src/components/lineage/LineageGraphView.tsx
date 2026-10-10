@@ -127,6 +127,12 @@ export function LineageGraphView() {
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
         fitView
+        // 图上不需要 Space 拖拽平移 / Backspace 删节点：这两个默认全局键绑定会
+        // preventDefault，而它的输入框守卫只看 nodeName/contenteditable——
+        // Monaco 换输入通道（如 EditContext div）时守卫会漏，把编辑器里的
+        // 空格 / 退格吃掉。显式关掉，图交互不受影响（拖拽平移仍可用）。
+        panActivationKeyCode={null}
+        deleteKeyCode={null}
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#333" />

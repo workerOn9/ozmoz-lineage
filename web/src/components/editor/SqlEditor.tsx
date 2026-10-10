@@ -35,6 +35,11 @@ export function SqlEditor({ value, onChange }: SqlEditorProps) {
       scrollBeyondLastLine: false,
       padding: { top: 8 },
       fixedOverflowWidgets: true,
+      // Monaco 0.57 默认启用 Chromium EditContext 输入通道，实测真实键盘输入会丢空格
+      // （keydown → EditContext textupdate 在部分 Chrome 版本对 Space 不生效；
+      // CDP 注入 text 绕过该通道所以测不出来）。关掉回落到经典 textarea 输入管线，
+      // 这条路对 IME（中文输入法）与空格最稳。
+      editContext: false,
     })
     editorHolder.current = editor
     const sub = editor.onDidChangeModelContent(() => onChangeRef.current(editor.getValue()))
