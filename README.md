@@ -27,6 +27,7 @@ ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查
 ozml serve   --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|impact|path（当前可用）
 ozml parse   --engine calcite -f q.sql                # Calcite 按方言配解析器（反引号 / 方括号 / 双引号按方言路由）（当前可用）
 ozml convert --from mysql --to postgresql -f q.sql    # 方言转换：parse→render→re-parse 等价门禁，不等价不输出（当前可用）
+ozml convert --engine jooq --from mysql --to trino -f q.sql  # jOOQ 第二实现（12 个 OSS 关系库方言；当前可用）
 ```
 
 `ozml` = **ozmoz** + **lineage**。
@@ -86,7 +87,10 @@ ozml impact  --graph ./lineage.db --on db.t.c
 
 ### 方言转换（`ozml convert`）
 
-`ozml convert` 由 `engine-calcite`（Apache Calcite `SqlDialect`）实现，目标方言覆盖 jsqlparser 缺失的数仓系：`mysql` / `postgresql` / `oracle` / `hive` / `spark` / `bigquery` / `snowflake` / `duckdb` / `trino` / `mssql`（别名 `tsql`）/ `calcite`。**只承诺注册表里实测过的方言**，`AnsiSqlDialect` 有已知 quoting 缺陷，有意未注册。
+`ozml convert` 有**两档实现**（ADR-0004）：
+
+- **Calcite 主力**（`--engine calcite`，缺省）：数仓系 + 常用库，方言 `mysql` / `postgresql` / `oracle` / `hive` / `spark` / `bigquery` / `snowflake` / `duckdb` / `trino` / `mssql`（别名 `tsql`）/ `calcite`。**只承诺注册表里实测过的方言**，`AnsiSqlDialect` 有已知 quoting 缺陷，有意未注册。
+- **jOOQ 第二实现**（`--engine jooq`）：OSS edition 的 12 个可承诺开源方言（`mysql` / `mariadb` / `postgres` / `h2` / `hsqldb` / `derby` / `firebird` / `sqlite` / `duckdb` / `trino` / `clickhouse` / `yugabytedb`）+ 无方言族 `ansi`；Oracle / Snowflake / 数仓系在 jOOQ OSS **编译期不存在**（不是受限，枚举里没有），不对外预支。jOOQ 无公开 SQL AST，`parse` 只产浅树——树对比主力仍是 jsqlparser / calcite。
 
 ```bash
 ozml convert --from mysql --to postgresql -f q.sql

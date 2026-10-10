@@ -23,6 +23,9 @@
 | [calcite-linq4j](https://github.com/apache/calcite)（Calcite 同仓同版本） | 1.42.0 | Apache-2.0 | Calcite 传递依赖（与 calcite-core 同仓发布） |
 | [Avatica core / metrics](https://github.com/apache/calcite-avatica)（Calcite 传递） | 1.28.0 | Apache-2.0 | Calcite 传递依赖（JDBC 框架，本项目不用其 JDBC 能力） |
 | [Guava](https://github.com/google/guava) | 33.4.8-jre | Apache-2.0 | Calcite 的 Google Guava（JVM 工具集）；未破坏封装， CALCITE 私有类型（`SqlNode`/`SqlDialect`/`Lex`）不出本模块公共签名 |
+| [jOOQ](https://github.com/jOOQ/jOOQ)（`engine-jooq`） | 3.21.9 | Apache-2.0 | **方言转换第二实现**（`ozml convert --engine jooq`，OSS edition 12 方言 + DEFAULT；ADR-0004 / 2026-10-10 引入 classpath） |
+| [r2dbc-spi](https://github.com/r2dbc/r2dbc-spi)（jOOQ 传递） | 1.0.0.RELEASE | Apache-2.0 | jOOQ 唯一传递依赖（R2DBC 反应式 SPI，本项目只用 jOOQ 的 parser / render，不触碰该 API） |
+| [reactive-streams](https://github.com/reactive-streams/reactive-streams-jvm)（jOOQ 传递） | 1.0.3 | **CC0 1.0** | jOOQ 传递依赖（r2dbc-spi 的 API 契约）。CC0 = 公有领域等价，不带署名义务；以**未修改的独立依赖**方式使用，不内联不 fork |
 | [Ktor Server](https://github.com/ktorio/ktor)（core / netty / content-negotiation / serialization-kotlinx-json，`server`） | 3.5.2 | Apache-2.0 | 本地 HTTP `/api`（`ozml serve`）；锁定 3.5.2 与 ADR-0002 的版本口径一致 |
 | [Netty](https://github.com/netty/netty)（Ktor 传递，server 引擎） | 4.2.16.Final | Apache-2.0 | Ktor Netty 引擎（`ozml serve`） |
 | [kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines)（Ktor 传递） | 1.11.0 | Apache-2.0 | Ktor 运行时依赖 |
