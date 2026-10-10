@@ -372,6 +372,13 @@ private class Assembler(
         }
 
         is DerivedSourcePlan -> null
+
+        // 递归自引用来源：CTE 身份已知（名字就是引用原文），发与 CTE 相同形状的哨兵；
+        // 但其体尚未构建 → 不进 sources 集合的表身份，仅做表级 SOURCE 哨兵。
+        is RecursiveSourcePlan -> {
+            val name = source.source.raw
+            ColumnRef(raw = name, canonical = name.lowercase(), name = name, table = null, span = null)
+        }
     }
 
     // ——— 边与候选（规则 E：边 id 按分配顺序 e0、e1…） ———
@@ -420,6 +427,9 @@ private class Assembler(
                     )
 
                     is DerivedSourcePlan -> null
+
+                    // 递归自引用来源无表身份（体未构建，血缘可展开性未知）→ 不进 sources。
+                    is RecursiveSourcePlan -> null
                 }
             },
             // 有名输出槽的 consumerRef 列表；UPDATE 作用域 = assignment refs（规则 F）。

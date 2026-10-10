@@ -41,6 +41,10 @@ import io.github.workeron9.ozmoz.lineage.ir.Span
  * - 查询 `Q` 的作用域**可见的 CTE** = `Q.ctes` 声明的名字 ∪ 从外层查询继承来的 CTE 名字。
  * - 内层同名 CTE **覆盖**外层同名 CTE（大小写不敏感，与 SQL 未加引号标识符一致）。
  * - CTE 之间**互相可见**（含自身）：不强制 `RECURSIVE` 限制——能解析成 CTE 就解析成 CTE。
+ *   已构建完的 CTE 体**沿嵌套层级向下传递**：CTE 体、派生表、集合运算分支同样能引用
+ *   外层（含本层先声明的）CTE——CTE 链 `WITH a AS (…), b AS (SELECT … FROM a)` 成立。
+ * - **递归自引用显式降级**：CTE 自己的体引用自己时（体尚未构建完），来源显式落
+ *   [ScopeSource.Unknown]（`RecursiveSourcePlan`），引用列记 unknown，绝不抛内部错误。
  * - **带 schema / catalog 限定的表名一律视为物理表**（`db.t` 不会命中名为 `t` 的 CTE）。
  * - 优先级：**可见 CTE 优先于物理表**——即 `FROM c` 在 `c` 是可见 CTE 时解析为 [ScopeSource.Cte]。
  *
@@ -94,6 +98,7 @@ private class Builder {
                 query = query,
                 parentId = null,
                 inherited = emptyMap(),
+                bodies = emptyMap(),
                 forcedIndex = null,
                 binding = ScopeBinding.Terminal,
             )
@@ -143,22 +148,27 @@ private class Builder {
      *
      * [forcedIndex] 用于 CTE：id 需在构建 CTE 体之前就已知（供互相引用），故由调用方预分配。
      * [binding] 是该查询体作为「被消费方」时的命名绑定（CTE 名 / 派生表别名 / 顶层）。
+     * [bodies] 是**外层已构建完**的 CTE 体（名字 → 体计划），使内层查询（CTE 体 / 派生表 /
+     * 集合分支）也能引用外层 CTE——CTE 链 `WITH a AS (…), b AS (SELECT … FROM a)` 的关键。
+     * 每层会在此之上叠加自己声明的 CTE 体；同名覆盖（与 `inherited` 的遮蔽规则一致）。
      */
     private fun buildQuery(
         query: QuerySpec,
         parentId: String?,
         inherited: Map<String, CteRef>,
+        bodies: Map<String, ScopePlan>,
         forcedIndex: Int?,
         binding: ScopeBinding,
     ): ScopePlan = when (query) {
-        is SelectQuery -> buildSelect(query, parentId, inherited, forcedIndex, binding)
-        is SetOperationQuery -> buildSetOp(query, parentId, inherited, forcedIndex, binding)
+        is SelectQuery -> buildSelect(query, parentId, inherited, bodies, forcedIndex, binding)
+        is SetOperationQuery -> buildSetOp(query, parentId, inherited, bodies, forcedIndex, binding)
     }
 
     private fun buildSelect(
         query: SelectQuery,
         parentId: String?,
         inherited: Map<String, CteRef>,
+        bodies: Map<String, ScopePlan>,
         forcedIndex: Int?,
         binding: ScopeBinding,
     ): ScopePlan {
@@ -171,12 +181,16 @@ private class Builder {
         for ((cte, index) in cteIds) {
             visible[cte.name.lowercase()] = CteRef(name = cte.name, scopeId = idOf(index), cte = cte)
         }
-        val cteBodies = LinkedHashMap<String, ScopePlan>()
+        // 体集合约定：进本层时先带上外层体（B 的体构建时可引用 A 的体）；
+        // 构建中的 CTE 的体暂时缺席——此时命中 visible 即为**递归自引用**，由
+        // [resolveTable] 显式降级（绝不抛内部错误）。
+        val cteBodies = LinkedHashMap(bodies)
         for ((cte, index) in cteIds) {
             cteBodies[cte.name.lowercase()] = buildQuery(
                 query = cte.query,
                 parentId = idOf(index),
                 inherited = visible,
+                bodies = cteBodies,
                 forcedIndex = index,
                 binding = ScopeBinding.Cte(name = cte.name, explicitColumns = cte.columns),
             )
@@ -212,6 +226,7 @@ private class Builder {
         query: SetOperationQuery,
         parentId: String?,
         inherited: Map<String, CteRef>,
+        bodies: Map<String, ScopePlan>,
         forcedIndex: Int?,
         binding: ScopeBinding,
     ): ScopePlan {
@@ -223,12 +238,13 @@ private class Builder {
         for ((cte, index) in cteIds) {
             visible[cte.name.lowercase()] = CteRef(name = cte.name, scopeId = idOf(index), cte = cte)
         }
-        val cteBodies = LinkedHashMap<String, ScopePlan>()
+        val cteBodies = LinkedHashMap(bodies)
         for ((cte, index) in cteIds) {
             cteBodies[cte.name.lowercase()] = buildQuery(
                 query = cte.query,
                 parentId = idOf(index),
                 inherited = visible,
+                bodies = cteBodies,
                 forcedIndex = index,
                 binding = ScopeBinding.Cte(name = cte.name, explicitColumns = cte.columns),
             )
@@ -236,7 +252,7 @@ private class Builder {
 
         // 各分支继承容器的绑定：集合运算作为 CTE 体 / 派生表时，消费名由分支逐位承接。
         val branches = query.branches.map { branch ->
-            buildQuery(query = branch, parentId = containerId, inherited = visible, forcedIndex = null, binding = binding)
+            buildQuery(query = branch, parentId = containerId, inherited = visible, bodies = cteBodies, forcedIndex = null, binding = binding)
         }
 
         val plan = ScopePlan(
@@ -315,6 +331,7 @@ private class Builder {
                     query = source.query,
                     parentId = parentScopeId,
                     inherited = visible,
+                    bodies = cteBodies,
                     forcedIndex = null,
                     binding = ScopeBinding.Derived(alias = source.alias),
                 )
@@ -347,15 +364,28 @@ private class Builder {
         } else {
             null
         }
-        return if (cte != null) {
-            CteSourcePlan(
-                source = ScopeSource.Cte(alias = table.alias, name = cte.name, scopeId = cte.scopeId),
-                cte = cte.cte,
-                body = cteBodies[cte.name.lowercase()]
-                    ?: error("内部错误：CTE 体未构建：${cte.name}"),
-            )
-        } else {
-            TableSourcePlan(source = ScopeSource.Table(alias = table.alias, ref = table), table = table, spec = source)
+        return when {
+            cte == null ->
+                TableSourcePlan(source = ScopeSource.Table(alias = table.alias, ref = table), table = table, spec = source)
+
+            // 体已构建 → 正常 CTE 引用。
+            cteBodies.containsKey(cte.name.lowercase()) ->
+                CteSourcePlan(
+                    source = ScopeSource.Cte(alias = table.alias, name = cte.name, scopeId = cte.scopeId),
+                    cte = cte.cte,
+                    body = cteBodies.getValue(cte.name.lowercase()),
+                )
+
+            // 可见但体缺席 = **正在构建**的 CTE 被自己的体引用（递归，含 UNION ALL 递归分支）。
+            // 递归血缘展开需要迭代求值，暂不支持 → 显式降级为 Unknown（Never-wrong），
+            // 引用列记 unknown 并可统计，绝不抛内部错误、绝不猜。
+            else -> {
+                val reason = "递归 CTE ${cte.name} 的自引用暂不支持血缘展开"
+                unknowns += UnknownEntry(reason = reason, span = table.span)
+                RecursiveSourcePlan(
+                    source = ScopeSource.Unknown(alias = table.alias, raw = table.raw, reason = reason),
+                )
+            }
         }
     }
 

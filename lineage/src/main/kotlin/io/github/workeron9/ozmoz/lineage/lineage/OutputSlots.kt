@@ -168,6 +168,14 @@ internal class SlotEngine(
         is TableSourcePlan -> expandPhysicalSource(source, star)
         is CteSourcePlan -> expandOutputs(source.body.id)
         is DerivedSourcePlan -> expandOutputs(source.body.id)
+        // 递归自引用来源列集未知（体尚未构建完）→ 不产槽，显式记 Unknown。
+        is RecursiveSourcePlan -> {
+            unknowns += Resolved.Unknown(
+                "递归 CTE ${source.source.raw} 无法展开 `*`（递归血缘展开暂不支持）",
+                star.span,
+            )
+            emptyList()
+        }
     }
 
     /**

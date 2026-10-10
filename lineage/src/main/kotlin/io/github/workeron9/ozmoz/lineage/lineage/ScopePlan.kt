@@ -49,6 +49,15 @@ internal data class CteSourcePlan(
     val body: ScopePlan,
 ) : SourcePlan
 
+/**
+ * 递归 CTE 的**自引用**来源：`visible` 已命中但体的 [ScopePlan] 尚未构建完（正在构建中）。
+ * 递归血缘展开需要迭代求值，暂不支持 → 来源显式落 [ScopeSource.Unknown]（Never-wrong），
+ * 引用它的列解析记 unknown 并可统计，而不是抛内部错误。
+ */
+internal data class RecursiveSourcePlan(
+    override val source: ScopeSource.Unknown,
+) : SourcePlan
+
 /** 派生表来源：持有子查询体的代表 [ScopePlan]。 */
 internal data class DerivedSourcePlan(
     override val source: ScopeSource.Derived,

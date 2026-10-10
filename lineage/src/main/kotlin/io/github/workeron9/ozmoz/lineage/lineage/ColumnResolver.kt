@@ -25,6 +25,11 @@ internal fun matchesQualifier(source: SourcePlan, foldedQualifier: String): Bool
             source.source.alias?.lowercase() == foldedQualifier
 
     is DerivedSourcePlan -> source.source.alias?.lowercase() == foldedQualifier
+
+    // 递归自引用来源：按引用原文（CTE 名）或别名命中，让列解析能「明确地」落 Unknown。
+    is RecursiveSourcePlan ->
+        source.source.raw.lowercase() == foldedQualifier ||
+            source.source.alias?.lowercase() == foldedQualifier
 }
 
 /**
@@ -93,11 +98,12 @@ internal class ColumnResolver(
         endpointInSource(name, name, span, source)
 
     /** 裸列名的候选判定：物理表恒为候选（schema 收录且没有该列时可证伪，排除）；
-     *  CTE / 派生只有拥有该名列（按有效输出）才是候选。 */
+     *  CTE / 派生只有拥有该名列（按有效输出）才是候选；递归自引用来源未知列集，恒为候选。 */
     private fun isBareCandidate(source: SourcePlan, foldedName: String): Boolean = when (source) {
         is TableSourcePlan -> schema?.table(source.table)?.let { it.column(foldedName) != null } ?: true
         is CteSourcePlan -> hasColumn(source.body.id, foldedName)
         is DerivedSourcePlan -> hasColumn(source.body.id, foldedName)
+        is RecursiveSourcePlan -> true
     }
 
     private fun hasColumn(bodyId: String, foldedName: String): Boolean =
@@ -132,6 +138,12 @@ internal class ColumnResolver(
 
             is CteSourcePlan -> outputEndpoint(name, span, displayName = source.source.name, bodyId = source.body.id)
             is DerivedSourcePlan -> outputEndpoint(name, span, displayName = source.source.alias ?: "无别名派生表", bodyId = source.body.id)
+            // 递归自引用：体尚未构建完，列的出来源显式留 Unknown（Never-wrong）。
+            is RecursiveSourcePlan ->
+                Resolved.Unknown(
+                    "递归 CTE ${source.source.raw} 的列 $name 无法解析（递归血缘展开暂不支持）",
+                    span,
+                )
         }
 
     private fun outputEndpoint(name: String, span: Span?, displayName: String, bodyId: String): Resolved<ColumnRef> {
