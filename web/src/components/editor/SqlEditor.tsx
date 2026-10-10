@@ -35,6 +35,8 @@ export function SqlEditor({ value, onChange }: SqlEditorProps) {
       scrollBeyondLastLine: false,
       padding: { top: 8 },
       fixedOverflowWidgets: true,
+      // 长单行 SQL（宽表 / 长表达式）不横向溢出，自动按视口宽度换行。
+      wordWrap: 'on',
       // Monaco 0.57 默认启用 Chromium EditContext 输入通道，实测真实键盘输入会丢空格
       // （keydown → EditContext textupdate 在部分 Chrome 版本对 Space 不生效；
       // CDP 注入 text 绕过该通道所以测不出来）。关掉回落到经典 textarea 输入管线，
