@@ -24,7 +24,9 @@ ozml lineage -f q.sql --schema schema.sql             # 喂 DDL 元数据：物�
 ozml lineage -f sql/ --graph ./lineage.db             # 吃下一个 SQL 目录（含多语句脚本）→ 落库全库血缘图（当前可用）
 ozml impact  --graph ./lineage.db --on db.t.c --depth 3  # 从库查询上溯 / 下溯 / 影响面（当前可用）
 ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查（当前可用）
-ozml serve   --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|impact|path（当前可用）
+ozml matrix   --corpus ./conformance/corpus --out ./docs/compat-matrix.json
+ozml matrix   --convert --corpus ./conformance/corpus  # 方言转换矩阵：20 组方言对 × 渲染引擎（diff 视图数据）
+ozml serve    --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|impact|path（当前可用）
 ozml parse   --engine calcite -f q.sql                # Calcite 按方言配解析器（反引号 / 方括号 / 双引号按方言路由）（当前可用）
 ozml convert --from mysql --to postgresql -f q.sql    # 方言转换：parse→render→re-parse 等价门禁，不等价不输出（当前可用）
 ozml convert --engine jooq --from mysql --to trino -f q.sql  # jOOQ 第二实现（12 个 OSS 关系库方言；当前可用）
@@ -98,6 +100,19 @@ ozml convert --from mysql --to mssql        -f q.sql    # → 门禁拦截，非
 ```
 
 输出前跑 **render-verified 门禁**：按源方言解析 → 按目标方言渲染 → 将渲染结果按目标方言的解析器配置 re-parse → 等价（canon：空白折叠 + 小写）才输出。**不等价就不输出 SQL**，非零退出并报告诊断——这档住了 Calcite unparse 的已知静默降级（如 `MssqlSqlDialect` 丢 `LIMIT`/`OFFSET`：输出能跑、语义已变）。未知方言、引擎不支持渲染同样给可解释的错，不靠异常碰运气。
+
+### 方言转换矩阵（`ozml matrix --convert`）
+
+CI 上的**方言对 × 语料 × 渲染引擎**实测矩阵（M3 验收项「20 组方言对 diff 视图」的数据载体）：
+
+```bash
+ozml matrix --convert --corpus conformance/corpus            # 缺省 M3 的 20 组方言对
+ozml matrix --convert --pairs mysql>postgresql,ansi>trino # 自定义方言对
+```
+
+- 方言对缺省 **20 组**（横跨 calcite 数仓系与 jOOQ 关系库：双 quoting、分页、大小写改写形态）；引擎不注册的（方言，对）组合**不出格**（coverage 只记实际跑的组合——jOOQ 没有的数仓方言不会在 jOOQ 列上凭空记失败）。
+- 语料按 `case.dialect == 对.from` 进格；ok 格**带 `sql` 成品**（render-verified 门禁放行才出炉），失败格给截断原因（源解析 / 渲染 / 门禁拦截分开说话）。
+- CI（`conformance` workflow）产出 `compat-convert.json` artifact，并在任务摘要里渲染**覆盖表 + 每方言对一条成品样本**（diff 视图样本，可见两档引擎的大小写 / quoting / 分页差异）。
 
 `--schema` 接一个含 `CREATE TABLE` 的 DDL 文件或目录（目录取其下全部 `*.sql`；`schema` 模块的 `DdlFileSchemaProvider`，另有 `StaticSchemaProvider` / `JdbcSchemaProvider` / `CompositeSchemaProvider` 可编程接入）：物理表的 `SELECT *` 按列清单展开、裸列名按「哪张表真有这一列」消歧、`INSERT INTO t SELECT …` 未声明目标列时按表列定义序对齐。**未给 `--schema` 时从输入文本自动收集同源的 `CREATE TABLE`**（逐文件容错：解析失败的文件跳过——读取侧已有告警；显式 `--schema` 永远优先）。元数据缺失的列一律显式记 `unknown`，不发明列名。
 

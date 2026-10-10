@@ -63,6 +63,9 @@ internal object CalciteDialects {
         "tsql" to "mssql",
         "big_query" to "bigquery",
         "postgres" to "postgresql",
+        // 语料里的 `ansi`（无方言族）：解析按 Lex.ORACLE、渲染按 CalciteSqlDialect——
+        // 与主档 `calcite` 同配置。**不等于**缺陷方言类 AnsiSqlDialect（仍不使用）。
+        "ansi" to "calcite",
     )
 
     /** 已注册的方言 id（含别名）——`ozml convert --from/--to` 与引擎能力表的合法取值。 */

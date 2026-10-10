@@ -2,12 +2,14 @@ package io.github.workeron9.ozmoz.lineage.cli
 
 import com.github.ajalt.clikt.testing.test
 import io.github.workeron9.ozmoz.lineage.conformance.CompatMatrix
+import io.github.workeron9.ozmoz.lineage.conformance.ConvertMatrix
 import io.github.workeron9.ozmoz.lineage.conformance.CorpusLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.Path
 import kotlin.io.path.readText
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -114,5 +116,65 @@ class MatrixCommandTest {
             Files.writeString(root.resolve(name), caseJson)
         }
         return root
+    }
+
+    // ————— ozml matrix --convert（方言转换矩阵，M3 验收项） —————
+
+    @Test
+    fun `convert 模式输出方言转换矩阵并带成品 sql`() {
+        val root = corpus(
+            "mysql" to listOf(
+                "ok.json" to """{"id":"ok","dialect":"mysql","kind":"SELECT","sql":"SELECT id FROM customer ORDER BY id LIMIT 10"}""",
+                "broken.json" to """{"id":"broken","dialect":"mysql","kind":"SELECT","sql":"SELECT no FROM"}""",
+            ),
+        )
+        val result = command.test("--convert --pairs mysql>postgresql --corpus ${root.toAbsolutePath()}")
+        assertEquals(0, result.statusCode, result.stderr)
+        // calcite + jooq 都注册了 mysql / postgresql → 每个 2 格（ok + broken）
+        val matrix = CorpusLoader.jsonBuilder().decodeFromString(ConvertMatrix.serializer(), result.stdout)
+        assertEquals(2, matrix.meta.engineCount)
+        assertEquals(2, matrix.meta.pairCount)
+        assertEquals(4, matrix.cells.size)
+        // 成品 sql 出炉（diff 视图的数据）；失败格无 sql 但有原因
+        val okCell = matrix.cells.filter { it.caseId == "ok" }
+        assertTrue(okCell.all { it.ok && it.sql != null }, okCell.toString())
+        val failed = matrix.cells.filter { it.caseId == "broken" }
+        assertTrue(failed.all { !it.ok && it.sql == null && it.reason != null }, failed.toString())
+    }
+
+    @Test
+    fun `convert 模式缺省用 M3 的 20 组方言对`() {
+        val root = corpus(
+            "mysql" to listOf("a.json" to """{"id":"a","dialect":"mysql","sql":"SELECT 1"}"""),
+        )
+        val result = command.test("--convert --corpus ${root.toAbsolutePath()}")
+        assertEquals(0, result.statusCode, result.stderr)
+        val matrix = CorpusLoader.jsonBuilder().decodeFromString(ConvertMatrix.serializer(), result.stdout)
+        // 20 组里 mysql 为源的只有 calcite 能吃 hive/spark/bigquery/oracle/tsql 与
+        // calcite/ansi 档；jooq 只吃 postgresql/trino/duckdb/h2 等——合计应大于 jooq 单引擎数。
+        assertTrue(matrix.meta.pairCount > 0, "pairCount=${matrix.meta.pairCount}")
+        // 有成品格
+        assertTrue(matrix.cells.any { it.ok && it.sql != null }, matrix.coverage.toString())
+    }
+
+    @Test
+    fun `convert 模式不支持的对不出格--语料方言与 pair from 不匹配不进格`() {
+        val root = corpus(
+            "hive" to listOf("h.json" to """{"id":"h","dialect":"hive","sql":"SELECT 1"}"""),
+        )
+        val result = command.test("--convert --pairs mysql>postgresql --corpus ${root.toAbsolutePath()}")
+        assertEquals(0, result.statusCode, result.stderr)
+        val matrix = CorpusLoader.jsonBuilder().decodeFromString(ConvertMatrix.serializer(), result.stdout)
+        assertEquals(0, matrix.cells.size)
+    }
+
+    @Test
+    fun `convert 模式坏 pairs 非零退出`() {
+        val root = corpus(
+            "mysql" to listOf("a.json" to """{"id":"a","dialect":"mysql","sql":"SELECT 1"}"""),
+        )
+        val result = command.test("--convert --pairs nope --corpus ${root.toAbsolutePath()}")
+        assertTrue(result.statusCode != 0, result.stdout)
+        assertContains(result.stderr, "--pairs 格式非法")
     }
 }
