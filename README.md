@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + 方言转换主力已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml serve`（Ktor `/api`）可运行；Web UI 尚未接入）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + 方言转换主力 + schema 语义校验已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml serve`（Ktor `/api`）可运行；Web UI 尚未接入）。
 
 ## 它要解决什么
 
@@ -30,6 +30,7 @@ ozml serve    --port 8765                              # 本地 HTTP：/api/heal
 ozml parse   --engine calcite -f q.sql                # Calcite 按方言配解析器（反引号 / 方括号 / 双引号按方言路由）（当前可用）
 ozml convert --from mysql --to postgresql -f q.sql    # 方言转换：parse→render→re-parse 等价门禁，不等价不输出（当前可用）
 ozml convert --engine jooq --from mysql --to trino -f q.sql  # jOOQ 第二实现（12 个 OSS 关系库方言；当前可用）
+ozml validate --schema ddl.sql -f q.sql               # schema 语义校验：未知表 / 未知列 / 歧义给权威诊断（当前可用）
 ```
 
 `ozml` = **ozmoz** + **lineage**。
@@ -101,9 +102,18 @@ ozml convert --from mysql --to mssql        -f q.sql    # → 门禁拦截，非
 
 输出前跑 **render-verified 门禁**：按源方言解析 → 按目标方言渲染 → 将渲染结果按目标方言的解析器配置 re-parse → 等价（canon：空白折叠 + 小写）才输出。**不等价就不输出 SQL**，非零退出并报告诊断——这档住了 Calcite unparse 的已知静默降级（如 `MssqlSqlDialect` 丢 `LIMIT`/`OFFSET`：输出能跑、语义已变）。未知方言、引擎不支持渲染同样给可解释的错，不靠异常碰运气。
 
-### 方言转换矩阵（`ozml matrix --convert`）
+### schema 语义校验（`ozml validate`）
 
-CI 上的**方言对 × 语料 × 渲染引擎**实测矩阵（M3 验收项「20 组方言对 diff 视图」的数据载体）：
+结合 schema 做语义校验（能力位 `VALIDATE_SCHEMA`，Calcite `SqlValidator`）：未知表 / 未知列 / 列歧义 / 函数参数错误等给**权威诊断**（引擎无关的 `Diagnostic`，带行列位置）。schema 来自 `--schema`（单个 DDL 文件或目录，与 `ozml lineage --schema` 同一口径，大小写折叠 / search path 由 `SchemaProvider` 实现约定处理）。`--schema` 必填——没有校验目标就没有 validate；部分收录的 schema 会把「未收录表」如实报 `Object not found`，别拿半份 DDL 当全量校验用。
+
+```bash
+ozml validate --schema ddl.sql -f q.sql                  # output json: {engine, dialect, diagnostics}
+ozml validate --schema ddl.sql --dialect mysql -f q.sql  # 方言决定解析器 quoting（反引号等）
+```
+
+诊断输出为 JSON（stdout），存在 ERROR 级诊断（含语法错误——那是可背书的诊断）时非零退出，便于 CI。校验器说不出话的语句种类（纯 DDL 等）不产诊断，不猜。
+
+### 方言转换矩阵（`ozml matrix --convert`）
 
 ```bash
 ozml matrix --convert --corpus conformance/corpus            # 缺省 M3 的 20 组方言对

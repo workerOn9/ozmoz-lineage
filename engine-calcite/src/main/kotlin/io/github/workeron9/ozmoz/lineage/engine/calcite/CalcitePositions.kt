@@ -2,6 +2,7 @@ package io.github.workeron9.ozmoz.lineage.engine.calcite
 
 import io.github.workeron9.ozmoz.lineage.ir.Position
 import io.github.workeron9.ozmoz.lineage.ir.Span
+import org.apache.calcite.runtime.CalciteContextException
 import org.apache.calcite.sql.parser.SqlParserPos
 
 /**
@@ -84,5 +85,16 @@ internal object CalcitePositions {
         val valid = positions.filterNotNull().filter { it.lineNum > 0 }
         if (valid.isEmpty()) return null
         return spanOf(source, valid.reduce { a, b -> a.plus(b) })
+    }
+
+    /**
+     * `CalciteContextException` 的位置（**解析与校验共用**）：`getPosLine` 等
+     * 在异常本体上（`SqlParseException` 则直接 `getPos()`）。
+     */
+    public fun posOf(e: CalciteContextException): SqlParserPos? {
+        val line = e.posLine
+        val column = e.posColumn
+        if (line <= 0 || column <= 0) return null
+        return SqlParserPos(line, column, e.endPosLine, e.endPosColumn)
     }
 }

@@ -1,6 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.engine
 
 import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
+import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 
 /**
@@ -70,4 +71,20 @@ public interface SqlEngine {
             is Resolved.Known -> Resolved.Known(listOf(single.value))
             is Resolved.Unknown -> single
         }
+
+    /**
+     * 结合 schema 做语义校验（[Feature.VALIDATE_SCHEMA]）。**可选**能力。
+     *
+     * 结果契约（与 [analyze] 一处有意不同——validate 的产物就是诊断流）：
+     * - `Resolved.Known(diagnostics)` = **校验真的跑了**：diagnostics 为空即通过，
+     *   含 ERROR / WARNING 即校验发现的问题（含解析失败——语法错误是可背书、
+     *   有位置的诊断，不是「推不出来」）；
+     * - `Resolved.Unknown(reason)` = 校验**没跑成**：引擎未申报能力、[ValidateRequest.schema]
+     *   未提供、SQL 为空、方言未注册——与 [analyze] 的 unknown 口径一致。
+     *
+     * 校验器发现的问题（未知表 / 未知列 / 列歧义 / 类型不匹配）由引擎给出诊断码与
+     * 位置；**给不出的诊断不猜**（Never-wrong 镜像：不造能跑但错的结论）。
+     */
+    public fun validate(request: ValidateRequest): Resolved<List<Diagnostic>> =
+        Resolved.Unknown(capabilities.reason(Feature.VALIDATE_SCHEMA) ?: "unsupported")
 }

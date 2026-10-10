@@ -6,6 +6,7 @@ import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.RenderRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
+import io.github.workeron9.ozmoz.lineage.engine.ValidateRequest
 import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
@@ -30,15 +31,16 @@ import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl
  *   方言（Hive / Spark / Snowflake / BigQuery / Trino / DuckDB …）。
  * - ✅ **语义模型**：[analyze] / [analyzeAll] 产引擎无关的 `SemanticStatement`
  *   （SELECT / INSERT / CTAS / CREATE VIEW / UPDATE / DELETE；MERGE / VALUES / 纯
- *   DDL 跳过）——calcite 由此进入血缘矩阵；`VALIDATE_SCHEMA` 未申报
- *  （engine-api 侧缺 schema 装配，另立 ADR）。
+ *   DDL 跳过）——calcite 由此进入血缘矩阵。
+ * - ✅ **语义校验**（[validate]，[Feature.VALIDATE_SCHEMA]，ADR-0013）：
+ *   Calcite `SqlValidator` + 按名懒查的 [io.github.workeron9.ozmoz.lineage.engine.SchemaLookup]
+ *   （`SchemaProvider` 在装配点 SAM 转换喂入）——未知表 / 未知列 / 列歧义 /
+ *   类型不匹配给权威诊断。
  * - ✅ **按方言配解析器**：反引号 / 方括号 / 双引号由 [CalciteDialects] 注册表统一管理。
  * - ✅ **render-verified 门禁**（风险 R3 的对策，抽测证明可自动化）：
  *   输出前跑 `parse → render → re-parse(按目标方言配) → canon 等价`；
  *   **不等价时不输出**，返回带原因的 [Resolved.Unknown]（含 MSSQL 静默丢弃
  *   `LIMIT`/`OFFSET` 这类「输出能跑、语义变了」的最危险降级）。
- * - ❌ 语义校验（Calcite `Validator` + schema）暂不申报（见能力表 reasons）；
- *   血缘主力是 jsqlparser + lineage 模块。
  *
  * 引擎私有类型（`SqlNode` / `SqlParserPos` / `Lex`）**只在本适配器内部出现**，
  * 不进入 `ir` / `engine-api` 的公共签名。
@@ -52,6 +54,7 @@ public class CalciteEngine : SqlEngine {
             Feature.PARSE,
             Feature.DIALECT_PARSE,
             Feature.DIALECT_RENDER,
+            Feature.VALIDATE_SCHEMA,
             Feature.AST_EXPORT,
             Feature.SEMANTIC_MODEL,
             Feature.MULTI_STATEMENT,
@@ -60,7 +63,6 @@ public class CalciteEngine : SqlEngine {
         dialects = CalciteDialects.IDS,
         reasons = mapOf(
             Feature.EXTRACT_TABLES to "表提取暂未实现，血缘由 jsqlparser 引擎承担",
-            Feature.VALIDATE_SCHEMA to "schema 语义校验未实现（需要 engine-api 侧 schema 装配，另立 ADR）",
             Feature.FIELD_LINEAGE to "字段级血缘由 lineage 模块承担（两类引擎都能产语义模型）",
             Feature.ERROR_TOLERANT to "Calcite 解析器不支持误差容忍",
             Feature.PRETTY_PRINT to "unparse 固定单行缩进风格，未提供排版开关",
@@ -284,6 +286,48 @@ public class CalciteEngine : SqlEngine {
         return Resolved.Known(extracted)
     }
 
+    /**
+     * **schema 语义校验**（[Feature.VALIDATE_SCHEMA]，ADR-0013）。
+     *
+     * 与 [analyze] 同一解析口径（按方言配 [Lex]），解析成功后逐语句送
+     * [CalciteValidator]（Calcite `SqlValidator` + 按名懒查 catalog）：
+     * - 结果契约见 [SqlEngine.validate]——`Known(diagnostics)` = 校验跑了
+     *   （diagnostics 可为空 = 通过），`Unknown` = 校验没跑成（schema 未给 /
+     *   SQL 为空 / 方言未注册）；
+     * - **解析失败 → `Known([ERROR 诊断])`**：语法错误是可背书、有位置的
+     *   诊断，不是「推不出来」——与 [analyze] 有意不同（analyze 的产物是
+     *   模型，解析失败确实产不出）；
+     * - 逐语句独立校验，单语句的失败不阻断其余（诊断全部收集）；
+     * - 纯 DDL 等校验器不说话的语句种类跳过（不产假诊断）。
+     */
+    override fun validate(request: ValidateRequest): Resolved<List<Diagnostic>> {
+        val lookup = request.schema
+            ?: return Resolved.Unknown("validate 需要 schema（ValidateRequest.schema 未提供）")
+        if (request.sql.isBlank()) return Resolved.Unknown("SQL 为空，无可校验内容")
+
+        val spec = resolveDialect(request.dialect)
+            ?: return Resolved.Unknown(dialectUnknownMessage(request.dialect))
+
+        val statements = try {
+            parseStatementList(request.sql, spec.lex)
+        } catch (e: SqlParseException) {
+            return Resolved.Known(listOf(parseDiagnostic(request.sql, e.pos, firstLine(e.message))))
+        } catch (e: CalciteContextException) {
+            return Resolved.Known(listOf(parseDiagnostic(request.sql, posOf(e), firstLine(e.message))))
+        } catch (e: RuntimeException) {
+            return Resolved.Known(
+                listOf(parseDiagnostic(request.sql, null, firstLine(e.message) ?: e.javaClass.simpleName)),
+            )
+        }
+        if (statements.isEmpty()) return Resolved.Known(emptyList())
+
+        val diagnostics = ArrayList<Diagnostic>()
+        for (statement in statements) {
+            diagnostics += CalciteValidator.validate(request.sql, statement, lookup)
+        }
+        return Resolved.Known(diagnostics)
+    }
+
     // ————— 解析 —————
 
     /** 统一用 no-arg `parseStmtList()`（抽测 E5：`SqlParser.create(sql, cfg)` + 无参方法，quoting 生效）。 */
@@ -309,18 +353,18 @@ public class CalciteEngine : SqlEngine {
                 .withParserFactory(SqlDdlParserImpl.FACTORY),
         ).setAllowBangEqual(true).build()
 
-    private fun parseFailure(sql: String, pos: SqlParserPos?, message: String?): ParseOutcome = ParseOutcome(
-        diagnostics = listOf(
-            Diagnostic(
-                severity = Severity.ERROR,
-                code = CODE_PARSE_ERROR,
-                message = message ?: "解析失败",
-                span = spanOf(sql, pos),
-                engineId = id,
-            ),
-        ),
-        root = AstNode.empty(),
-    )
+    private fun parseFailure(sql: String, pos: SqlParserPos?, message: String?): ParseOutcome =
+        ParseOutcome(diagnostics = listOf(parseDiagnostic(sql, pos, message)), root = AstNode.empty())
+
+    /** 解析失败的 ERROR 诊断（parse / validate 共用——同一口径同一码）。 */
+    private fun parseDiagnostic(sql: String, pos: SqlParserPos?, message: String?): Diagnostic =
+        Diagnostic(
+            severity = Severity.ERROR,
+            code = CODE_PARSE_ERROR,
+            message = message ?: "解析失败",
+            span = spanOf(sql, pos),
+            engineId = id,
+        )
 
     // ————— 渲染校验 —————
 
@@ -372,14 +416,10 @@ public class CalciteEngine : SqlEngine {
 
     /**
      * `CalciteContextException` 的位置：`getPosLine` 等在异常本体上
-     * （`SqlParseException` 则直接 `getPos()`）。
+     * （`SqlParseException` 则直接 `getPos()`）。换算在 [CalcitePositions]
+     * （解析与校验共用）。
      */
-    private fun posOf(e: CalciteContextException): SqlParserPos? {
-        val line = e.posLine
-        val column = e.posColumn
-        if (line <= 0 || column <= 0) return null
-        return SqlParserPos(line, column, e.endPosLine, e.endPosColumn)
-    }
+    private fun posOf(e: CalciteContextException): SqlParserPos? = CalcitePositions.posOf(e)
 
     private fun firstLine(message: String?): String? =
         message?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
