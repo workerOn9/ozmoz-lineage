@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.server
 
+import java.nio.file.Path
+
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 
@@ -10,8 +12,8 @@ import io.ktor.server.netty.Netty
  * 默认只绑本机回环（`DEFAULT_HOST`）；把 SQL 或元数据送出本机违背项目定位
  * （离线优先），所以默认绑定不可被局域网访问。
  *
- * `web/` 静态托管（SPA dist + `/` 回落）属于 M4（`web/` 子项目尚未创建），
- * 本模块当前只承载 `/api`。
+ * `web/` 静态托管（`--web-root <dir>`）：SPA dist 挂到 `/`，未知非 `/api` 路径
+ * 回落 `index.html`（web 设计稿 §6.4 形态 1）；不给 `--web-root` 则只承载 `/api`。
  */
 public object OzmlLineageServer {
 
@@ -32,13 +34,17 @@ public object OzmlLineageServer {
      * 启动服务器并返回关闭句柄（`AutoCloseable`，不泄漏具体引擎类型——换引擎
      * 只改本文件）。[wait] = true 时阻塞直到进程退出（CLI 用法）；测试传 false 后
      * 自行 `close()` 停止。
+     *
+     * [webRoot] 非空时把该目录作为静态资源托管到 `/`（SPA：未知非 `/api` 路径
+     * 回落 index.html），与 `/api` 共存于同一端口（web 设计稿 §6.4 形态 1）。
      */
     public fun start(
         port: Int = DEFAULT_PORT,
         host: String = DEFAULT_HOST,
+        webRoot: Path? = null,
         wait: Boolean = true,
     ): AutoCloseable {
-        val server = embeddedServer(Netty, port = port, host = host) { serverModule() }
+        val server = embeddedServer(Netty, port = port, host = host) { serverModule(webRoot) }
         server.start(wait = wait)
         return AutoCloseable { server.stop(1000, 1000) }
     }

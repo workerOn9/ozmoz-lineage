@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + 方言转换主力 + schema 语义校验已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml serve`（Ktor `/api`）可运行；Web UI 尚未接入）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml serve`（Ktor `/api` + `web/` 静态托管）可运行；Web UI 已交付三栏起步版，AST 并排 diff 与 Tauri 壳未做）。
 
 ## 它要解决什么
 
@@ -74,6 +74,26 @@ curl -s localhost:8765/api/lineage -H 'Content-Type: application/json' \
 ```
 
 端点：`GET /api/health`、`GET /api/engines`（引擎能力路由表）、`POST /api/parse`（归一化树，与 `ozml parse --format json` 同形）、`POST /api/lineage`（`LineageModel`，仅接受一条可建模语句）、`POST /api/impact` / `POST /api/path`（图查询，响应与 `ozml impact --format json` 同形）。**解析失败不是 HTTP 错误**：语法错误以 200 + 结构化 `unknown` 返回（错误是数据）；仅请求本身非法（缺字段、未知引擎、坏 DDL）才 4xx。`schema` 指定时必须为内联 DDL 文本；未指定时自动从 `sql` 文本收集 `CREATE TABLE`（与 CLI 的目录行为一致）。
+
+### Web UI（`web/`，M4 起步）
+
+`web/` 是独立前端子项目（不进 Gradle 多模块）：Vite + React 19 + TypeScript + Tailwind 4 + Monaco + React Flow，三栏布局——左 SQL 编辑器，中归一化树，右列级血缘图（dagre 布局，支持上溯 / 下溯 / 短路径高亮与节点详情），底部诊断与 unknowns 面板。
+
+```bash
+# 开发：前端 dev server（/api 代理到 8765）+ 后端
+ozml serve --port 8765 &
+cd web && npm install && npm run dev      # http://localhost:5173
+
+# 生产形态：单端口同托管（ozml serve 直接托管 web/dist）
+cd web && npm run build
+ozml serve --port 8765 --web-root web/dist   # 打开 http://localhost:8765
+
+# Docker 一体化（前端构建 + JVM 构建 + JRE 运行时，单镜像单端口）
+docker build -t ozmoz-lineage .
+docker run --rm -p 8765:8765 ozmoz-lineage
+```
+
+前端类型与 Kotlin `@Serializable` 契约的同步靠「手写 TS 镜像 + golden 夹具」双保险（`web/src/types/` + `web/test/fixtures/`，`npm run test` 校验）。
 
 `ozml lineage -f <目录>` 递归读取目录下的 `*.sql`，并可把结果**落库**到 SQLite：
 

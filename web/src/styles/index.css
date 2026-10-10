@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/* React Flow 主题（xyflow v12 官方样式，随组件导入亦可；这里集中放全局样式）。 */
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  @apply bg-neutral-950 text-neutral-200 antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Segoe UI", sans-serif;
+}
+
+/* 血缘图高亮态：不在高亮子图里的节点/边淡化。 */
+.dimmed {
+  opacity: 0.15;
+  transition: opacity 120ms ease;
+}
+.highlighted {
+  opacity: 1;
+}
+
+/* AST 树的行 hover 与选中。 */
+.ast-row:hover {
+  background-color: rgb(255 255 255 / 0.06);
+}
+.ast-row-selected {
+  background-color: rgb(59 130 246 / 0.25);
+}

@@ -1,0 +1,31 @@
+# 镜像构建上下文瘦身：只留构建所需，构建产物与本地痕迹全部排除。
+
+# VCS 与本地协作文件（AGENTS.md 含本地红线，绝不进镜像）
+.git
+.gitignore
+AGENTS.md
+CLAUDE.md
+.claude/
+.opencode/
+.cursor/
+.vscode/
+.idea/
+
+# 本地构建产物（各 stage 在镜像内重新构建）
+.gradle/
+.kotlin/
+build/
+**/build/
+web/node_modules/
+web/dist/
+.vite/
+*.tsbuildinfo
+
+# 本地运行痕迹
+*.log
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+local/
+.DS_Store
