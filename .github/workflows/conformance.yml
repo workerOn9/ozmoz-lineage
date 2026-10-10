@@ -1,0 +1,40 @@
+name: conformance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# 兼容性矩阵：引擎 × 语料的实测快照（失败格是产物，不设 ok 率门禁）。
+# 门禁只守住结构契约：语料损坏（CorpusLoader 记问题且无可跑 case）会让
+# `ozml matrix` 非零退出，本任务随红。产物与摘要供文档站 / 复盘取用。
+jobs:
+  matrix:
+    name: compat matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "21"
+          cache: gradle
+
+      - name: 构建 ozml 命令行
+        run: ./gradlew :cli:installDist
+
+      - name: 生成兼容性矩阵
+        run: ./cli/build/install/ozml/bin/ozml matrix --corpus conformance/corpus --commit "${{ github.sha }}" --out compat-matrix.json
+
+      - name: 渲染任务摘要
+        run: python3 .github/scripts/matrix_summary.py compat-matrix.json >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: 上传矩阵产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-matrix
+          path: compat-matrix.json

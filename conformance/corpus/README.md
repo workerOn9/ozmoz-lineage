@@ -1,8 +1,13 @@
 # 兼容性语料（conformance corpus)
 
 「方言兼容性矩阵」的输入：**一个 case 一个 JSON 文件**，记录一条真实 SQL 及其分层标签。
-`ozml matrix --corpus ./conformance/corpus --out ./docs/compat-matrix.json` 会把它跑成
+`ozml matrix --corpus ./conformance/corpus --out ./compat-matrix.json` 会把它跑成
 引擎 × 语料的实测矩阵（每格带失败原因前 40 字与 commit 溯源）。
+
+CI 会随每个 PR / `main` 提交跑同一命令（`.github/workflows/conformance.yml`）：
+产物文件 `compat-matrix.json` 上传为任务 artifact（供将来的文档站渲染），
+方言覆盖表与全部失败格渲染进 Actions 任务摘要。没有 ok 率门禁——失败格
+是产物，不是事故；门禁只守结构契约（语料损坏会让 `ozml matrix` 非零退出）。
 
 当前规模：**200 条**，分层口径（M1）：8 方言（`ansi` / `mysql` / `postgresql` / `hive` /
 `spark` / `trino` / `oracle` / `tsql`）× 语句类型（SELECT / INSERT / UPDATE / DELETE /
