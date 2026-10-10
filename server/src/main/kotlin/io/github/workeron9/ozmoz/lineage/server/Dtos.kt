@@ -67,6 +67,14 @@ public data class LineageQuery(
     val dialect: String? = null,
     /** 内联 DDL 文本（CREATE TABLE）；给出时**优先**（权威元数据，解析失败 → 400）。 */
     val schema: String? = null,
+    /**
+     * 导出格式：`format` 模块注册表 id（与 CLI `--format` 同名：mermaid / dot /
+     * cypher / openlineage / ozmoz-json）；null 或 "json" → 默认的 [io.github.workeron9.ozmoz.lineage.ir.LineageModel]
+     * JSON 响应。未注册 id → 400（请求本身非法，与 `unknown_engine` 同语义）。
+     * 不用 `Accept` 协商：openlineage / ozmoz-json / 默认 json 的 mime 都是
+     * application/json，按 mime 区分有歧义；导出成功走注册表声明的 mime。
+     */
+    val format: String? = null,
 )
 
 /**
@@ -149,7 +157,7 @@ public data class PathReportDto(
 /** 4xx / 422 的统一错误体。 */
 @Serializable
 public data class ErrorResponse(
-    /** 机器可判的短码：`invalid_request` / `unknown_engine` / `invalid_schema` / `invalid_direction` / `invalid_depth` / `no_modelable_statement` / `multi_statement_input` / `column_not_found`。 */
+    /** 机器可判的短码：`invalid_request` / `unknown_engine` / `unknown_format` / `invalid_schema` / `invalid_direction` / `invalid_depth` / `no_modelable_statement` / `multi_statement_input` / `column_not_found`。 */
     val error: String,
     /** 人读原因。 */
     val reason: String? = null,

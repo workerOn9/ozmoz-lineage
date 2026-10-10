@@ -2,11 +2,13 @@ package io.github.workeron9.ozmoz.lineage.server
 
 import io.github.workeron9.ozmoz.lineage.engine.Feature
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
+import io.github.workeron9.ozmoz.lineage.format.LineageExporters
 import io.github.workeron9.ozmoz.lineage.graph.Direction
 import io.github.workeron9.ozmoz.lineage.graph.LineageGraph
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.schema.SchemaProvider
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -15,6 +17,7 @@ import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
@@ -66,6 +69,19 @@ public fun Application.serverModule() {
 
         post("/api/lineage") {
             val query = call.receiveQuery<LineageQuery>() ?: return@post call.badRequest("invalid_request", bodyShape("sql"))
+            // 导出格式按 id 查 format 模块注册表（与 CLI --format 取值同名）；显式 "json"
+            // 与缺省同义（LineageModel 本体响应）。未注册 id → 400，在建图**之前**短路。
+            val exporter = query.format?.let { requested ->
+                if (requested.equals("json", ignoreCase = true)) {
+                    null
+                } else {
+                    LineageExporters.byId(requested)
+                        ?: return@post call.badRequest(
+                            error = "unknown_format",
+                            reason = "未注册的导出格式：$requested（可用：${LineageExporters.ids.joinToString("、")}）",
+                        )
+                }
+            }
             val engine = ServerPipeline.engineById(query.engine ?: ServerPipeline.DEFAULT_ENGINE)
                 ?: return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
             val schema = query.schema?.let {
@@ -83,7 +99,16 @@ public fun Application.serverModule() {
                         error = "no_modelable_statement",
                         reason = "未从输入提取到可建模的语句（可能只含 DDL / MERGE 等不产出列级血缘的语句）",
                     )
-                    1 -> call.respond(built.value.single())
+                    1 -> {
+                        val model = built.value.single()
+                        if (exporter == null) {
+                            call.respond(model)
+                        } else {
+                            // 导出成功按注册表声明的 mime 回文本；错误路径（unknown / 4xx）
+                            // 仍是 JSON，形状不随 format 变。
+                            call.respondText(exporter.exporter.export(model), ContentType.parse(exporter.mime))
+                        }
+                    }
                     else -> call.respondUnprocessableEntity(
                         error = "multi_statement_input",
                         reason = "HTTP 层只接受一条可建模语句；多条语句请用 CLI " +

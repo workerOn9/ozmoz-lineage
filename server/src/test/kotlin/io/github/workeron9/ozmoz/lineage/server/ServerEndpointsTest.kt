@@ -181,6 +181,103 @@ class ServerEndpointsTest {
         assertTrue(parse(text).getValue("unknown").jsonObject.getValue("reason").jsonPrimitive.content.isNotBlank())
     }
 
+    // ————— format 导出器接入（与 CLI --format 同名，按注册表 id） —————
+
+    /**
+     * POST 一次请求，返回 (状态码, 响应 Content-Type, 响应体)——不带 `Accept` 头，
+     * 导出格式的响应类型由服务端按注册表的 mime 决定。
+     */
+    private fun postBody(path: String, body: String): Triple<Int, String, String> =
+        runBlocking {
+            var status = -1
+            var ctype = ""
+            var text = ""
+            testApplication {
+                application { serverModule() }
+                val response = client.post(path) {
+                    contentType(ContentType.Application.Json)
+                    setBody(body)
+                }
+                status = response.status.value
+                ctype = response.contentType()?.withoutParameters()?.toString().orEmpty()
+                text = response.bodyAsText()
+            }
+            Triple(status, ctype, text)
+        }
+
+    @Test
+    fun `lineage format mermaid 返回流图文本`() {
+        val (status, ctype, text) = postBody("/api/lineage", """{"sql": "SELECT a FROM t", "format": "mermaid"}""")
+
+        // 断言锚定真实输出（ozml lineage --format mermaid 的 flowchart LR 起手 + 箭头行）。
+        assertEquals(200, status)
+        assertEquals("text/vnd.mermaid", ctype)
+        assertTrue(text.startsWith("flowchart LR"), text)
+        assertTrue(text.contains("-->|OUTPUT/"), text)
+    }
+
+    @Test
+    fun `lineage format dot 返回 Graphviz 文本`() {
+        val (status, ctype, text) = postBody("/api/lineage", """{"sql": "SELECT a FROM t", "format": "dot"}""")
+
+        assertEquals(200, status)
+        assertEquals("text/vnd.graphviz", ctype)
+        assertTrue(text.startsWith("digraph lineage"), text)
+    }
+
+    @Test
+    fun `lineage format ozmoz-json 与默认同形`() {
+        val (status, ctype, text) = postBody("/api/lineage", """{"sql": "SELECT a FROM t", "format": "ozmoz-json"}""")
+
+        assertEquals(200, status)
+        assertEquals("application/json", ctype)
+        val body = parse(text)
+        val outputs = body.getValue("edges").jsonArray
+            .map { it.jsonObject }
+            .filter { it.getValue("kind").jsonPrimitive.content == "OUTPUT" }
+        assertEquals(1, outputs.size)
+    }
+
+    @Test
+    fun `lineage format json 与缺省同义`() {
+        val (status, text) = request("/api/lineage", """{"sql": "SELECT a FROM t", "format": "json"}""")
+
+        assertEquals(200, status)
+        val body = parse(text)
+        val outputs = body.getValue("edges").jsonArray
+            .map { it.jsonObject }
+            .filter { it.getValue("kind").jsonPrimitive.content == "OUTPUT" }
+        assertEquals(1, outputs.size)
+    }
+
+    @Test
+    fun `lineage format 未注册 id 返回 400`() {
+        val (status, text) = request("/api/lineage", """{"sql": "SELECT a FROM t", "format": "nope"}""")
+
+        assertEquals(400, status)
+        val body = parse(text)
+        assertEquals("unknown_format", body.getValue("error").jsonPrimitive.content)
+        assertTrue(body.getValue("reason").jsonPrimitive.content.contains("mermaid"))
+    }
+
+    @Test
+    fun `lineage format 不改错误路径`() {
+        // 多语句 422 与整段语法错误 200 unknown 都是 JSON 数据，不随 format 变形。
+        val (multiStatus, multiText) = request(
+            "/api/lineage",
+            """{"sql": "SELECT a FROM t; SELECT b FROM t", "format": "mermaid"}""",
+        )
+        assertEquals(422, multiStatus)
+        assertEquals("multi_statement_input", parse(multiText).getValue("error").jsonPrimitive.content)
+
+        val (unknownStatus, unknownText) = request(
+            "/api/lineage",
+            """{"sql": "SELEC a FROM", "format": "mermaid"}""",
+        )
+        assertEquals(200, unknownStatus)
+        assertTrue(parse(unknownText).getValue("unknown").jsonObject.getValue("reason").jsonPrimitive.content.isNotBlank())
+    }
+
     @Test
     fun `impact 返回下溯影响面`() {
         val (status, text) = request(

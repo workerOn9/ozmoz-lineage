@@ -24,6 +24,7 @@
 | [kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines)（Ktor 传递） | 1.11.0 | Apache-2.0 | Ktor 运行时依赖 |
 | [kotlinx-io](https://github.com/Kotlin/kotlinx-io)（Ktor 传递） | 0.9.1 | Apache-2.0 | Ktor 运行时依赖 |
 | [JetBrains annotations](https://github.com/JetBrains/java-annotations)（kotlin-stdlib 传递） | 13.0 | Apache-2.0 | 编译期注解 |
+| [SLF4J](https://github.com/qos-ch/slf4j)（slf4j-nop，`server`） | 2.0.20 | MIT | 静默 Netty / Ktor 启动时的「No SLF4J providers were found」告警；本地工具无日志需求，绑空实现是有意取舍（2026-10-10 开发记录踩坑 8） |
 
 ### JSqlParser 许可证说明（重要）
 
