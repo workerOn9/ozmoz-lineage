@@ -3,16 +3,22 @@ import { ApiError } from '../api/client'
 import { endpoints } from '../api/endpoints'
 import type { EngineReport, LineageModel, ParseReport } from '../types'
 import { SAMPLE_SQL } from '../lib/sample'
+import { diffAstTrees } from '../lib/astDiff'
+import type { AstDiff } from '../lib/astDiff'
 import type { HighlightResult } from '../graph/traverse'
 
 /**
  * 全局状态（Zustand，web 设计稿 §2.1）。状态面很小：
- * SQL 文本、引擎/方言、最近一次解析的两种产物、图选择集与高亮子图。
+ * SQL 文本、引擎/方言、最近一次解析的两种产物、图选择集与高亮子图、
+ * AST 对比（T4：左右引擎 + diff 结果）。
  */
 
 export type BackendState = 'checking' | 'ok' | 'down'
 
 export type GraphMode = 'none' | 'upstream' | 'downstream' | 'path'
+
+/** 顶层视图：三栏主视图 / AST 并排对比（web 设计稿 App.tsx 的「视图切换」）。 */
+export type ViewMode = 'main' | 'ast-diff'
 
 interface AppState {
   sql: string
@@ -32,6 +38,13 @@ interface AppState {
   selectedNodeId: string | null
   selectedEdgeId: string | null
   highlight: HighlightResult | null
+  view: ViewMode
+  /** AST 对比（T4.2）：左右引擎（null = 尚未初始化）。 */
+  diffLeftEngine: string | null
+  diffRightEngine: string | null
+  diffResult: AstDiff | null
+  diffError: string | null
+  diffRunning: boolean
 
   setSql: (sql: string) => void
   setEngineId: (id: string | null) => void
@@ -44,6 +57,10 @@ interface AppState {
   selectNode: (id: string | null) => void
   selectEdge: (id: string | null) => void
   setHighlight: (h: HighlightResult | null) => void
+  setView: (view: ViewMode) => void
+  setDiffLeftEngine: (id: string | null) => void
+  setDiffRightEngine: (id: string | null) => void
+  runDiff: () => Promise<void>
 }
 
 /** `/api/lineage` 整段解析失败时返回 `{unknown: {reason, span?}}`（200，错误是数据）。 */
@@ -71,6 +88,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedNodeId: null,
   selectedEdgeId: null,
   highlight: null,
+  view: 'main',
+  diffLeftEngine: null,
+  diffRightEngine: null,
+  diffResult: null,
+  diffError: null,
+  diffRunning: false,
 
   setSql: (sql) => set({ sql }),
   setEngineId: (engineId) => set({ engineId }),
@@ -80,11 +103,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const health = await endpoints.health()
       const engines = await endpoints.engines()
+      const engineId = get().engineId ?? engines[0]?.id ?? null
+      // AST 对比默认值：左 = 当前引擎，右 = 另一个引擎（没有则同左，退化为自对比）。
+      const diffLeftEngine = get().diffLeftEngine ?? engineId
+      const diffRightEngine =
+        get().diffRightEngine ?? engines.map((e) => e.id).find((id) => id !== diffLeftEngine) ?? diffLeftEngine
       set({
         backend: 'ok',
         backendVersion: health.version,
         engines,
-        engineId: get().engineId ?? engines[0]?.id ?? null,
+        engineId,
+        diffLeftEngine,
+        diffRightEngine,
       })
     } catch {
       set({ backend: 'down' })
@@ -127,4 +157,44 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectNode: (selectedNodeId) => set({ selectedNodeId, selectedEdgeId: null }),
   selectEdge: (selectedEdgeId) => set({ selectedEdgeId, selectedNodeId: null }),
   setHighlight: (highlight) => set({ highlight }),
+  setView: (view) => set({ view }),
+
+  setDiffLeftEngine: (diffLeftEngine) => set({ diffLeftEngine }),
+  setDiffRightEngine: (diffRightEngine) => set({ diffRightEngine }),
+
+  runDiff: async () => {
+    const { sql, dialect, backend, diffLeftEngine, diffRightEngine } = get()
+    if (backend !== 'ok' || sql.trim() === '' || diffLeftEngine == null || diffRightEngine == null) return
+    set({ diffRunning: true, diffError: null })
+    const mk = (engine: string) => ({
+      sql,
+      engine,
+      ...(dialect !== '' ? { dialect } : {}),
+    })
+    try {
+      const [rawL, rawR] = await Promise.all([
+        endpoints.parse(mk(diffLeftEngine)) as Promise<unknown>,
+        endpoints.parse(mk(diffRightEngine)) as Promise<unknown>,
+      ])
+      // 解析失败是数据（200 unknown）：单侧失败即整体对比失败，但报文给出哪侧。
+      const errL = unknownReason(rawL)
+      const errR = unknownReason(rawR)
+      if (errL != null || errR != null) {
+        const parts = [
+          errL != null ? `左侧（${diffLeftEngine}）：${errL}` : null,
+          errR != null ? `右侧（${diffRightEngine}）：${errR}` : null,
+        ].filter((p): p is string => p != null)
+        set({ diffResult: null, diffError: parts.join('；') })
+      } else {
+        set({
+          diffResult: diffAstTrees((rawL as ParseReport).root, (rawR as ParseReport).root),
+        })
+      }
+    } catch (e) {
+      const reason = e instanceof ApiError ? (e.body?.reason ?? e.message) : String(e)
+      set({ diffError: reason })
+    } finally {
+      set({ diffRunning: false })
+    }
+  },
 }))

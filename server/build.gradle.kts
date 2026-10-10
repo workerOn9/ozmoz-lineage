@@ -7,6 +7,10 @@ dependencies {
     implementation(project(":ir"))
     implementation(project(":engine-api"))
     implementation(project(":engine-jsqlparser"))
+    // AST 对比（web 设计稿 T4.2：同 SQL 不同引擎）需要 /api/parse 能选 calcite / jooq；
+    // 与 CLI LineagePipeline.allEngines() 的注册面保持一致。
+    implementation(project(":engine-calcite"))
+    implementation(project(":engine-jooq"))
     implementation(project(":lineage"))
     implementation(project(":schema"))
     implementation(project(":graph"))

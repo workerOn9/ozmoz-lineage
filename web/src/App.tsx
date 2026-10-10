@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Toolbar } from './components/Toolbar'
 import { AstTreeView } from './components/ast/AstTreeView'
+import { AstDiffPanel } from './components/ast/AstDiffPanel'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
 import { GraphToolbar } from './components/lineage/GraphToolbar'
 import { LineageGraphView } from './components/lineage/LineageGraphView'
@@ -50,6 +51,7 @@ export default function App() {
   const parseReport = useAppStore((s) => s.parseReport)
   const lineage = useAppStore((s) => s.lineage)
   const backend = useAppStore((s) => s.backend)
+  const view = useAppStore((s) => s.view)
 
   // 左 / 中栏宽度（百分比），右栏吃剩余。
   const [widths, setWidths] = useState({ left: 30, mid: 26 })
@@ -72,7 +74,7 @@ export default function App() {
         </div>
       )}
       <div ref={mainRef} className="flex min-h-0 flex-1">
-        {/* 左：SQL 编辑器 */}
+        {/* 左：SQL 编辑器（三栏 / AST 对比共用） */}
         <section className="flex min-w-0 flex-col" style={{ width: `${widths.left}%` }}>
           <PanelTitle title="SQL 输入" />
           <div className="min-h-0 flex-1">
@@ -86,32 +88,41 @@ export default function App() {
             setWidths((v) => ({ ...v, left: clamp(v.left + (dx / w) * 100) }))
           }
         />
-        {/* 中：归一化树 */}
-        <section className="flex min-w-0 flex-col" style={{ width: `${widths.mid}%` }}>
-          <PanelTitle title="归一化树" />
-          <div className="min-h-0 flex-1">
-            <AstTreeView root={parseReport?.root ?? null} />
-          </div>
-        </section>
-        <DragHandle
-          onDelta={(dx, w) =>
-            setWidths((v) => {
-              const left = clamp(v.left + (dx / w) * 100)
-              return { left, mid: clamp(v.mid - (dx / w) * 100) }
-            })
-          }
-        />
-        {/* 右：血缘图 + 检查器 */}
-        <section className="flex min-w-0 flex-1 flex-col">
-          <GraphToolbar />
-          <div className="min-h-0 flex-[3]">
-            <LineageGraphView />
-          </div>
-          <EdgeLegend model={lineage} />
-          <div className="min-h-0 flex-[2] border-t border-neutral-800">
-            <NodeInspector />
-          </div>
-        </section>
+        {view === 'main' ? (
+          <>
+            {/* 中：归一化树 */}
+            <section className="flex min-w-0 flex-col" style={{ width: `${widths.mid}%` }}>
+              <PanelTitle title="归一化树" />
+              <div className="min-h-0 flex-1">
+                <AstTreeView root={parseReport?.root ?? null} />
+              </div>
+            </section>
+            <DragHandle
+              onDelta={(dx, w) =>
+                setWidths((v) => {
+                  const left = clamp(v.left + (dx / w) * 100)
+                  return { left, mid: clamp(v.mid - (dx / w) * 100) }
+                })
+              }
+            />
+            {/* 右：血缘图 + 检查器 */}
+            <section className="flex min-w-0 flex-1 flex-col">
+              <GraphToolbar />
+              <div className="min-h-0 flex-[3]">
+                <LineageGraphView />
+              </div>
+              <EdgeLegend model={lineage} />
+              <div className="min-h-0 flex-[2] border-t border-neutral-800">
+                <NodeInspector />
+              </div>
+            </section>
+          </>
+        ) : (
+          /* AST 对比：占满中栏 + 右栏（T4） */
+          <section className="flex min-w-0 flex-1 flex-col">
+            <AstDiffPanel />
+          </section>
+        )}
       </div>
       {/* 底部：诊断 / unknowns */}
       <div className="border-t border-neutral-800 bg-neutral-950">

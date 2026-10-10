@@ -18,7 +18,9 @@ curl -s -X POST http://127.0.0.1:8765/api/parse -H 'Content-Type: application/js
 | 文件 | 端点 | 输入 |
 |---|---|---|
 | `engines.json` | `GET /api/engines` | — |
-| `parse-report.json` | `POST /api/parse` | 电商示例（含 join/group by） |
+| `parse-report.json` | `POST /api/parse` | 电商示例（含 join/group by），jsqlparser |
+| `parse-report-calcite.json` | `POST /api/parse` | 同上电商示例，engine=`calcite`（AST 对比 T4 夹具） |
+| `parse-report-jooq.json` | `POST /api/parse` | 同上电商示例，engine=`jooq`（AST 对比 T4 夹具） |
 | `parse-report-error.json` | `POST /api/parse` | `SELEC form where`（整段语法错误） |
 | `lineage-model.json` | `POST /api/lineage` | 同上电商示例 |
 | `lineage-model-unknowns.json` | `POST /api/lineage` | 无 schema 的无限定列 SQL |
