@@ -1,0 +1,11 @@
+{
+  "id": "hive-lateral-view",
+  "dialect": "hive",
+  "kind": "SELECT",
+  "features": [
+    "explode",
+    "lateral-view"
+  ],
+  "comment": "LATERAL VIEW EXPLODE 表生成函数展开",
+  "sql": "SELECT id, tag FROM posts LATERAL VIEW EXPLODE(tags) t AS tag"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "trino-qualify",
+  "dialect": "trino",
+  "kind": "SELECT",
+  "features": [
+    "qualify",
+    "window"
+  ],
+  "comment": "QUALIFY（Trino 排名过滤子句）",
+  "sql": "SELECT id FROM emp QUALIFY ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) = 1"
+}

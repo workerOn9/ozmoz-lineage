@@ -9,7 +9,7 @@ import com.github.ajalt.clikt.core.main
  *
  * 子命令规划见计划 §5：`parse` / `lineage` / `convert` / `impact` / `matrix` / `serve` / `mcp`。
  * M0 落地 [ParseCommand]；M1 落地 [LineageCommand]（列级血缘）；M2 收尾补 [ImpactCommand]；
- * `serve`（Ktor `/api` 骨架）随后落地 [ServeCommand]。
+ * `serve`（Ktor `/api` 骨架）随后落地 [ServeCommand]；M3 起步落地 [MatrixCommand]（兼容性矩阵）。
  */
 public class OzmlCommand : CliktCommand(name = "ozml") {
     override fun run() {
@@ -19,6 +19,6 @@ public class OzmlCommand : CliktCommand(name = "ozml") {
 
 public fun main(args: Array<String>) {
     OzmlCommand()
-        .subcommands(ParseCommand(), LineageCommand(), ImpactCommand(), ServeCommand())
+        .subcommands(ParseCommand(), LineageCommand(), ImpactCommand(), ServeCommand(), MatrixCommand())
         .main(args)
 }

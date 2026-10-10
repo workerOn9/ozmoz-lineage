@@ -1,0 +1,10 @@
+{
+  "id": "tsql-top-select",
+  "dialect": "tsql",
+  "kind": "SELECT",
+  "features": [
+    "basic"
+  ],
+  "comment": "TOP N（T-SQL 行数限制语法）",
+  "sql": "SELECT TOP 10 id, name FROM customers WHERE age > 30"
+}

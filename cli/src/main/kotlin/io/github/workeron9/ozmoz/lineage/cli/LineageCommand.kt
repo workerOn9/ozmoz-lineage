@@ -327,6 +327,6 @@ public class LineageCommand : CliktCommand(name = "lineage") {
     }
 
     public companion object {
-        private val SUPPORTED_ENGINES = arrayOf(JSqlParserEngine.ID)
+        private val SUPPORTED_ENGINES = LineagePipeline.ENGINE_IDS.toTypedArray()
     }
 }

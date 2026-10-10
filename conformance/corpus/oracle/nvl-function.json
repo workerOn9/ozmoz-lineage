@@ -1,0 +1,10 @@
+{
+  "id": "oracle-nvl-function",
+  "dialect": "oracle",
+  "kind": "SELECT",
+  "features": [
+    "function"
+  ],
+  "comment": "NVL 函数（表达式派生血缘）",
+  "sql": "SELECT NVL(user_id, 0) AS uid FROM sessions"
+}

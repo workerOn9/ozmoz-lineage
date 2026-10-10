@@ -1,0 +1,10 @@
+{
+  "id": "ansi-union-all",
+  "dialect": "ansi",
+  "kind": "SELECT",
+  "features": [
+    "union"
+  ],
+  "comment": "UNION ALL 位对齐（两支各建模一个作用域）",
+  "sql": "SELECT a, b FROM t1 UNION ALL SELECT x, y FROM t2"
+}

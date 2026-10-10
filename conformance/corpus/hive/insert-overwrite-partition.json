@@ -1,0 +1,11 @@
+{
+  "id": "hive-insert-overwrite-partition",
+  "dialect": "hive",
+  "kind": "INSERT",
+  "features": [
+    "partition",
+    "overwrite"
+  ],
+  "comment": "动态分区 INSERT OVERWRITE",
+  "sql": "INSERT OVERWRITE TABLE events PARTITION (dt) SELECT uid, action, dt FROM raw_events"
+}

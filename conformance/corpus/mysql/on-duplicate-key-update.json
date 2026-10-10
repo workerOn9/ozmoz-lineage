@@ -1,0 +1,10 @@
+{
+  "id": "mysql-on-duplicate-key-update",
+  "dialect": "mysql",
+  "kind": "INSERT",
+  "features": [
+    "upsert"
+  ],
+  "comment": "ON DUPLICATE KEY UPDATE（方言 upsert，通用语法吃不吃得下如实记）",
+  "sql": "INSERT INTO counters (k, n) VALUES ('x', 1) ON DUPLICATE KEY UPDATE n = n + 1"
+}

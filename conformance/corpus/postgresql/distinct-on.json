@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-distinct-on",
+  "dialect": "postgresql",
+  "kind": "SELECT",
+  "features": [
+    "basic",
+    "distinct-on"
+  ],
+  "comment": "DISTINCT ON（PG 方言特有去重语义）",
+  "sql": "SELECT DISTINCT ON (department) id, salary FROM emp ORDER BY department, salary DESC"
+}
