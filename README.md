@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API 已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml serve`（Ktor `/api`）可运行；方言转换、Web UI 尚未接入）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + 方言转换主力已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml serve`（Ktor `/api`）可运行；Web UI 尚未接入）。
 
 ## 它要解决什么
 
@@ -25,7 +25,8 @@ ozml lineage -f sql/ --graph ./lineage.db             # 吃下一个 SQL 目录�
 ozml impact  --graph ./lineage.db --on db.t.c --depth 3  # 从库查询上溯 / 下溯 / 影响面（当前可用）
 ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查（当前可用）
 ozml serve   --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|impact|path（当前可用）
-ozml convert --from mysql --to postgresql             # 方言转换（规划中）
+ozml parse   --engine calcite -f q.sql                # Calcite 按方言配解析器（反引号 / 方括号 / 双引号按方言路由）（当前可用）
+ozml convert --from mysql --to postgresql -f q.sql    # 方言转换：parse→render→re-parse 等价门禁，不等价不输出（当前可用）
 ```
 
 `ozml` = **ozmoz** + **lineage**。
@@ -82,6 +83,17 @@ ozml impact  --graph ./lineage.db --on db.t.c
 - 不带 `--graph` 时，多文件 / 多语句可用 `--format summary` 或 `--format graph-json` 直接看合并后的图。
 
 解析失败、或引擎不支持该语句的语义提取（如 `MERGE`）时返回非零退出码，并把带位置（行列）的诊断打到 stderr——不会静默给出一个猜测的结果。
+
+### 方言转换（`ozml convert`）
+
+`ozml convert` 由 `engine-calcite`（Apache Calcite `SqlDialect`）实现，目标方言覆盖 jsqlparser 缺失的数仓系：`mysql` / `postgresql` / `oracle` / `hive` / `spark` / `bigquery` / `snowflake` / `duckdb` / `trino` / `mssql`（别名 `tsql`）/ `calcite`。**只承诺注册表里实测过的方言**，`AnsiSqlDialect` 有已知 quoting 缺陷，有意未注册。
+
+```bash
+ozml convert --from mysql --to postgresql -f q.sql
+ozml convert --from mysql --to mssql        -f q.sql    # → 门禁拦截，非零退出 + 诊断
+```
+
+输出前跑 **render-verified 门禁**：按源方言解析 → 按目标方言渲染 → 将渲染结果按目标方言的解析器配置 re-parse → 等价（canon：空白折叠 + 小写）才输出。**不等价就不输出 SQL**，非零退出并报告诊断——这档住了 Calcite unparse 的已知静默降级（如 `MssqlSqlDialect` 丢 `LIMIT`/`OFFSET`：输出能跑、语义已变）。未知方言、引擎不支持渲染同样给可解释的错，不靠异常碰运气。
 
 `--schema` 接一个含 `CREATE TABLE` 的 DDL 文件或目录（目录取其下全部 `*.sql`；`schema` 模块的 `DdlFileSchemaProvider`，另有 `StaticSchemaProvider` / `JdbcSchemaProvider` / `CompositeSchemaProvider` 可编程接入）：物理表的 `SELECT *` 按列清单展开、裸列名按「哪张表真有这一列」消歧、`INSERT INTO t SELECT …` 未声明目标列时按表列定义序对齐。**未给 `--schema` 时从输入文本自动收集同源的 `CREATE TABLE`**（逐文件容错：解析失败的文件跳过——读取侧已有告警；显式 `--schema` 永远优先）。元数据缺失的列一律显式记 `unknown`，不发明列名。
 

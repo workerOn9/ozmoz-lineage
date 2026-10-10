@@ -37,6 +37,9 @@ internal object JsonSupport {
 
     fun encodeGraph(graph: LineageGraph): String =
         json.encodeToString(GraphReport.serializer(), GraphReport.from(graph))
+
+    fun encodeConvertReport(report: ConvertReport): String =
+        json.encodeToString(ConvertReport.serializer(), report)
 }
 
 /** `ozml parse --format json` 的稳定输出形状。 */

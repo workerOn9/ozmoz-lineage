@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":ir"))
     implementation(project(":engine-api"))
     implementation(project(":engine-jsqlparser"))
+    implementation(project(":engine-calcite"))
     implementation(project(":lineage"))
     implementation(project(":schema"))
     implementation(project(":format"))
