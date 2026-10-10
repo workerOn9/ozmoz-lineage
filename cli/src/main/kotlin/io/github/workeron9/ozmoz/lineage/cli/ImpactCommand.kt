@@ -67,7 +67,7 @@ public class ImpactCommand : CliktCommand(name = "impact") {
 
     private val schemaPath: String? by option(
         "--schema",
-        help = "DDL 文件或目录（含 CREATE TABLE），仅 -f 现建现查时用",
+        help = "DDL 文件或目录（含 CREATE TABLE），仅 -f 现建现查时用；未给出时自动从输入文本收集 CREATE TABLE",
     )
 
     override fun help(context: Context): String =
@@ -117,8 +117,9 @@ public class ImpactCommand : CliktCommand(name = "impact") {
     /** 从文件 / 目录现建图（不落库）。 */
     private fun buildGraph(path: String): LineageGraph {
         val engine = LineagePipeline.engine(engineId)
-        val schema: SchemaProvider? = schemaPath?.let { LineagePipeline.schema(it) }
         val inputs = LineagePipeline.readInputs(path)
+        // 显式 --schema 永远优先；未给出时从输入文本顺手收集 CREATE TABLE（可能为 null）。
+        val schema: SchemaProvider? = schemaPath?.let { LineagePipeline.schema(it) } ?: LineagePipeline.autoSchema(inputs)
         val single = inputs.size == 1
         val models = ArrayList<LineageModel>()
         for ((source, text) in inputs) {
