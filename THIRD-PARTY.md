@@ -19,7 +19,8 @@
 | [JHeaps](https://github.com/d-michail/jheaps)（JGraphT 传递） | 0.14 | Apache-2.0 | 堆 / 优先队列（JGraphT 内部） |
 | [Apfloat](https://github.com/mtommila/apfloat)（JGraphT 传递） | 1.14.0 | MIT | 任意精度浮点（JGraphT 内部） |
 | [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（`graph`） | 3.53.4.0 | Apache-2.0 | 血缘图库的 SQLite 持久化（`ozml lineage --graph` / `ozml impact --graph`） |
-| [Apache Calcite](https://github.com/apache/calcite)（`engine-calcite`） | 1.42.0 | Apache-2.0 | **方言转换主力**（`ozml convert`）：`SqlDialect` 渲染 + 按方言配解析器（ADR-0004 / 2026-10-10 引入 classpath） |
+| [Apache Calcite](https://github.com/apache/calcite)（`engine-calcite`） | 1.42.0 | Apache-2.0 | **方言转换主力**（`ozml convert`）：`SqlDialect` 渲染 + 按方言配解析器 + 语义模型（ADR-0004 / 2026-10-10 引入 classpath） |
+| [calcite-server](https://github.com/apache/calcite)（Calcite 同仓同版本） | 1.42.0 | Apache-2.0 | Calcite 的 DDL 扩展解析器（`SqlDdlParserImpl`——CREATE TABLE / VIEW 等不在 calcite-core 默认语法，probe 实测）；2026-10-10 引入 |
 | [calcite-linq4j](https://github.com/apache/calcite)（Calcite 同仓同版本） | 1.42.0 | Apache-2.0 | Calcite 传递依赖（与 calcite-core 同仓发布） |
 | [Avatica core / metrics](https://github.com/apache/calcite-avatica)（Calcite 传递） | 1.28.0 | Apache-2.0 | Calcite 传递依赖（JDBC 框架，本项目不用其 JDBC 能力） |
 | [Guava](https://github.com/google/guava) | 33.4.8-jre | Apache-2.0 | Calcite 的 Google Guava（JVM 工具集）；未破坏封装， CALCITE 私有类型（`SqlNode`/`SqlDialect`/`Lex`）不出本模块公共签名 |

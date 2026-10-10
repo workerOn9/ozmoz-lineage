@@ -37,11 +37,11 @@ internal object LineagePipeline {
     /**
      * **血缘可用**的引擎 id 列表（`ozml lineage --engine` / `ozml matrix` 的展开源）。
      *
-     * 注意与 [engine] 的差异：引擎注册了 ≠ 能跑血缘。`calcite` 本轮只做方言渲染
-     *（`ozml parse` / `ozml convert`，无 `SEMANTIC_MODEL` 能力），进不了血缘管线，
-     * 所以这里**有意只有 jsqlparser**；calcite 补语义模型时再加进来。
+     * 计算：声明 `SEMANTIC_MODEL` 的注册引擎——`jsqlparser`（解析主力）+
+     * `calcite`（方言转换主力，M3 补语义模型）。`jooq` 无语义模型，
+     * 只走方言转换（`renderEngines()`），不进血缘矩阵。
      */
-    val ENGINE_IDS: List<String> = listOf(JSqlParserEngine.ID)
+    val ENGINE_IDS: List<String> = listOf(JSqlParserEngine.ID, CalciteEngine.ID)
 
     /** 注册的引擎实例（`ozml matrix` 等按列表逐个跑的入口用）。 */
     fun engines(): List<SqlEngine> = ENGINE_IDS.map { engine(it) }

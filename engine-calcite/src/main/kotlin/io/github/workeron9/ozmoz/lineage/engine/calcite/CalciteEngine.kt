@@ -6,11 +6,13 @@ import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.RenderRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
+import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.ir.Severity
 import io.github.workeron9.ozmoz.lineage.ir.Span
+import org.apache.calcite.avatica.util.Casing
 import org.apache.calcite.config.Lex
 import org.apache.calcite.runtime.CalciteContextException
 import org.apache.calcite.sql.SqlNode
@@ -18,6 +20,7 @@ import org.apache.calcite.sql.dialect.CalciteSqlDialect
 import org.apache.calcite.sql.parser.SqlParseException
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.sql.parser.SqlParserPos
+import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl
 
 /**
  * Apache Calcite 引擎适配器——**方言转换 + 语义校验主力**（ADR-0004）。
@@ -25,13 +28,17 @@ import org.apache.calcite.sql.parser.SqlParserPos
  * 定位（见计划 §4.2）：
  * - ✅ **方言渲染**：`SqlDialect.toSqlString`，覆盖 jsqlparser 缺失的数仓系
  *   方言（Hive / Spark / Snowflake / BigQuery / Trino / DuckDB …）。
+ * - ✅ **语义模型**：[analyze] / [analyzeAll] 产引擎无关的 `SemanticStatement`
+ *   （SELECT / INSERT / CTAS / CREATE VIEW / UPDATE / DELETE；MERGE / VALUES / 纯
+ *   DDL 跳过）——calcite 由此进入血缘矩阵；`VALIDATE_SCHEMA` 未申报
+ *  （engine-api 侧缺 schema 装配，另立 ADR）。
  * - ✅ **按方言配解析器**：反引号 / 方括号 / 双引号由 [CalciteDialects] 注册表统一管理。
  * - ✅ **render-verified 门禁**（风险 R3 的对策，抽测证明可自动化）：
  *   输出前跑 `parse → render → re-parse(按目标方言配) → canon 等价`；
  *   **不等价时不输出**，返回带原因的 [Resolved.Unknown]（含 MSSQL 静默丢弃
  *   `LIMIT`/`OFFSET` 这类「输出能跑、语义变了」的最危险降级）。
- * - ❌ 语义模型暂不做（血缘主力是 jsqlparser）；`analyze` 走默认实现返回
- *   `Resolved.Unknown`（Never-wrong）。
+ * - ❌ 语义校验（Calcite `Validator` + schema）暂不申报（见能力表 reasons）；
+ *   血缘主力是 jsqlparser + lineage 模块。
  *
  * 引擎私有类型（`SqlNode` / `SqlParserPos` / `Lex`）**只在本适配器内部出现**，
  * 不进入 `ir` / `engine-api` 的公共签名。
@@ -46,15 +53,15 @@ public class CalciteEngine : SqlEngine {
             Feature.DIALECT_PARSE,
             Feature.DIALECT_RENDER,
             Feature.AST_EXPORT,
+            Feature.SEMANTIC_MODEL,
+            Feature.MULTI_STATEMENT,
         ),
         // 只列 [CalciteDialects] 注册（= 抽测实测 / 有意保有）的方言，不预支承诺。
         dialects = CalciteDialects.IDS,
         reasons = mapOf(
-            Feature.SEMANTIC_MODEL to "语义模型暂未实现，血缘由 jsqlparser 引擎承担",
-            Feature.MULTI_STATEMENT to "多语句语义提取暂未实现（analyze 不可用）",
             Feature.EXTRACT_TABLES to "表提取暂未实现，血缘由 jsqlparser 引擎承担",
-            Feature.VALIDATE_SCHEMA to "schema 语义校验未实现（M3 校验增强再评估）",
-            Feature.FIELD_LINEAGE to "字段级血缘由 lineage 模块 + jsqlparser 引擎承担",
+            Feature.VALIDATE_SCHEMA to "schema 语义校验未实现（需要 engine-api 侧 schema 装配，另立 ADR）",
+            Feature.FIELD_LINEAGE to "字段级血缘由 lineage 模块承担（两类引擎都能产语义模型）",
             Feature.ERROR_TOLERANT to "Calcite 解析器不支持误差容忍",
             Feature.PRETTY_PRINT to "unparse 固定单行缩进风格，未提供排版开关",
         ),
@@ -208,13 +215,99 @@ public class CalciteEngine : SqlEngine {
         return Resolved.Known(rendered)
     }
 
+    /**
+     * 提取**单条语句**的语义模型（[Feature.SEMANTIC_MODEL]）。
+     *
+     * 与 [parse] 同一解析口径（按方言配 [Lex]），但产出引擎无关的
+     * [SemanticStatement]（认识不出的部分落 `SqlExpr.Unknown` / 部分诊断）。
+     * 解析失败 / 多语句 / 不可建模种类（MERGE / VALUES / 纯 DDL）→
+     * [Resolved.Unknown]，不抛异常（Never-wrong）。
+     */
+    override fun analyze(sql: String, request: ParseRequest): Resolved<SemanticStatement> {
+        if (sql.isBlank()) return Resolved.Unknown("SQL 为空，无可提取内容")
+
+        val spec = resolveDialect(request.dialect)
+            ?: return Resolved.Unknown(dialectUnknownMessage(request.dialect))
+
+        val statements = try {
+            parseStatementList(sql, spec.lex)
+        } catch (e: SqlParseException) {
+            return Resolved.Unknown(parseFailureReason(sql, e), spanOf(sql, e.pos))
+        } catch (e: CalciteContextException) {
+            return Resolved.Unknown(parseFailureReason(sql, e), spanOf(sql, posOf(e)))
+        } catch (e: RuntimeException) {
+            return Resolved.Unknown("解析失败: ${firstLine(e.message) ?: e.javaClass.simpleName}")
+        }
+        when {
+            statements.isEmpty() -> return Resolved.Unknown("没有可提取内容")
+            statements.size > 1 -> return Resolved.Unknown("多条语句请走 analyzeAll（本接口只收单条）")
+        }
+
+        return when (val extracted = CalciteSemanticExtractor(sql).extract(statements.first())) {
+            is Resolved.Known -> extracted
+            null -> Resolved.Unknown("该语句暂不支持语义提取（MERGE / VALUES / 纯 DDL 等）")
+            else -> extracted
+        }
+    }
+
+    /**
+     * 提取**多语句脚本**的语义模型（[Feature.MULTI_STATEMENT]，加法契约）。
+     *
+     * 一段脚本一次 `parseStmtList`（按方言配解析器），对每条语句独立提取
+     *（extractor 内部 diagnostics 累积——每语句新建，不让上一条的诊断串场）；
+     * 不可建模的语句（纯 DDL / MERGE / VALUES）**跳过**。
+     * 只有整段语法解析失败才返回 [Resolved.Unknown]。
+     */
+    override fun analyzeAll(sql: String, request: ParseRequest): Resolved<List<SemanticStatement>> {
+        if (sql.isBlank()) return Resolved.Unknown("SQL 为空，无可提取内容")
+
+        val spec = resolveDialect(request.dialect)
+            ?: return Resolved.Unknown(dialectUnknownMessage(request.dialect))
+
+        val statements = try {
+            parseStatementList(sql, spec.lex)
+        } catch (e: SqlParseException) {
+            return Resolved.Unknown(parseFailureReason(sql, e), spanOf(sql, e.pos))
+        } catch (e: CalciteContextException) {
+            return Resolved.Unknown(parseFailureReason(sql, e), spanOf(sql, posOf(e)))
+        } catch (e: RuntimeException) {
+            return Resolved.Unknown("解析失败: ${firstLine(e.message) ?: e.javaClass.simpleName}")
+        }
+        if (statements.isEmpty()) return Resolved.Unknown("没有可提取内容")
+
+        val extracted = ArrayList<SemanticStatement>(statements.size)
+        for (statement in statements) {
+            val result = CalciteSemanticExtractor(sql).extract(statement)
+            if (result is Resolved.Known) extracted += result.value
+            // null = 无法建模（DDL / MERGE / VALUES），跳过——Never-wrong 不硬塞。
+        }
+        return Resolved.Known(extracted)
+    }
+
     // ————— 解析 —————
 
     /** 统一用 no-arg `parseStmtList()`（抽测 E5：`SqlParser.create(sql, cfg)` + 无参方法，quoting 生效）。 */
     private fun parseStatementList(sql: String, lex: Lex): List<SqlNode> {
-        val parser = SqlParser.create(sql, SqlParser.config().withLex(lex))
+        val parser = SqlParser.create(sql, parserConfig(lex))
         return parser.parseStmtList().getList().filterNotNull()
     }
+
+    /**
+     * 解析器配置：按方言配 [Lex]（quoting），**统一带 DDL 扩展语法**
+     *（[SqlDdlParserImpl.FACTORY]——CREATE TABLE / VIEW 等默认语法没有，本机 probe5/6 实测）
+     * 与 `!=`（`allowBangEqual`，语义与 `<>` 等价、SQL Server 系语料必需）。
+     * `allowBangEqual` 只有 builder 入口（Config 只有 getter，1.42.0 API 面）。
+     */
+    private fun parserConfig(lex: Lex): SqlParser.Config =
+        SqlParser.configBuilder(
+            SqlParser.config()
+                .withLex(lex)
+                // Lossless：裸标识符不重写大小写（Lex.ORACLE 默认会把裸名转大写——
+                // 本机 probe 实测），canonical 折叠交给 ir 层统一做。
+                .withUnquotedCasing(Casing.UNCHANGED)
+                .withQuotedCasing(Casing.UNCHANGED)
+                .withParserFactory(SqlDdlParserImpl.FACTORY),
+        ).setAllowBangEqual(true).build()
 
     private fun parseFailure(sql: String, pos: SqlParserPos?, message: String?): ParseOutcome = ParseOutcome(
         diagnostics = listOf(
@@ -230,6 +323,16 @@ public class CalciteEngine : SqlEngine {
     )
 
     // ————— 渲染校验 —————
+
+    /** 解析失败的机器可读原因（analyze / analyzeAll 复用）。 */
+    private fun parseFailureReason(sql: String, e: Exception): String {
+        val message = when (e) {
+            is SqlParseException -> firstLine(e.message) ?: e.javaClass.simpleName
+            is CalciteContextException -> firstLine(e.message) ?: e.javaClass.simpleName
+            else -> firstLine(e.message) ?: e.javaClass.simpleName
+        }
+        return "解析失败: $message"
+    }
 
     /** 等价基线 / 复验读回的 canon：折叠空白 + 小写（抽测 E2 的判定口径）。 */
     private fun canon(nodes: List<SqlNode>): String =
