@@ -11,6 +11,7 @@ antlr = "4.13.2"
 jooq = "3.21.9"
 jgrapht = "1.5.3"
 sqlite = "3.53.4.0"
+slf4j = "2.0.20"
 jmh = "1.37"
 
 [libraries]
@@ -30,6 +31,7 @@ antlr-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr" }
 jooq = { module = "org.jooq:jooq", version.ref = "jooq" }
 jgrapht-core = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
+slf4j-nop = { module = "org.slf4j:slf4j-nop", version.ref = "slf4j" }
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
 
 [plugins]
