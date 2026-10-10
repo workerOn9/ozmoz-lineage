@@ -75,6 +75,14 @@ public data class LineageQuery(
      * application/json，按 mime 区分有歧义；导出成功走注册表声明的 mime。
      */
     val format: String? = null,
+    /**
+     * **opt-in 聚合模式**（2026-10-10 拍板，终结「多语句 422 待议」）：
+     * true 时不论语句数，统一返回**合并图**响应（[GraphReportDto]，与 CLI
+     * `ozml lineage --format graph-json` 同形）；缺省 false 保持既有单语句契约
+     * （多条可建模语句 → 422 `multi_statement_input`），老客户端零影响。
+     * 与非 json 的 [format] 互斥 → 400 `aggregate_with_format`（导出器吃单模型）。
+     */
+    val aggregate: Boolean = false,
 )
 
 /**
@@ -85,6 +93,52 @@ public data class LineageQuery(
 public data class UnknownReport(
     val unknown: Resolved.Unknown,
 )
+
+/**
+ * `POST /api/lineage` 在 [LineageQuery.aggregate]（opt-in 聚合模式）下的响应——
+ * 与 CLI `ozml lineage --format graph-json` **同一形状**（{nodes, edges}），
+ * 多语句合并为一张图（[io.github.workeron9.ozmoz.lineage.graph.LineageGraph.of]）。
+ */
+@Serializable
+public data class GraphReportDto(
+    val nodes: List<GraphNodeDto>,
+    val edges: List<GraphEdgeDto>,
+) {
+    @Serializable
+    public data class GraphNodeDto(
+        val id: String,
+        val label: String,
+        val isOutput: Boolean,
+    )
+
+    @Serializable
+    public data class GraphEdgeDto(
+        val id: String,
+        val from: String,
+        val to: String,
+        val kind: String,
+        val transform: String,
+    )
+
+    public companion object {
+        @JvmStatic
+        public fun from(graph: io.github.workeron9.ozmoz.lineage.graph.LineageGraph): GraphReportDto = GraphReportDto(
+            // nodeIds 保持首次出现序（确定性）；边取 LineageGraph.edges（已稳定排序）。
+            nodes = graph.nodeIds.map {
+                GraphNodeDto(id = it, label = graph.label(it), isOutput = graph.isOutput(it))
+            },
+            edges = graph.edges.map { edge ->
+                GraphEdgeDto(
+                    id = edge.id,
+                    from = edge.from,
+                    to = edge.to,
+                    kind = edge.kind.name,
+                    transform = edge.transform.name,
+                )
+            },
+        )
+    }
+}
 
 /**
  * `POST /api/impact` 的 JSON 形状——与 `ozml impact --format json` **同形**。
@@ -157,7 +211,7 @@ public data class PathReportDto(
 /** 4xx / 422 的统一错误体。 */
 @Serializable
 public data class ErrorResponse(
-    /** 机器可判的短码：`invalid_request` / `unknown_engine` / `unknown_format` / `invalid_schema` / `invalid_direction` / `invalid_depth` / `no_modelable_statement` / `multi_statement_input` / `column_not_found`。 */
+    /** 机器可判的短码：`invalid_request` / `unknown_engine` / `unknown_format` / `invalid_schema` / `invalid_direction` / `invalid_depth` / `no_modelable_statement` / `multi_statement_input` / `aggregate_with_format` / `column_not_found`。 */
     val error: String,
     /** 人读原因。 */
     val reason: String? = null,
