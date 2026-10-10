@@ -77,9 +77,20 @@ public class LineageCommand : CliktCommand(name = "lineage") {
     )
         .flag()
 
+    /**
+     * 关掉表级哨兵边：`SOURCE` 边让每个 `SELECT` 的边数近乎翻倍（每列一条），大库
+     * 场景下图会显得嘈杂。开了它，值血缘六类边剩五类（OpenLineage 的 inputs 会只按
+     * 剩余边的 `fromColumn.table` 推导，少掉仅被 WHERE / JOIN 引用的表）。
+     */
+    private val noSourceEdges: Boolean by option(
+        "--no-source-edges",
+        help = "不发表级哨兵边（SOURCE）：只保留值血缘五类边（影响输出与 --graph 落库）",
+    )
+        .flag()
+
     override fun help(context: Context): String =
-        "解析一条或多条 SQL 并输出列级血缘（OUTPUT / PREDICATE / JOIN_KEY / GROUP_BY / ORDER_BY / SOURCE 六类边）；" +
-            "支持目录聚合与 --graph 落库。"
+        "解析一条或多条 SQL 并输出列级血缘（OUTPUT / PREDICATE / JOIN_KEY / GROUP_BY / ORDER_BY / SOURCE 六类边，" +
+            "可用 --no-source-edges 关掉 SOURCE）；支持目录聚合与 --graph 落库。"
 
     override fun run() {
         val engine = LineagePipeline.engine(engineId)
@@ -150,7 +161,7 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         for ((source, text) in inputs) {
             when (val models = LineagePipeline.models(text, engine, dialect, schema)) {
                 is Resolved.Known -> models.value.forEachIndexed { index, model ->
-                    result += StoredModel(model = model, sourceFile = source, statementIndex = index)
+                    result += StoredModel(model = shape(model), sourceFile = source, statementIndex = index)
                 }
                 is Resolved.Unknown -> {
                     // 单文件：整段语法错误直接失败（保持旧行为）；目录：跳过坏文件并提醒。
@@ -164,6 +175,10 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         }
         return result
     }
+
+    /** 出口定形：`--no-source-edges` 时把表级哨兵边裁掉（见 [LineagePipeline.dropSourceEdges]）。 */
+    private fun shape(model: LineageModel): LineageModel =
+        if (noSourceEdges) LineagePipeline.dropSourceEdges(model) else model
 
     private fun renderSingle(model: LineageModel) {
         when (format) {
@@ -207,7 +222,7 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         val files: List<Pair<String, String>> = inputs.map { (source, text) ->
             requireNotNull(source) { "增量模式收到无来源输入（stdin 未被拦截）" } to text
         }
-        val context = LineagePipeline.contextDigest(engineId, dialect, schemaPath, inputs)
+        val context = LineagePipeline.contextDigest(engineId, dialect, schemaPath, noSourceEdges, inputs)
         val inputSources = files.map { it.first }.toSet()
         var reused = 0
         var parsed = 0
@@ -228,7 +243,7 @@ public class LineageCommand : CliktCommand(name = "lineage") {
                             store.removeSource(source)
                         } else {
                             store.replaceSource(built.value.mapIndexed { index, model ->
-                                StoredModel(model = model, sourceFile = source, statementIndex = index, fingerprint = fp)
+                                StoredModel(model = shape(model), sourceFile = source, statementIndex = index, fingerprint = fp)
                             })
                         }
                         parsed++

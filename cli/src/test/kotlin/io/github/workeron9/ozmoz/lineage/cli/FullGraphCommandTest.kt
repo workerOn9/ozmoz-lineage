@@ -267,6 +267,70 @@ class FullGraphCommandTest {
         assertContains(inc.stdout, "parsed_files: 1")
     }
 
+    // ————— --no-source-edges —————
+
+    @Test
+    fun `开关作用于 graph 落库`() {
+        val dir = sqlDir("a.sql" to "INSERT INTO dst (x) SELECT a FROM src")
+        val db = tempDb()
+
+        val full = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()}")
+        assertEquals(0, full.statusCode)
+        // 1 OUTPUT + 1 SOURCE。
+        assertContains(full.stdout, "edges: 2")
+        SqliteLineageStore.open(db).use { loaded ->
+            val model = loaded.load().single().model
+            assertEquals(2, model.edges.size)
+        }
+
+        val trimmed = lineage.test(
+            "-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --no-source-edges",
+        )
+        assertEquals(0, trimmed.statusCode)
+        assertContains(trimmed.stdout, "edges: 1")
+        SqliteLineageStore.open(db).use { loaded ->
+            val model = loaded.load().single().model
+            assertEquals(1, model.edges.size)
+            assertTrue(model.edges.none { it.kind == io.github.workeron9.ozmoz.lineage.ir.EdgeKind.SOURCE })
+        }
+
+        // 库里没有 SOURCE 边，impact 仍可沿值血缘查下游。
+        val downstream = impact.test("--graph ${db.toAbsolutePath()} --on src.a --direction downstream")
+        assertEquals(0, downstream.statusCode)
+        assertContains(downstream.stdout, "dst.x  [output]")
+    }
+
+    @Test
+    fun `开关变化使增量指纹失效`() {
+        val dir = sqlDir("a.sql" to "INSERT INTO dst (x) SELECT a FROM src")
+        val db = tempDb()
+
+        lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+        val first = loadTags(db)
+
+        val trimmed = lineage.test(
+            "-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental --no-source-edges",
+        )
+        assertEquals(0, trimmed.statusCode)
+        // 开关进上下文摘要 → 指纹全变 → 重解析（否则跳过会让旧 SOURCE 边留在库里）。
+        assertContains(trimmed.stdout, "reused_files: 0")
+        assertContains(trimmed.stdout, "parsed_files: 1")
+        SqliteLineageStore.open(db).use { loaded ->
+            val model = loaded.load().single().model
+            assertTrue(model.edges.none { it.kind == io.github.workeron9.ozmoz.lineage.ir.EdgeKind.SOURCE })
+            assertEquals(loadTags(db), first)
+        }
+
+        // 关回去 → 再重解析，边恢复。
+        val restored = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+        assertEquals(0, restored.statusCode)
+        assertContains(restored.stdout, "reused_files: 0")
+        SqliteLineageStore.open(db).use { loaded ->
+            val model = loaded.load().single().model
+            assertEquals(2, model.edges.size)
+        }
+    }
+
     /** 载入库并抽「来源文件 → 模型指纹特征」做断言（键取文件名，值取 OUTPUT 边的目标列）。 */
     private fun loadTags(db: Path): Map<String, String> =
         SqliteLineageStore.open(db).use { store ->

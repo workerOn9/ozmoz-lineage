@@ -82,6 +82,24 @@ class LineageCommandTest {
     }
 
     @Test
+    fun `no-source-edges 关闭哨兵边 落到 json 与 edges 输出`() {
+        val f = tempSql("SELECT a AS x FROM s")
+
+        val default = command.test("--file ${f.absolutePath} --format summary")
+        assertEquals(0, default.statusCode)
+        assertContains(default.stdout, "edges: 2") // 1 OUTPUT + 1 SOURCE
+        assertContains(default.stdout, "SOURCE: 1")
+
+        val trimmed = command.test("--file ${f.absolutePath} --format edges --no-source-edges")
+        assertEquals(0, trimmed.statusCode)
+        assertContains(trimmed.stdout, "OUTPUT")
+        assertTrue("SOURCE" !in trimmed.stdout)
+        // 哨兵边原本占 e1：开关后编号出现空洞（对上未过滤版本的边号）。
+        assertContains(trimmed.stdout, "e0  OUTPUT")
+        assertTrue("e1" !in trimmed.stdout)
+    }
+
+    @Test
     fun `MERGE 端到端非零退出且不猜`() {
         // MERGE 不建模为 SemanticStatement：analyzeAll 跳过它，输入里没有可建模语句 → 非零退出。
         val f = tempSql("MERGE INTO t USING s ON t.id = s.id")

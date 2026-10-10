@@ -3,6 +3,7 @@ package io.github.workeron9.ozmoz.lineage.cli
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
+import io.github.workeron9.ozmoz.lineage.ir.EdgeKind
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.ir.map
@@ -103,20 +104,36 @@ internal object LineagePipeline {
     fun autoSchema(inputs: List<Pair<String?, String>>): SchemaProvider? =
         DdlFileSchemaProvider.parseTolerant(id = "ddl:auto", sqlTexts = inputs.map { it.second }.toTypedArray())
 
+    /**
+     * `--no-source-edges` 的**出口侧过滤**（ Never-wrong 的镜像：不删语义，只裁展示）：
+     * 把表级哨兵 `SOURCE` 边从模型里去掉，值血缘六类边剩五类。放在 cli（组合根）
+     * 而不是 `LineageBuilder`：建模语义保持完整与中性，开关只影响入口层的输出与落库。
+     * 边 id 保持原编号（出现空洞）——能对上未过滤版本的边号，便于人工比对。
+     */
+    fun dropSourceEdges(model: LineageModel): LineageModel =
+        if (model.edges.none { it.kind == EdgeKind.SOURCE }) model
+        else model.copy(edges = model.edges.filter { it.kind != EdgeKind.SOURCE })
+
     // ————— 增量更新（--incremental）的指纹 —————
 
     private const val SEPARATOR = "\u0000"
 
     /**
      * **上下文摘要**：会影响「同一段 SQL 解析出什么模型」的输入快照：
-     * 引擎 id、方言、schema 快照。schema 按 [schemaPath] 来路取摘要——
+     * 引擎 id、方言、schema 快照、[noSourceEdges] 开关。schema 按 [schemaPath] 来路取摘要——
      * - 显式 `--schema`：DDL 文件路径 + 全部内容（权威元数据，改一个字就全失效）；
      * - auto：只把**含 `create table` 子串（大小写不敏感）**的输入文本入摘要。
      *   该子串是「能贡献 DDL」的必要条件（文件里没 `create table` 就一定抽不出
      *   表），所以无关文件的编辑不会全局失效；而真正增删 / 改 DDL 的文件，
      *   本身文本必然变化，摘要必变。
      */
-    fun contextDigest(engineId: String, dialect: String?, schemaPath: String?, inputs: List<Pair<String?, String>>): String {
+    fun contextDigest(
+        engineId: String,
+        dialect: String?,
+        schemaPath: String?,
+        noSourceEdges: Boolean,
+        inputs: List<Pair<String?, String>>,
+    ): String {
         val schemaPart = if (schemaPath != null) {
             buildString {
                 append("explicit")
@@ -130,7 +147,7 @@ internal object LineagePipeline {
                 .joinToString(SEPARATOR) { it.second }
                 .let { "auto$SEPARATOR$it" }
         }
-        return sha256(engineId + SEPARATOR + (dialect ?: "") + SEPARATOR + schemaPart)
+        return sha256(engineId + SEPARATOR + (dialect ?: "") + SEPARATOR + "noSourceEdges=$noSourceEdges" + SEPARATOR + schemaPart)
     }
 
     /**
