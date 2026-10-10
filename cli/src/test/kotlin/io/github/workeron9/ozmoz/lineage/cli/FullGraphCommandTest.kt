@@ -116,4 +116,19 @@ class FullGraphCommandTest {
         assertEquals(1, result.statusCode)
         assertContains(result.stderr, "missing_input")
     }
+
+    @Test
+    fun `impact 现建图也自动收集 DDL`() {
+        // 目录里 DDL 与查询同源：无须 --schema，SELECT * 即展开，src.a 可作为上溯起点。
+        // INSERT 目标列（x, y）与展开后的查询列数一致，才不会触发「目标列数不一致」的 unknown。
+        val dir = sqlDir(
+            "schema.sql" to "CREATE TABLE src (a INT, b INT)",
+            "query.sql" to "INSERT INTO dst (x, y) SELECT * FROM src",
+        )
+
+        val result = impact.test("-f ${dir.toAbsolutePath()} --on src.a --direction downstream")
+
+        assertEquals(0, result.statusCode)
+        assertContains(result.stdout, "dst.x  [output]")
+    }
 }

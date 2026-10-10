@@ -39,6 +39,32 @@ public class DdlFileSchemaProvider private constructor(
         public fun fromFiles(id: String = "ddl", vararg paths: Path): DdlFileSchemaProvider =
             parse(id = paths.firstOrNull()?.let { "$id:${it.fileName}" } ?: id, sqlTexts = paths.map { it.readText() }.toTypedArray())
 
+        /**
+         * **容错**入口：与 [parse] 相同的提取逻辑，但单段文本整体解析失败时
+         * **跳过该段**（不抛异常），其余段照常提取，「先定义者胜」按传入顺序。
+         *
+         * 用途：从 SQL 输入（目录 / 脚本）里顺手收集 `CREATE TABLE`——坏文件在
+         * 读取侧已有告警（如 `ozml lineage` 对目录坏文件的 WARN），schema 收集
+         * 不必二次硬失败。全部文本解析失败、或没有任何 `CREATE TABLE` 时返回
+         * **null**，调用方回落到「无 schema」路径。
+         *
+         * 与 [parse] 的严格约定**并存不冲突**：显式提供 DDL（`--schema`）的场景
+         * 仍必须用 [parse]——DDL 是权威元数据，静默缺一张表比报错更糟；
+         * 本函数只用于「顺手收集」的 best-effort 场景，调用方必须意识到
+         * 这里**可能缺表**（解析失败的段的表就缺了）。
+         */
+        @JvmStatic
+        public fun parseTolerant(id: String, vararg sqlTexts: String): DdlFileSchemaProvider? {
+            // 逐段收集、跨段去重（同名表先定义者胜；[parseTables] 的去重只在其单次调用内生效）。
+            val tables = sqlTexts.asSequence()
+                .mapNotNull { text -> runCatching { parseTables(listOf(text)) }.getOrNull() }
+                .flatten()
+                .distinctBy { it.id }
+                .toList()
+            if (tables.isEmpty()) return null
+            return DdlFileSchemaProvider(id, index = StaticSchemaProvider(tables))
+        }
+
         private fun parseTables(texts: List<String>): List<TableSchema> = texts.flatMap { text ->
             CCJSqlParserUtil.parseStatements(text).filterIsInstance<CreateTable>().map(::toTableSchema)
         }.distinctBy { it.id } // 同名重复定义：先定义者胜

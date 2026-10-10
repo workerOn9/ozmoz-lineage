@@ -8,6 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -75,5 +76,33 @@ class LineagePipelineTest {
         // 或 schema 列清单），展开失败时的 unknown 也在那一层记（见 LineageCommandTest）。
         assertTrue(root.outputs.isEmpty())
         assertTrue(tree.unknowns.isEmpty())
+    }
+
+    @Test
+    fun `autoSchema 从输入文本收集 CREATE TABLE`() {
+        val inputs = listOf(
+            "schema.sql" to "CREATE TABLE t (a INT, b INT)",
+            "query.sql" to "SELECT * FROM t",
+        )
+
+        val schema = LineagePipeline.autoSchema(inputs)
+
+        assertNotNull(schema)
+        assertEquals(listOf("a", "b"), schema.table(io.github.workeron9.ozmoz.lineage.ir.TableRef(raw = "t", canonical = "t", name = "t"))!!.columns.map { it.name })
+    }
+
+    @Test
+    fun `autoSchema 跳过坏文件且无 DDL 时为 null`() {
+        // 坏文件不影响其余文件的收集（读取侧已按文件 WARN，schema 不二次报错）。
+        val schema = LineagePipeline.autoSchema(
+            listOf(
+                "bad.sql" to "THIS IS NOT SQL",
+                "ok.sql" to "CREATE TABLE t (a INT)",
+            ),
+        )
+        assertNotNull(schema)
+
+        assertNull(LineagePipeline.autoSchema(listOf("query.sql" to "SELECT 1")))
+        assertNull(LineagePipeline.autoSchema(emptyList()))
     }
 }

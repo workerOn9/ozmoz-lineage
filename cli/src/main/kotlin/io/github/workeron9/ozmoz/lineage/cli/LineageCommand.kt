@@ -57,7 +57,8 @@ public class LineageCommand : CliktCommand(name = "lineage") {
 
     private val schemaPath: String? by option(
         "--schema",
-        help = "DDL 文件或目录（含 CREATE TABLE），用于物理表 `*` 展开、裸列消歧与 INSERT 目标列对齐",
+        help = "DDL 文件或目录（含 CREATE TABLE），用于物理表 `*` 展开、裸列消歧与 INSERT 目标列对齐；" +
+            "未给出时自动从输入文本收集 CREATE TABLE（显式给出则只认它）",
     )
 
     private val graphPath: String? by option(
@@ -71,8 +72,10 @@ public class LineageCommand : CliktCommand(name = "lineage") {
 
     override fun run() {
         val engine = LineagePipeline.engine(engineId)
-        val schema = schemaPath?.let { LineagePipeline.schema(it) }
-        val stored = collect(engine, schema)
+        val inputs = LineagePipeline.readInputs(file)
+        // 显式 --schema 永远优先；未给出时从输入文本顺手收集 CREATE TABLE（可能为 null）。
+        val schema = schemaPath?.let { LineagePipeline.schema(it) } ?: LineagePipeline.autoSchema(inputs)
+        val stored = collect(engine, schema, inputs)
 
         if (stored.isEmpty()) {
             echo(
@@ -111,8 +114,7 @@ public class LineageCommand : CliktCommand(name = "lineage") {
     }
 
     /** 逐文件（文件 / 目录 / stdin）读取并建模型；保留来源文件与语句序号。 */
-    private fun collect(engine: SqlEngine, schema: SchemaProvider?): List<StoredModel> {
-        val inputs = LineagePipeline.readInputs(file)
+    private fun collect(engine: SqlEngine, schema: SchemaProvider?, inputs: List<Pair<String?, String>>): List<StoredModel> {
         val single = inputs.size == 1
         val result = ArrayList<StoredModel>()
         for ((source, text) in inputs) {

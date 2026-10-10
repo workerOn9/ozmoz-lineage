@@ -136,6 +136,40 @@ class LineageCommandTest {
     }
 
     @Test
+    fun `未给 schema 时从输入文本自动收集 DDL 展开星号`() {
+        // 单文件内 DDL 与查询同源：无须 --schema，CREATE TABLE 顺手喂给展开。
+        val sql = tempSql("CREATE TABLE t (a INT, b INT);\nSELECT * FROM t")
+        val result = command.test("--file ${sql.absolutePath} --format summary")
+
+        assertEquals(0, result.statusCode)
+        // 2 条 OUTPUT + 2 条 SOURCE（哨兵 → 每个输出列各 1 条）。
+        assertContains(result.stdout, "edges: 4")
+        assertContains(result.stdout, "unknowns: 0")
+    }
+
+    @Test
+    fun `显式 schema 优先于自动收集`() {
+        // 输入里的 DDL 是 t(a, b)，显式 --schema 是 t(a)：以用户为准 → 只展开 1 列。
+        val sql = tempSql("CREATE TABLE t (a INT, b INT);\nSELECT * FROM t")
+        val ddl = tempSql("CREATE TABLE t (a INT)")
+        val result = command.test("--file ${sql.absolutePath} --schema ${ddl.absolutePath} --format summary")
+
+        assertEquals(0, result.statusCode)
+        assertContains(result.stdout, "edges: 2") // 1 OUTPUT（a）+ 1 SOURCE
+        assertContains(result.stdout, "unknowns: 0")
+    }
+
+    @Test
+    fun `输入无 DDL 时自动收集为空 行为与旧版一致`() {
+        val sql = tempSql("SELECT * FROM store_sales")
+        val result = command.test("--file ${sql.absolutePath} --format summary")
+
+        assertEquals(0, result.statusCode)
+        assertContains(result.stdout, "edges: 0") // 无 schema 可展开，不产边
+        assertContains(result.stdout, "unknowns: 1")
+    }
+
+    @Test
     fun `format 模块导出器经 --format 可用`() {
         val sql = tempSql("SELECT a FROM t")
 

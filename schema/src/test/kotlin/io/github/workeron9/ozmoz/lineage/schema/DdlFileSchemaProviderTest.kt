@@ -90,6 +90,39 @@ class DdlFileSchemaProviderTest {
     }
 
     @Test
+    fun `parseTolerant 跳过解析失败的段保留其余且先定义者胜`() {
+        val provider = DdlFileSchemaProvider.parseTolerant(
+            id = "ddl:auto",
+            sqlTexts = arrayOf(
+                "CREATE TABLE t (a INT);", // 正常
+                "THIS IS NOT SQL", // 整段失败 → 跳过
+                "CREATE TABLE t (a INT, b INT); CREATE TABLE u (x INT);", // 同名表后定义，不覆盖
+            ),
+        )!!
+
+        assertEquals("ddl:auto", provider.id)
+        assertEquals(listOf("a"), provider.table(tableRef("t"))!!.columns.map { it.name })
+        assertEquals(listOf("x"), provider.table(tableRef("u"))!!.columns.map { it.name })
+    }
+
+    @Test
+    fun `parseTolerant 同一段内的同名表也先定义者胜`() {
+        val provider = DdlFileSchemaProvider.parseTolerant(
+            id = "ddl:auto",
+            sqlTexts = arrayOf("CREATE TABLE t (a INT); CREATE TABLE t (a INT, b INT);"),
+        )!!
+
+        assertEquals(listOf("a"), provider.table(tableRef("t"))!!.columns.map { it.name })
+    }
+
+    @Test
+    fun `parseTolerant 没有可提取的表返回 null`() {
+        assertNull(DdlFileSchemaProvider.parseTolerant(id = "ddl:auto", sqlTexts = arrayOf("SELECT 1")))
+        assertNull(DdlFileSchemaProvider.parseTolerant(id = "ddl:auto", sqlTexts = arrayOf("THIS IS NOT SQL")))
+        assertNull(DdlFileSchemaProvider.parseTolerant(id = "ddl:auto"))
+    }
+
+    @Test
     fun `查不到的表返回 null`() {
         val provider = DdlFileSchemaProvider.parse(sqlTexts = arrayOf("CREATE TABLE t (a INT)"))
         assertNull(provider.table(tableRef("missing")))

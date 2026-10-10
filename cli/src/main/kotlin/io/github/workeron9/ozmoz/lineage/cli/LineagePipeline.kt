@@ -90,4 +90,16 @@ internal object LineagePipeline {
             *files.toTypedArray(),
         )
     }
+
+    /**
+     * **顺手收集**：`--schema` 未给出时，从输入文本（目录 / 文件 / stdin）里的
+     * `CREATE TABLE` 建 schema——输入与 DDL 同源的目录不需要再显式 `--schema`。
+     *
+     * 走 [DdlFileSchemaProvider.parseTolerant]（坏文件跳过——读取侧的解析告警已
+     * 覆盖它，schema 收集不二次报错）；没有任何 `CREATE TABLE` 时返回 null，
+     * 行为与旧版一致（无 schema）。**显式 `--schema` 永远优先**：调用方只在
+     * `schemaPath == null` 时才用本函数（DDL 是权威元数据，用户指了就以用户为准）。
+     */
+    fun autoSchema(inputs: List<Pair<String?, String>>): SchemaProvider? =
+        DdlFileSchemaProvider.parseTolerant(id = "ddl:auto", sqlTexts = inputs.map { it.second }.toTypedArray())
 }
