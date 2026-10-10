@@ -70,6 +70,59 @@ class LineageCommandTest {
     }
 
     @Test
+    fun `CTE 链式引用端到端 b 引用 a 产三段 DIRECT 链`() {
+        // 回归（语料矩阵暴露）：CTE 体引用同层先声明的 CTE 曾报「内部错误：CTE 体未构建」。
+        val model = analyze("WITH a AS (SELECT id, name FROM t1), b AS (SELECT id, name FROM a) SELECT id FROM b")
+
+        // id 链：t1.id -> a.id（a 的体）、a.id -> b.id（b 的体）、b.id -> id（顶层）；
+        // name 链只到 b.name（顶层未消费 name）：t1.name -> a.name、a.name -> b.name，共 5 条。
+        val outputs = model.edges.filter { it.kind == EdgeKind.OUTPUT }
+        assertEquals(5, outputs.size)
+        assertTrue(outputs.all { it.transform == TransformKind.DIRECT })
+        val chain = outputs.associateBy { it.fromColumn.qualifiedName }
+        assertEquals("a.id", chain.getValue("t1.id").toColumn.qualifiedName)
+        assertEquals("b.id", chain.getValue("a.id").toColumn.qualifiedName)
+        assertEquals("id", chain.getValue("b.id").toColumn.qualifiedName)
+        assertEquals("a.name", chain.getValue("t1.name").toColumn.qualifiedName)
+        assertEquals("b.name", chain.getValue("a.name").toColumn.qualifiedName)
+        assertTrue(model.unknowns.none { it.reason.contains("CTE") })
+    }
+
+    @Test
+    fun `派生表在内层引用 CTE 端到端产链`() {
+        // 子查询体也要能引用外层 CTE（构建体的传播覆盖派生表层级）。
+        val model = analyze("WITH a AS (SELECT id FROM t1) SELECT d.x FROM (SELECT id AS x FROM a) d")
+
+        val outputs = model.edges.filter { it.kind == EdgeKind.OUTPUT }
+        assertEquals(3, outputs.size)
+        val chain = outputs.associateBy { it.fromColumn.qualifiedName }
+        assertEquals("a.id", chain.getValue("t1.id").toColumn.qualifiedName)
+        assertEquals("d.x", chain.getValue("a.id").toColumn.qualifiedName)
+        assertEquals("x", chain.getValue("d.x").toColumn.qualifiedName)
+    }
+
+    @Test
+    fun `递归 CTE 自引用端到端显式 unknown 不抛内部错误`() {
+        // 递归血缘展开需要迭代求值，暂不支持；自引用显式降级为 Unknown（Never-wrong），不炸。
+        val model =
+            analyze("WITH r (n) AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM r WHERE n < 10) SELECT n FROM r")
+
+        assertTrue(model.unknowns.any { it.reason.startsWith("递归 CTE r 的自引用") })
+        // 非递归分支照常出边：顶层 SELECT n 解析到 r 的有效输出（首分支 n）。
+        assertTrue(model.edges.any { it.kind == EdgeKind.OUTPUT && it.toColumn.qualifiedName == "n" })
+    }
+
+    @Test
+    fun `递归 CTE 限定自引用与星号引用都记录了 unknown 而非 crash`() {
+        val qualified =
+            analyze("WITH r AS (SELECT a AS n FROM t UNION ALL SELECT n FROM r) SELECT n FROM r")
+        assertTrue(qualified.unknowns.any { it.reason.startsWith("递归 CTE r 的自引用") })
+
+        val starred = analyze("WITH r AS (SELECT a FROM t UNION ALL SELECT * FROM r) SELECT a FROM r")
+        assertTrue(starred.unknowns.any { it.reason.startsWith("递归 CTE r") })
+    }
+
+    @Test
     fun `JOIN 等值条件端到端产 JOIN_KEY 边`() {
         val model = analyze("SELECT a.x, b.y FROM a JOIN b ON a.id = b.id")
 
