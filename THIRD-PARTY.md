@@ -19,6 +19,10 @@
 | [JHeaps](https://github.com/d-michail/jheaps)（JGraphT 传递） | 0.14 | Apache-2.0 | 堆 / 优先队列（JGraphT 内部） |
 | [Apfloat](https://github.com/mtommila/apfloat)（JGraphT 传递） | 1.14.0 | MIT | 任意精度浮点（JGraphT 内部） |
 | [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（`graph`） | 3.53.4.0 | Apache-2.0 | 血缘图库的 SQLite 持久化（`ozml lineage --graph` / `ozml impact --graph`） |
+| [Ktor Server](https://github.com/ktorio/ktor)（core / netty / content-negotiation / serialization-kotlinx-json，`server`） | 3.5.2 | Apache-2.0 | 本地 HTTP `/api`（`ozml serve`）；锁定 3.5.2 与 ADR-0002 的版本口径一致 |
+| [Netty](https://github.com/netty/netty)（Ktor 传递，server 引擎） | 4.2.16.Final | Apache-2.0 | Ktor Netty 引擎（`ozml serve`） |
+| [kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines)（Ktor 传递） | 1.11.0 | Apache-2.0 | Ktor 运行时依赖 |
+| [kotlinx-io](https://github.com/Kotlin/kotlinx-io)（Ktor 传递） | 0.9.1 | Apache-2.0 | Ktor 运行时依赖 |
 | [JetBrains annotations](https://github.com/JetBrains/java-annotations)（kotlin-stdlib 传递） | 13.0 | Apache-2.0 | 编译期注解 |
 
 ### JSqlParser 许可证说明（重要）
@@ -48,6 +52,7 @@
 | [kotlin-test](https://github.com/JetBrains/kotlin/blob/v2.4.20/license/LICENSE.txt) | 2.4.20 | Apache-2.0 | 单元测试 |
 | [JUnit Jupiter](https://www.eclipse.org/legal/epl-2.0/)（`kotlin-test-junit5` 传递） | 5.10.1 | EPL-2.0 | 测试运行器 |
 | [H2](https://h2database.com/html/license.html) | 2.3.232 | **MPL 2.0 / EPL 1.0 双许可（二选一）** | `schema` 的 `JdbcSchemaProvider` 实测（仅测试期，不打包） |
+| [Ktor Server Test Host](https://github.com/ktorio/ktor) | 3.5.2 | Apache-2.0 | `server` 的 `/api` 端点测试（仅测试期，不打包） |
 
 catalog 里锁定、但尚未进入 classpath 的库（Ktor、Calcite、jOOQ、JMH、ANTLR 等）不在本表登记。真正添加时再补行，并以上游许可证原文为准。
 

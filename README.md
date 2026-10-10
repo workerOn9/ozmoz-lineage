@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` 可运行；方言转换、Web UI 尚未接入）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API 已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml serve`（Ktor `/api`）可运行；方言转换、Web UI 尚未接入）。
 
 ## 它要解决什么
 
@@ -24,6 +24,7 @@ ozml lineage -f q.sql --schema schema.sql             # 喂 DDL 元数据：物�
 ozml lineage -f sql/ --graph ./lineage.db             # 吃下一个 SQL 目录（含多语句脚本）→ 落库全库血缘图（当前可用）
 ozml impact  --graph ./lineage.db --on db.t.c --depth 3  # 从库查询上溯 / 下溯 / 影响面（当前可用）
 ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查（当前可用）
+ozml serve   --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|impact|path（当前可用）
 ozml convert --from mysql --to postgresql             # 方言转换（规划中）
 ```
 
@@ -58,6 +59,17 @@ e3  SOURCE  c -> x  [SOURCE]
 
 `ozml impact` 在 `graph` 模块的 `LineageGraph` 上做**上溯 / 下溯 / 影响面**（`--direction upstream|downstream|both`，`--depth` 限层）与环检测；目标列不在图里时非零退出，不猜相近列。
 
+`ozml serve` 启动本地单用户 HTTP 服务（默认 `127.0.0.1:8765`，只绑回环），暴露与 CLI 同一契约的 `/api`：
+
+```bash
+ozml serve --port 8765 &
+curl -s localhost:8765/api/health
+curl -s localhost:8765/api/lineage -H 'Content-Type: application/json' \
+    -d '{"sql": "SELECT * FROM t", "schema": "CREATE TABLE t (a INT)"}'
+```
+
+端点：`GET /api/health`、`GET /api/engines`（引擎能力路由表）、`POST /api/parse`（归一化树，与 `ozml parse --format json` 同形）、`POST /api/lineage`（`LineageModel`，仅接受一条可建模语句）、`POST /api/impact` / `POST /api/path`（图查询，响应与 `ozml impact --format json` 同形）。**解析失败不是 HTTP 错误**：语法错误以 200 + 结构化 `unknown` 返回（错误是数据）；仅请求本身非法（缺字段、未知引擎、坏 DDL）才 4xx。`schema` 指定时必须为内联 DDL 文本；未指定时自动从 `sql` 文本收集 `CREATE TABLE`（与 CLI 的目录行为一致）。
+
 `ozml lineage -f <目录>` 递归读取目录下的 `*.sql`，并可把结果**落库**到 SQLite：
 
 ```bash
@@ -71,7 +83,7 @@ ozml impact  --graph ./lineage.db --on db.t.c
 
 解析失败、或引擎不支持该语句的语义提取（如 `MERGE`）时返回非零退出码，并把带位置（行列）的诊断打到 stderr——不会静默给出一个猜测的结果。
 
-`--schema` 接一个含 `CREATE TABLE` 的 DDL 文件或目录（目录取其下全部 `*.sql`；`schema` 模块的 `DdlFileSchemaProvider`，另有 `StaticSchemaProvider` / `JdbcSchemaProvider` / `CompositeSchemaProvider` 可编程接入）：物理表的 `SELECT *` 按列清单展开、裸列名按「哪张表真有这一列」消歧、`INSERT INTO t SELECT …` 未声明目标列时按表列定义序对齐。元数据缺失的列一律显式记 `unknown`，不发明列名。
+`--schema` 接一个含 `CREATE TABLE` 的 DDL 文件或目录（目录取其下全部 `*.sql`；`schema` 模块的 `DdlFileSchemaProvider`，另有 `StaticSchemaProvider` / `JdbcSchemaProvider` / `CompositeSchemaProvider` 可编程接入）：物理表的 `SELECT *` 按列清单展开、裸列名按「哪张表真有这一列」消歧、`INSERT INTO t SELECT …` 未声明目标列时按表列定义序对齐。**未给 `--schema` 时从输入文本自动收集同源的 `CREATE TABLE`**（逐文件容错：解析失败的文件跳过——读取侧已有告警；显式 `--schema` 永远优先）。元数据缺失的列一律显式记 `unknown`，不发明列名。
 
 ## 设计原则
 
