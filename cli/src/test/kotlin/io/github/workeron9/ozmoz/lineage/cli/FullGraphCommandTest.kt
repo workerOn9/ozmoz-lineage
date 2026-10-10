@@ -131,4 +131,150 @@ class FullGraphCommandTest {
         assertEquals(0, result.statusCode)
         assertContains(result.stdout, "dst.x  [output]")
     }
+
+    // ————— --incremental 增量落库 —————
+
+    @Test
+    fun `增量首轮等于全量 第二轮全跳过`() {
+        val dir = sqlDir(
+            "a.sql" to "INSERT INTO dst (x) SELECT a FROM src",
+            "b.sql" to "INSERT INTO dst2 (y) SELECT x FROM dst",
+        )
+        val db = tempDb()
+
+        val first = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+        assertEquals(0, first.statusCode)
+        assertContains(first.stdout, "reused_files: 0")
+        assertContains(first.stdout, "parsed_files: 2")
+        assertContains(first.stdout, "statements: 2")
+
+        val db1 = loadTags(db)
+
+        val second = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+        assertEquals(0, second.statusCode)
+        assertContains(second.stdout, "reused_files: 2")
+        assertContains(second.stdout, "parsed_files: 0")
+        assertContains(second.stdout, "removed_files: 0")
+        // 复用 = 库里原样保留（Lossless 往返）。
+        assertEquals(db1, loadTags(db))
+    }
+
+    @Test
+    fun `增量只重解析改动的文件 其余原样保留`() {
+        val dir = sqlDir(
+            "a.sql" to "INSERT INTO dst (x) SELECT a FROM src",
+            "b.sql" to "INSERT INTO dst2 (y) SELECT x FROM dst",
+        )
+        val db = tempDb()
+        lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+        val before = loadTags(db)
+
+        Files.writeString(dir.resolve("b.sql"), "INSERT INTO dst2 (y) SELECT x FROM dst  -- 内容变了")
+        val run2 = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+
+        assertEquals(0, run2.statusCode)
+        assertContains(run2.stdout, "reused_files: 1")
+        assertContains(run2.stdout, "parsed_files: 1")
+        assertContains(run2.stdout, "statements: 2")
+        // 未变化的 a.sql 模型原样；b.sql 重解析（新 lineage id 仍 e0，列相同）。
+        val after = loadTags(db)
+        assertEquals(before.getValue("a.sql"), after.getValue("a.sql"))
+        assertEquals("dst2.y", after.getValue("b.sql"))
+    }
+
+    @Test
+    fun `增量从库里删除输入中已消失的文件`() {
+        val dir = sqlDir(
+            "a.sql" to "INSERT INTO dst (x) SELECT a FROM src",
+            "b.sql" to "INSERT INTO dst2 (y) SELECT x FROM dst",
+        )
+        val db = tempDb()
+        lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+
+        Files.delete(dir.resolve("b.sql"))
+        val run = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+
+        assertEquals(0, run.statusCode)
+        assertContains(run.stdout, "removed_files: 1")
+        assertContains(run.stdout, "statements: 1")
+        assertEquals(listOf("a.sql"), loadTags(db).keys.toList())
+    }
+
+    @Test
+    fun `增量解析失败的文件保留旧血缘 好文件照常更新`() {
+        val dir = sqlDir(
+            "a.sql" to "INSERT INTO dst (x) SELECT a FROM src",
+            "b.sql" to "INSERT INTO dst2 (y) SELECT x FROM dst",
+        )
+        val db = tempDb()
+        lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+
+        Files.writeString(dir.resolve("b.sql"), "SELEC broken FROM ; ;")
+        val run = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+
+        assertEquals(0, run.statusCode)
+        assertContains(run.stdout, "failed_files: 1")
+        assertContains(run.stdout, "statements: 2")
+        val tags = loadTags(db)
+        assertEquals("dst2.y", tags.getValue("b.sql"), "坏文件保留旧血缘（过期但可用）")
+    }
+
+    @Test
+    fun `增量 schema 或引擎变化使全体指纹失效`() {
+        val dir = sqlDir(
+            "query.sql" to "INSERT INTO dst (x, y) SELECT * FROM src",
+            "schema.sql" to "CREATE TABLE src (a INT, b INT)",
+        )
+        val db = tempDb()
+        lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+
+        // DDL 文件改动 → auto schema 变 → 全部文件重解析。
+        Files.writeString(dir.resolve("schema.sql"), "CREATE TABLE src (a INT, b INT, c INT)")
+        val run = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+
+        assertEquals(0, run.statusCode)
+        assertContains(run.stdout, "reused_files: 0")
+        assertContains(run.stdout, "parsed_files: 2")
+    }
+
+    @Test
+    fun `incremental 不带 graph 与 stdin 都被拒绝`() {
+        val dir = sqlDir("a.sql" to "SELECT a FROM t")
+
+        val noGraph = lineage.test("-f ${dir.toAbsolutePath()} --incremental")
+        assertEquals(1, noGraph.statusCode)
+        assertContains(noGraph.stderr, "incremental_requires_graph")
+
+        val stdin = lineage.test("-f - --graph ${tempDb().toAbsolutePath()} --incremental")
+        assertEquals(1, stdin.statusCode)
+        assertContains(stdin.stderr, "incremental_requires_source")
+    }
+
+    @Test
+    fun `全量跑法不带指纹也不受增量影响`() {
+        val dir = sqlDir("a.sql" to "SELECT a FROM t")
+        val db = tempDb()
+
+        val build = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()}")
+        assertEquals(0, build.statusCode)
+
+        // 非 --incremental 的落库不写指纹：fingerprints 为空，增量首轮当全量处理。
+        SqliteLineageStore.open(db).use {
+            assertEquals(emptyMap<String, String>(), it.fingerprints())
+        }
+        val inc = lineage.test("-f ${dir.toAbsolutePath()} --graph ${db.toAbsolutePath()} --incremental")
+        assertEquals(0, inc.statusCode)
+        assertContains(inc.stdout, "parsed_files: 1")
+    }
+
+    /** 载入库并抽「来源文件 → 模型指纹特征」做断言（键取文件名，值取 OUTPUT 边的目标列）。 */
+    private fun loadTags(db: Path): Map<String, String> =
+        SqliteLineageStore.open(db).use { store ->
+            store.load().associate {
+                val name = it.sourceFile!!.substringAfterLast('/')
+                name to (it.model.edges.firstOrNull { edge ->
+                    edge.kind == io.github.workeron9.ozmoz.lineage.ir.EdgeKind.OUTPUT
+                }?.toColumn?.qualifiedName ?: "<none>")
+            }
+        }
 }
