@@ -44,7 +44,7 @@ ozml convert --engine jooq --from mysql --to trino -f q.sql  # jOOQ 第二实现
 ./cli/build/install/ozml/bin/ozml impact  --graph ./lineage.db --on db.t.c --direction upstream
 ```
 
-`ozml lineage` 输出列级血缘模型，共**六类边**：`OUTPUT`（输出列的值从哪来）、`PREDICATE`（WHERE / HAVING 引用，只影响结果集）、`JOIN_KEY`（`a.id = b.id` 连接键传递）、`GROUP_BY`（分组引用）、`ORDER_BY`（排序引用）、`SOURCE`（表级血缘：表 / CTE 作为整体被引用）。每条边带 `TransformKind`（`DIRECT` / `EXPRESSION` / `AGGREGATE` / `WINDOW` / `CASE_BRANCH` / `CONSTANT` / `JOIN_KEY` / `FILTER_PREDICATE` / `GROUPING` / `ORDERING` / `SOURCE`）：
+`ozml lineage` 输出列级血缘模型（每格可溯源）并由**两个引擎**共同提供语义模型：`jsqlparser`（解析主力）与 `calcite`（方言转换主力，`ozml matrix` 各占一列，方言不认的地方看另一列能不能认——两引擎合并实测覆盖 190/200 条语料，双失败只剩方言专属语法盲区）。共**六类边**：`OUTPUT`（输出列的值从哪来）、`PREDICATE`（WHERE / HAVING 引用，只影响结果集）、`JOIN_KEY`（`a.id = b.id` 连接键传递）、`GROUP_BY`（分组引用）、`ORDER_BY`（排序引用）、`SOURCE`（表级血缘：表 / CTE 作为整体被引用）。每条边带 `TransformKind`（`DIRECT` / `EXPRESSION` / `AGGREGATE` / `WINDOW` / `CASE_BRANCH` / `CONSTANT` / `JOIN_KEY` / `FILTER_PREDICATE` / `GROUPING` / `ORDERING` / `SOURCE`）：
 
 ```text
 $ cat q.sql

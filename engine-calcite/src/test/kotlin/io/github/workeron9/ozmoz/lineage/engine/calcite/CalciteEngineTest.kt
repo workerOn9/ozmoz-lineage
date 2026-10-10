@@ -26,10 +26,11 @@ class CalciteEngineTest {
         assertTrue(engine.capabilities.supports(Feature.PARSE))
         assertTrue(engine.capabilities.supports(Feature.DIALECT_PARSE))
         assertTrue(engine.capabilities.supports(Feature.DIALECT_RENDER))
-        assertTrue(!engine.capabilities.supports(Feature.SEMANTIC_MODEL))
-        assertTrue(
-            engine.capabilities.reason(Feature.SEMANTIC_MODEL)!!.contains("jsqlparser"),
-        )
+        assertTrue(engine.capabilities.supports(Feature.SEMANTIC_MODEL))
+        assertTrue(engine.capabilities.supports(Feature.MULTI_STATEMENT))
+        // VALIDATE_SCHEMA 有意不申报（engine-api 侧缺 schema 装配，另立 ADR）
+        assertTrue(!engine.capabilities.supports(Feature.VALIDATE_SCHEMA))
+        assertContains(engine.capabilities.reason(Feature.VALIDATE_SCHEMA)!!, "schema")
         // 注册的方言 = 承诺的方言（含别名 tsql）
         assertTrue("tsql" in engine.capabilities.dialects)
         assertTrue("mssql" in engine.capabilities.dialects)
