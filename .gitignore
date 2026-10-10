@@ -33,6 +33,8 @@ Thumbs.db
 *.hprof
 build/
 out/
+# Eclipse JDT (VSCode Java 扩展) 默认输出目录
+bin/
 .gradle/
 .kotlin/
 !gradle/wrapper/gradle-wrapper.jar
