@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 #
 # ozmoz-lineage 一体化镜像（web 设计稿 §6.5）：web/ 静态产物 + `ozml serve` 单端口。
 # 全程离线可跑：不依赖任何云服务，SQL 与元数据不出本机。
@@ -21,7 +21,24 @@ RUN npm run build
 # ── stage 2：JVM 构建（JDK 21 轴；gradle 镜像版本与 wrapper 锁定一致）─────────
 FROM gradle:9.8.1-jdk21 AS jvm
 WORKDIR /src
-COPY --chown=gradle:gradle . .
+# 只拷 JVM 侧输入：前端改动不该让 JVM 层缓存失效（前端迭代只重跑 node 阶段）。
+# ⚠️ 新增 Gradle 模块时，要把模块目录加到下面第二行。
+COPY --chown=gradle:gradle gradle/ ./gradle/
+COPY --chown=gradle:gradle gradlew gradlew.bat settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY --chown=gradle:gradle ir/ ./ir/
+COPY --chown=gradle:gradle engine-api/ ./engine-api/
+COPY --chown=gradle:gradle engine-jsqlparser/ ./engine-jsqlparser/
+COPY --chown=gradle:gradle engine-calcite/ ./engine-calcite/
+COPY --chown=gradle:gradle engine-antlr/ ./engine-antlr/
+COPY --chown=gradle:gradle engine-jooq/ ./engine-jooq/
+COPY --chown=gradle:gradle lineage/ ./lineage/
+COPY --chown=gradle:gradle graph/ ./graph/
+COPY --chown=gradle:gradle schema/ ./schema/
+COPY --chown=gradle:gradle format/ ./format/
+COPY --chown=gradle:gradle cli/ ./cli/
+COPY --chown=gradle:gradle server/ ./server/
+COPY --chown=gradle:gradle bench/ ./bench/
+COPY --chown=gradle:gradle conformance/ ./conformance/
 # installDist 产出可执行发行版（bin/ozml + lib/），不打测试（测试由 CI 的 build 轴守）。
 RUN gradle --no-daemon :cli:installDist
 
