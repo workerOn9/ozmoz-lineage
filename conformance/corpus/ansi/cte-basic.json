@@ -1,0 +1,10 @@
+{
+  "id": "ansi-cte-basic",
+  "dialect": "ansi",
+  "kind": "SELECT",
+  "features": [
+    "cte"
+  ],
+  "comment": "带名字的 CTE 引用（作用域树的关键 case）",
+  "sql": "WITH c AS (SELECT id, name FROM t) SELECT id, name FROM c"
+}

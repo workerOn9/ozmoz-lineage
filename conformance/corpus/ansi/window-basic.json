@@ -1,0 +1,10 @@
+{
+  "id": "ansi-window-basic",
+  "dialect": "ansi",
+  "kind": "SELECT",
+  "features": [
+    "window"
+  ],
+  "comment": "窗口函数（TransformKind.WINDOW）",
+  "sql": "SELECT id, ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary) AS rn FROM emp"
+}

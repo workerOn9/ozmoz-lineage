@@ -1,0 +1,10 @@
+{
+  "id": "mysql-select-limit",
+  "dialect": "mysql",
+  "kind": "SELECT",
+  "features": [
+    "basic"
+  ],
+  "comment": "MySQL LIMIT/OFFSET 语法",
+  "sql": "SELECT id FROM orders ORDER BY created_at LIMIT 50 OFFSET 100"
+}

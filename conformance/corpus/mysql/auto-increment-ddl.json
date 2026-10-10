@@ -1,0 +1,10 @@
+{
+  "id": "mysql-auto-increment-ddl",
+  "dialect": "mysql",
+  "kind": "DDL",
+  "features": [
+    "ddl"
+  ],
+  "comment": "AUTO_INCREMENT / ENGINE 后缀的表定义",
+  "sql": "CREATE TABLE orders (id BIGINT AUTO_INCREMENT, user_id INT) ENGINE=InnoDB"
+}

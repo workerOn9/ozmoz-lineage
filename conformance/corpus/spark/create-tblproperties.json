@@ -1,0 +1,10 @@
+{
+  "id": "spark-create-tblproperties",
+  "dialect": "spark",
+  "kind": "DDL",
+  "features": [
+    "ddl"
+  ],
+  "comment": "TBLPROPERTIES 表属性（Spark DDL 方言）",
+  "sql": "CREATE TABLE t (a INT) TBLPROPERTIES ('key' = 'value')"
+}

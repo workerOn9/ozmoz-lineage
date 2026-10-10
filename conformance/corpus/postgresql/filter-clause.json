@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-filter-clause",
+  "dialect": "postgresql",
+  "kind": "SELECT",
+  "features": [
+    "aggregate",
+    "filter"
+  ],
+  "comment": "聚合 FILTER (WHERE ...) 子句",
+  "sql": "SELECT department, SUM(salary) FILTER (WHERE salary > 1000) AS big_sum FROM emp GROUP BY department"
+}

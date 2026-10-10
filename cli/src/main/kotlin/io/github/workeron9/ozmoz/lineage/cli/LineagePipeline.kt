@@ -30,6 +30,12 @@ internal object LineagePipeline {
         else -> error("未注册的引擎：$id")
     }
 
+    /** 当前注册的引擎 id 列表（`--engine` 的合法取值，也是 `matrix` 等多引擎入口的展开源）。 */
+    val ENGINE_IDS: List<String> = listOf(JSqlParserEngine.ID)
+
+    /** 注册的全部引擎实例（`ozml matrix` 等按列表逐个跑的入口用）。 */
+    fun engines(): List<SqlEngine> = ENGINE_IDS.map { engine(it) }
+
     /**
      * 输入路径 → (来源文件, SQL 文本) 列表：
      * - `-` → 单个 `(null, stdin)`；

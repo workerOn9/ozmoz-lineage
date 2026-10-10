@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-insert-returning",
+  "dialect": "postgresql",
+  "kind": "INSERT",
+  "features": [
+    "returning"
+  ],
+  "comment": "INSERT ... RETURNING（值血缘与可回读输出并存）",
+  "sql": "INSERT INTO logs (msg) VALUES ('hi') RETURNING id"
+}

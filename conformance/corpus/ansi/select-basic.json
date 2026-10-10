@@ -1,0 +1,10 @@
+{
+  "id": "ansi-select-basic",
+  "dialect": "ansi",
+  "kind": "SELECT",
+  "features": [
+    "basic"
+  ],
+  "comment": "基础列选择、过滤、排序与行数限制（所有引擎的底线）",
+  "sql": "SELECT id, name FROM users WHERE age > 30 ORDER BY name LIMIT 10"
+}

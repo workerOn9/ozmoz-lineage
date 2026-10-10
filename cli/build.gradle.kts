@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":format"))
     implementation(project(":graph"))
     implementation(project(":server"))
+    implementation(project(":conformance"))
     implementation(libs.clikt)
     implementation(libs.serialization.json)
 }

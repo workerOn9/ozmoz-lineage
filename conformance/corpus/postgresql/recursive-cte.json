@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-recursive-cte",
+  "dialect": "postgresql",
+  "kind": "SELECT",
+  "features": [
+    "cte",
+    "recursive"
+  ],
+  "comment": "WITH RECURSIVE 递归 CTE",
+  "sql": "WITH RECURSIVE r (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 10) SELECT n FROM r"
+}

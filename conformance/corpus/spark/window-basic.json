@@ -1,0 +1,10 @@
+{
+  "id": "spark-window-basic",
+  "dialect": "spark",
+  "kind": "SELECT",
+  "features": [
+    "window"
+  ],
+  "comment": "Spark 窗口函数",
+  "sql": "SELECT id, dense_rank() OVER (ORDER BY score DESC) AS rk FROM scores"
+}

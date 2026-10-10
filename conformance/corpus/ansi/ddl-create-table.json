@@ -1,0 +1,10 @@
+{
+  "id": "ansi-ddl-create-table",
+  "dialect": "ansi",
+  "kind": "DDL",
+  "features": [
+    "basic"
+  ],
+  "comment": "CREATE TABLE：不产列级血缘但可喂 schema",
+  "sql": "CREATE TABLE t (a INT, b VARCHAR(20))"
+}

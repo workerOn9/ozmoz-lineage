@@ -1,0 +1,11 @@
+{
+  "id": "ansi-multi-statement-script",
+  "dialect": "ansi",
+  "kind": "OTHER",
+  "features": [
+    "multi-statement",
+    "ddl"
+  ],
+  "comment": "DDL + DML 混排脚本：DDL 跳过、INSERT 建模（analyzeAll 语义）",
+  "sql": "CREATE TABLE t (a INT);\nINSERT INTO t (a) VALUES (1);"
+}

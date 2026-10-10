@@ -1,0 +1,10 @@
+{
+  "id": "hive-backtick-select",
+  "dialect": "hive",
+  "kind": "SELECT",
+  "features": [
+    "basic"
+  ],
+  "comment": "反引号标识符",
+  "sql": "SELECT `user_id`, `ts` FROM `access_log`"
+}
