@@ -3,6 +3,7 @@ package io.github.workeron9.ozmoz.lineage.cli
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.engine.calcite.CalciteEngine
+import io.github.workeron9.ozmoz.lineage.engine.jooq.JooqEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
 import io.github.workeron9.ozmoz.lineage.ir.EdgeKind
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
@@ -29,6 +30,7 @@ internal object LineagePipeline {
     fun engine(id: String): SqlEngine = when (id) {
         JSqlParserEngine.ID -> JSqlParserEngine()
         CalciteEngine.ID -> CalciteEngine()
+        JooqEngine.ID -> JooqEngine()
         else -> error("未注册的引擎：$id")
     }
 

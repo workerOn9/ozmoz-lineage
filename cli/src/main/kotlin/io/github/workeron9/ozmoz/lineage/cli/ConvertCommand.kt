@@ -12,6 +12,7 @@ import io.github.workeron9.ozmoz.lineage.engine.Feature
 import io.github.workeron9.ozmoz.lineage.engine.RenderRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.engine.calcite.CalciteEngine
+import io.github.workeron9.ozmoz.lineage.engine.jooq.JooqEngine
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.ir.Severity
@@ -31,7 +32,7 @@ import kotlinx.serialization.Serializable
  */
 public class ConvertCommand : CliktCommand(name = "convert") {
 
-    private val engineId: String by option("--engine", help = "转换引擎（当前仅 calcite）")
+    private val engineId: String by option("--engine", help = "转换引擎（calcite / jooq）")
         .choice(*SUPPORTED_ENGINES)
         .default(CalciteEngine.ID)
 
@@ -129,7 +130,7 @@ public class ConvertCommand : CliktCommand(name = "convert") {
         }
 
     public companion object {
-        private val SUPPORTED_ENGINES = arrayOf(CalciteEngine.ID)
+        private val SUPPORTED_ENGINES = arrayOf(CalciteEngine.ID, JooqEngine.ID)
 
         /** 诊断码：稳定契约（门禁拦截统一用它，与引擎码 `calcite.render_unverified` 成镜像）。 */
         public const val CODE_RENDER_UNVERIFIED: String = "convert.render_unverified"

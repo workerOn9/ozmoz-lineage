@@ -82,4 +82,31 @@ class ConvertCommandTest {
         val result = command.test("--to postgresql")
         assertTrue(result.statusCode != 0, result.stdout)
     }
+
+    // ————— jOOQ 第二实现（ADR-0004：Calcite 主力 + jOOQ 出差异） —————
+
+    @Test
+    fun `jooq 引擎转换成功且方言化`() {
+        val f = tempSql("SELECT id FROM customer ORDER BY id LIMIT 10")
+        val result = command.test("--engine jooq --from mysql --to postgresql -f ${f.absolutePath}")
+        assertEquals(0, result.statusCode, result.stderr)
+        assertContains(result.stdout.lowercase(), "fetch next 10 rows only")
+    }
+
+    @Test
+    fun `jooq 引擎不许转商业版方言`() {
+        val f = tempSql("SELECT 1")
+        val result = command.test("--engine jooq --from mysql --to snowflake -f ${f.absolutePath}")
+        assertTrue(result.statusCode != 0, result.stdout)
+        assertContains(result.stderr, "snowflake")
+    }
+
+    @Test
+    fun `sqlite 与 trino 等 jooq 专属方言可用`() {
+        val f = tempSql("SELECT id FROM customer WHERE id > 1")
+        for (target in listOf("sqlite", "trino")) {
+            val result = command.test("--engine jooq --from mysql --to $target -f ${f.absolutePath}")
+            assertEquals(0, result.statusCode, "$target: ${result.stderr}")
+        }
+    }
 }
