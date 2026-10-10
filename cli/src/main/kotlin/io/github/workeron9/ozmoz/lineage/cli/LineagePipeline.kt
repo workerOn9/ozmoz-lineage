@@ -102,4 +102,52 @@ internal object LineagePipeline {
      */
     fun autoSchema(inputs: List<Pair<String?, String>>): SchemaProvider? =
         DdlFileSchemaProvider.parseTolerant(id = "ddl:auto", sqlTexts = inputs.map { it.second }.toTypedArray())
+
+    // ————— 增量更新（--incremental）的指纹 —————
+
+    private const val SEPARATOR = "\u0000"
+
+    /**
+     * **上下文摘要**：会影响「同一段 SQL 解析出什么模型」的输入快照：
+     * 引擎 id、方言、schema 快照。schema 按 [schemaPath] 来路取摘要——
+     * - 显式 `--schema`：DDL 文件路径 + 全部内容（权威元数据，改一个字就全失效）；
+     * - auto：只把**含 `create table` 子串（大小写不敏感）**的输入文本入摘要。
+     *   该子串是「能贡献 DDL」的必要条件（文件里没 `create table` 就一定抽不出
+     *   表），所以无关文件的编辑不会全局失效；而真正增删 / 改 DDL 的文件，
+     *   本身文本必然变化，摘要必变。
+     */
+    fun contextDigest(engineId: String, dialect: String?, schemaPath: String?, inputs: List<Pair<String?, String>>): String {
+        val schemaPart = if (schemaPath != null) {
+            buildString {
+                append("explicit")
+                for (file in ddlFiles(schemaPath)) {
+                    append(SEPARATOR).append(file).append(SEPARATOR).append(Files.readString(file))
+                }
+            }
+        } else {
+            inputs.asSequence()
+                .filter { it.second.contains("create table", ignoreCase = true) }
+                .joinToString(SEPARATOR) { it.second }
+                .let { "auto$SEPARATOR$it" }
+        }
+        return sha256(engineId + SEPARATOR + (dialect ?: "") + SEPARATOR + schemaPart)
+    }
+
+    /**
+     * 单个来源的指纹 = 上下文摘要 + 该文件全文的 hash。同一文件在同一上下文下
+     * 指纹不变 ⇒ 引擎 / 方言 / schema / 内容都没变 ⇒ 库里的模型可安全复用。
+     */
+    fun fingerprint(contextDigest: String, text: String): String = sha256(contextDigest + SEPARATOR + text)
+
+    /** `--schema` 路径下的 DDL 文件（单文件或目录递归 `*.sql`，与 [schema] 同口径）。 */
+    private fun ddlFiles(schemaPath: String): List<Path> =
+        when {
+            Files.isRegularFile(Path(schemaPath)) -> listOf(Path(schemaPath))
+            Files.isDirectory(Path(schemaPath)) -> sqlFiles(Path(schemaPath))
+            else -> throw IllegalArgumentException("找不到 schema 文件或目录：$schemaPath")
+        }
+
+    private fun sha256(text: String): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 }

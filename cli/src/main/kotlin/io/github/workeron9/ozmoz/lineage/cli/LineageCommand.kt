@@ -4,6 +4,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.choice
@@ -66,15 +67,44 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         help = "把合并后的全库血缘图落库到该 SQLite 文件（如 ./lineage.db）；给了就只落库不按 --format 输出",
     )
 
+    /**
+     * 增量落库（仅在 `--graph` 下有意义）：指纹未变的文件跳过解析，改了的重解析
+     * 并**按来源替换**，输入里已消失的文件从库里删除。
+     */
+    private val incremental: Boolean by option(
+        "--incremental",
+        help = "增量落库：按来源文件指纹（引擎 / 方言 / schema / 内容）跳过未变化的文件（需配合 --graph）",
+    )
+        .flag()
+
     override fun help(context: Context): String =
         "解析一条或多条 SQL 并输出列级血缘（OUTPUT / PREDICATE / JOIN_KEY / GROUP_BY / ORDER_BY / SOURCE 六类边）；" +
             "支持目录聚合与 --graph 落库。"
 
     override fun run() {
         val engine = LineagePipeline.engine(engineId)
+
+        if (incremental) {
+            // 前置校验放在 stdin 读取**之前**：`-f -` 传进来不要先吞 stdin。
+            if (graphPath == null) {
+                echo("ERROR incremental_requires_graph: --incremental 需要配合 --graph <db>；不带 --graph 的落库本来就是全量替换", err = true)
+                throw ProgramResult(1)
+            }
+            if (file == "-") {
+                echo("ERROR incremental_requires_source: stdin 没有稳定的来源标识，--incremental 只支持文件路径 / 目录", err = true)
+                throw ProgramResult(1)
+            }
+        }
+
         val inputs = LineagePipeline.readInputs(file)
         // 显式 --schema 永远优先；未给出时从输入文本顺手收集 CREATE TABLE（可能为 null）。
         val schema = schemaPath?.let { LineagePipeline.schema(it) } ?: LineagePipeline.autoSchema(inputs)
+
+        if (incremental) {
+            runIncremental(engine, inputs, schema)
+            return
+        }
+
         val stored = collect(engine, schema, inputs)
 
         if (stored.isEmpty()) {
@@ -161,6 +191,83 @@ public class LineageCommand : CliktCommand(name = "lineage") {
             append("statements: ").append(stored.size).append('\n')
             append("nodes: ").append(graph.nodeIds.size).append('\n')
             append("edges: ").append(graph.edges.size).append('\n')
+            graphPath?.let { append("graph: ").append(it).append('\n') }
+        }
+    }
+
+    /**
+     * 增量落库：指纹未变 → 跳过（reused）；变了 → 重解析并按来源原子替换（parsed）；
+     * 输入里已消失的来源 → 删除（removed）；解析失败的文件保留旧血缘并 WARN（failed）。
+     *
+     * 指纹 = 引擎 / 方言 / schema 摘要 + 文件内容（[LineagePipeline.contextDigest] /
+     * [LineagePipeline.fingerprint]），库端线索见 [LineageStore.fingerprints]。
+     */
+    private fun runIncremental(engine: SqlEngine, inputs: List<Pair<String?, String>>, schema: SchemaProvider?) {
+        // stdin 已被 run() 的前置校验挡掉：这里的来源必为文件路径。
+        val files: List<Pair<String, String>> = inputs.map { (source, text) ->
+            requireNotNull(source) { "增量模式收到无来源输入（stdin 未被拦截）" } to text
+        }
+        val context = LineagePipeline.contextDigest(engineId, dialect, schemaPath, inputs)
+        val inputSources = files.map { it.first }.toSet()
+        var reused = 0
+        var parsed = 0
+        var removed = 0
+        var failed = 0
+        SqliteLineageStore.open(Path(graphPath!!)).use { store ->
+            val known = store.fingerprints()
+            for ((source, text) in files) {
+                val fp = LineagePipeline.fingerprint(context, text)
+                if (source in known && known[source] == fp) {
+                    reused++
+                    continue
+                }
+                when (val built = LineagePipeline.models(text, engine, dialect, schema)) {
+                    is Resolved.Known -> {
+                        // 整个文件变成只含 DDL / 不可建模语句 → 旧血缘清掉（来源已无产出）。
+                        if (built.value.isEmpty()) {
+                            store.removeSource(source)
+                        } else {
+                            store.replaceSource(built.value.mapIndexed { index, model ->
+                                StoredModel(model = model, sourceFile = source, statementIndex = index, fingerprint = fp)
+                            })
+                        }
+                        parsed++
+                    }
+                    // 解析失败：旧血缘留在库里（有总比没有强，但已过期）——WARN 提醒重跑者。
+                    is Resolved.Unknown -> {
+                        failed++
+                        echo("WARN $source: ${built.reason}（保留旧血缘，视为过期）", err = true)
+                    }
+                }
+            }
+            for (gone in known.keys - inputSources) {
+                store.removeSource(gone)
+                removed++
+            }
+            if (store.count() == 0) {
+                echo(
+                    "ERROR no_modelable_statement: 未从输入提取到可建模的语句（可能只含 DDL / MERGE 等不产出列级血缘的语句）",
+                    err = true,
+                )
+                throw ProgramResult(1)
+            }
+            echo(renderIncrementalSummary(store, reused, parsed, removed, failed))
+        }
+    }
+
+    /** `--graph --incremental` 落库后的人读摘要：既有行 + 本轮的四类计数。 */
+    private fun renderIncrementalSummary(store: SqliteLineageStore, reused: Int, parsed: Int, removed: Int, failed: Int): String {
+        val stored = store.load()
+        val graph = LineageGraph.of(stored.map { it.model })
+        return buildString {
+            append("files: ").append(stored.mapNotNull { it.sourceFile }.distinct().size).append('\n')
+            append("statements: ").append(stored.size).append('\n')
+            append("nodes: ").append(graph.nodeIds.size).append('\n')
+            append("edges: ").append(graph.edges.size).append('\n')
+            append("reused_files: ").append(reused).append('\n')
+            append("parsed_files: ").append(parsed).append('\n')
+            append("removed_files: ").append(removed).append('\n')
+            append("failed_files: ").append(failed).append('\n')
             graphPath?.let { append("graph: ").append(it).append('\n') }
         }
     }

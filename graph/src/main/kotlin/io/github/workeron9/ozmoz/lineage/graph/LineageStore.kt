@@ -12,6 +12,11 @@ public data class StoredModel(
     val model: LineageModel,
     val sourceFile: String? = null,
     val statementIndex: Int = 0,
+    /**
+     * 来源指纹（增量更新用）：**上下文摘要 + 内容摘要**的组合 hash，同一来源全组
+     * 共享同一值。null 表示无指纹（旧库迁移 / 手工构造），增量流程视为「未比对 → 需重解析」。
+     */
+    val fingerprint: String? = null,
 )
 
 /**
@@ -33,6 +38,10 @@ public data class StoredModel(
  *
  * - [save] 是**全量替换**语义：先清空再写入，保证库与本次输入一致（不做增量合并）。
  * - [load] 按**写入顺序**返回，保证确定性（golden / diff 依赖）。
+ * - 增量更新三件套（[fingerprints] / [replaceSource] / [removeSource]）按**来源文件**
+ *   为粒度做「变了才重写」：调用方（CLI `--incremental`）负责算指纹并决定跳过谁。
+ *   每个 IDempotent 操作各自成事务；多来源的批量更新**不是**整体事务（部分失败
+ *   留半新状态），要原子语义请用 [save] 全量重跑。
  * - 实现需是 [AutoCloseable]：调用方用 `use {}` 释放连接。
  */
 public interface LineageStore : AutoCloseable {
@@ -48,4 +57,21 @@ public interface LineageStore : AutoCloseable {
 
     /** 记录条数。 */
     public fun count(): Int
+
+    /**
+     * 有指纹的来源 → 指纹（同一来源全组共享同一值；只有一组的以先读到的为准）。
+     * 无指纹（null）的来源**不出现在结果里**——调用方据此把它当作「未比对」。
+     */
+    public fun fingerprints(): Map<String, String>
+
+    /**
+     * 以来源文件为粒度原子替换：删掉 [sourceFile] 的旧记录后按序插入 [stored]。
+     * [stored] 必须非空，且全部记录共享**同一个非空** [StoredModel.sourceFile]
+     * 与 [StoredModel.fingerprint]——这是增量写入的数据完整性前提，违反直接抛
+     * [IllegalArgumentException]。
+     */
+    public fun replaceSource(stored: List<StoredModel>)
+
+    /** 删掉某个来源文件（含其全部语句）的记录；返回删除的条数（0 = 本来就没有）。 */
+    public fun removeSource(sourceFile: String): Int
 }
