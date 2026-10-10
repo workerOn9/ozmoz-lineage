@@ -1,0 +1,11 @@
+{
+  "id": "tsql-identity-ddl",
+  "dialect": "tsql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "identity"
+  ],
+  "comment": "IDENTITY 自增列建表",
+  "sql": "CREATE TABLE audit_log (id BIGINT IDENTITY(1, 1) PRIMARY KEY, action NVARCHAR(200), created_at DATETIME2 DEFAULT GETDATE())"
+}

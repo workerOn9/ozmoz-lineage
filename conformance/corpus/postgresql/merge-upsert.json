@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-merge-upsert",
+  "dialect": "postgresql",
+  "kind": "MERGE",
+  "features": [
+    "merge"
+  ],
+  "comment": "MERGE INTO 双分支 upsert",
+  "sql": "MERGE INTO user_stats s USING daily_active d ON s.user_id = d.user_id WHEN MATCHED THEN UPDATE SET last_seen = d.seen_at WHEN NOT MATCHED THEN INSERT (user_id, last_seen) VALUES (d.user_id, d.seen_at)"
+}

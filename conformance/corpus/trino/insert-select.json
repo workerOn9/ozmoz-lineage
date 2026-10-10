@@ -1,0 +1,11 @@
+{
+  "id": "trino-insert-select",
+  "dialect": "trino",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "aggregate"
+  ],
+  "comment": "INSERT INTO ... SELECT 聚合写入",
+  "sql": "INSERT INTO order_summary (user_id, order_count) SELECT user_id, COUNT(*) FROM orders GROUP BY user_id"
+}

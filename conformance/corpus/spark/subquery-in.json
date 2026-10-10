@@ -1,0 +1,10 @@
+{
+  "id": "spark-subquery-in",
+  "dialect": "spark",
+  "features": [
+    "subquery",
+    "in-list"
+  ],
+  "comment": "IN 子查询",
+  "sql": "SELECT name FROM users WHERE id IN (SELECT user_id FROM orders WHERE amount > 100)"
+}

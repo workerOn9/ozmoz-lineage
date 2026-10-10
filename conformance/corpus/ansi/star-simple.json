@@ -1,0 +1,9 @@
+{
+  "id": "ansi-star-simple",
+  "dialect": "ansi",
+  "features": [
+    "star-expand"
+  ],
+  "comment": "最简 SELECT * 全表展开",
+  "sql": "SELECT * FROM orders"
+}

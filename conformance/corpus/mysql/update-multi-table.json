@@ -1,0 +1,11 @@
+{
+  "id": "mysql-update-multi-table",
+  "dialect": "mysql",
+  "kind": "UPDATE",
+  "features": [
+    "update",
+    "join"
+  ],
+  "comment": "多表 UPDATE（JOIN 定位）",
+  "sql": "UPDATE users u JOIN orders o ON o.user_id = u.id SET u.level = 'gold' WHERE o.amount > 1000"
+}

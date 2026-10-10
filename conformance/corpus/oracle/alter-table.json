@@ -1,0 +1,11 @@
+{
+  "id": "oracle-alter-table",
+  "dialect": "oracle",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "alter"
+  ],
+  "comment": "ALTER TABLE ADD (列)",
+  "sql": "ALTER TABLE users ADD (nickname VARCHAR2(64))"
+}

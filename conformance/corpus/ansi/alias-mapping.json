@@ -1,0 +1,9 @@
+{
+  "id": "ansi-alias-mapping",
+  "dialect": "ansi",
+  "features": [
+    "alias"
+  ],
+  "comment": "表别名 + 列别名映射",
+  "sql": "SELECT u.id AS user_id, u.name AS user_name FROM users u WHERE u.age > 18"
+}

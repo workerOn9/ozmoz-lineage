@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-grouping-sets",
+  "dialect": "postgresql",
+  "features": [
+    "aggregate",
+    "grouping-sets"
+  ],
+  "comment": "GROUP BY GROUPING SETS 多维小计",
+  "sql": "SELECT city, district, COUNT(*) AS n FROM users GROUP BY GROUPING SETS ((city), (city, district), ())"
+}

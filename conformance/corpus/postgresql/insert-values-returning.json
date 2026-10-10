@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-insert-values-returning",
+  "dialect": "postgresql",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "returning"
+  ],
+  "comment": "INSERT VALUES + RETURNING",
+  "sql": "INSERT INTO users (id, name) VALUES (1, 'alice') RETURNING id"
+}

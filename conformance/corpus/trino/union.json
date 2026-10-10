@@ -1,0 +1,10 @@
+{
+  "id": "trino-union",
+  "dialect": "trino",
+  "features": [
+    "union",
+    "set-op"
+  ],
+  "comment": "UNION 去重合并",
+  "sql": "SELECT city FROM users UNION SELECT region FROM warehouses"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "postgresql-alter-table-multi",
+  "dialect": "postgresql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "alter",
+    "constraint"
+  ],
+  "comment": "ALTER TABLE 同时加列与 CHECK 约束",
+  "sql": "ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP, ADD CONSTRAINT chk_amount CHECK (amount >= 0)"
+}

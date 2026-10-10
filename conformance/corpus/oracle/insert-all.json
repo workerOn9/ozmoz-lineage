@@ -1,0 +1,11 @@
+{
+  "id": "oracle-insert-all",
+  "dialect": "oracle",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "multi-insert"
+  ],
+  "comment": "INSERT ALL 多目标条件写入",
+  "sql": "INSERT ALL INTO order_stats (user_id, n) VALUES (user_id, amount) INTO order_archive (user_id, amount) VALUES (user_id, amount) SELECT user_id, amount FROM orders WHERE created_at > DATE '2026-10-01'"
+}

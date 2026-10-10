@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-create-view",
+  "dialect": "postgresql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "view"
+  ],
+  "comment": "CREATE VIEW 视图定义",
+  "sql": "CREATE VIEW v_refunds AS SELECT id, order_id, amount FROM refunds WHERE status = 'approved'"
+}

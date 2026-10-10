@@ -1,0 +1,10 @@
+{
+  "id": "tsql-outer-apply",
+  "dialect": "tsql",
+  "features": [
+    "apply",
+    "subquery"
+  ],
+  "comment": "OUTER APPLY 保行关联",
+  "sql": "SELECT u.id, recent.order_id FROM users u OUTER APPLY (SELECT TOP 1 id AS order_id FROM orders o WHERE o.user_id = u.id ORDER BY o.created_at DESC) recent"
+}

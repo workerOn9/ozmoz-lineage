@@ -1,0 +1,10 @@
+{
+  "id": "spark-rollup",
+  "dialect": "spark",
+  "features": [
+    "aggregate",
+    "rollup"
+  ],
+  "comment": "GROUP BY ... WITH ROLLUP",
+  "sql": "SELECT city, district, COUNT(*) AS n FROM users GROUP BY city, district WITH ROLLUP"
+}

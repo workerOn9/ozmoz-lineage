@@ -1,0 +1,10 @@
+{
+  "id": "oracle-cte-multi",
+  "dialect": "oracle",
+  "features": [
+    "cte",
+    "multi-cte"
+  ],
+  "comment": "多 CTE 链式引用",
+  "sql": "WITH a AS (SELECT id, user_id FROM orders), b AS (SELECT user_id, COUNT(*) AS n FROM a GROUP BY user_id) SELECT user_id, n FROM b"
+}

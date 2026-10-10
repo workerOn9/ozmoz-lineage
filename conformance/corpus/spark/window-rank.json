@@ -1,0 +1,9 @@
+{
+  "id": "spark-window-rank",
+  "dialect": "spark",
+  "features": [
+    "window"
+  ],
+  "comment": "RANK() OVER 全局排名",
+  "sql": "SELECT user_id, amount, RANK() OVER (ORDER BY amount DESC) AS r FROM payments"
+}

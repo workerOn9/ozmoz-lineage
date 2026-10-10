@@ -1,0 +1,10 @@
+{
+  "id": "trino-tablesample",
+  "dialect": "trino",
+  "kind": "OTHER",
+  "features": [
+    "tablesample"
+  ],
+  "comment": "TABLESAMPLE 采样——引擎边界，如实入格",
+  "sql": "SELECT id FROM users TABLESAMPLE BERNOULLI (10)"
+}

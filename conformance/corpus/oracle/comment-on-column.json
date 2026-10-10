@@ -1,0 +1,11 @@
+{
+  "id": "oracle-comment-on-column",
+  "dialect": "oracle",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "comment"
+  ],
+  "comment": "COMMENT ON COLUMN 列注释",
+  "sql": "COMMENT ON COLUMN users.status IS '状态：active / closed'"
+}

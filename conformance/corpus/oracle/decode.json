@@ -1,0 +1,10 @@
+{
+  "id": "oracle-decode",
+  "dialect": "oracle",
+  "features": [
+    "function",
+    "expression"
+  ],
+  "comment": "DECODE 映射函数",
+  "sql": "SELECT id, DECODE(status, 1, 'active', 2, 'closed', 'unknown') AS status_text FROM users"
+}

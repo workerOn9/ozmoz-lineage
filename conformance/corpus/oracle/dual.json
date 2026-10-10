@@ -1,0 +1,9 @@
+{
+  "id": "oracle-dual",
+  "dialect": "oracle",
+  "features": [
+    "basic"
+  ],
+  "comment": "FROM dual 常量查询",
+  "sql": "SELECT 1 + 1 AS two FROM dual"
+}

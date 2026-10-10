@@ -1,0 +1,10 @@
+{
+  "id": "ansi-fetch-first-offset",
+  "dialect": "ansi",
+  "features": [
+    "limit",
+    "offset"
+  ],
+  "comment": "SQL 标准分页：OFFSET + FETCH FIRST",
+  "sql": "SELECT id, name FROM users ORDER BY created_at DESC OFFSET 20 ROWS FETCH FIRST 10 ROWS ONLY"
+}

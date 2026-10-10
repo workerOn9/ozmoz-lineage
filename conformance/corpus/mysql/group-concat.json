@@ -1,0 +1,10 @@
+{
+  "id": "mysql-group-concat",
+  "dialect": "mysql",
+  "features": [
+    "aggregate",
+    "function"
+  ],
+  "comment": "GROUP_CONCAT 聚合拼接",
+  "sql": "SELECT user_id, GROUP_CONCAT(tag ORDER BY tag SEPARATOR ';') AS tags FROM user_tags GROUP BY user_id"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "tsql-unpivot",
+  "dialect": "tsql",
+  "features": [
+    "pivot"
+  ],
+  "comment": "UNPIVOT 列转行——引擎边界，如实入格",
+  "sql": "SELECT id, metric, value FROM (SELECT id, pv, uv FROM report_metrics) src UNPIVOT (value FOR metric IN ([pv], [uv])) unp"
+}

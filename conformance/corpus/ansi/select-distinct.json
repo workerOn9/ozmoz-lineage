@@ -1,0 +1,10 @@
+{
+  "id": "ansi-select-distinct",
+  "dialect": "ansi",
+  "features": [
+    "basic",
+    "distinct"
+  ],
+  "comment": "DISTINCT 去重选择",
+  "sql": "SELECT DISTINCT city, country FROM users"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "mysql-update-order-limit",
+  "dialect": "mysql",
+  "kind": "UPDATE",
+  "features": [
+    "update",
+    "limit"
+  ],
+  "comment": "UPDATE + ORDER BY + LIMIT",
+  "sql": "UPDATE tasks SET status = 'running' WHERE status = 'pending' ORDER BY created_at LIMIT 10"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "spark-create-view",
+  "dialect": "spark",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "view"
+  ],
+  "comment": "CREATE VIEW 视图定义",
+  "sql": "CREATE VIEW v_active AS SELECT id, name FROM users WHERE status = 'active'"
+}

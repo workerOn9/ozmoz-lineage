@@ -1,0 +1,11 @@
+{
+  "id": "mysql-create-view",
+  "dialect": "mysql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "view"
+  ],
+  "comment": "CREATE VIEW 视图定义",
+  "sql": "CREATE VIEW v_recent_orders AS SELECT id, user_id, amount FROM orders WHERE created_at > '2026-09-01'"
+}

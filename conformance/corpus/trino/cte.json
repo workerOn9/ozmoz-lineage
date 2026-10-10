@@ -1,0 +1,9 @@
+{
+  "id": "trino-cte",
+  "dialect": "trino",
+  "features": [
+    "cte"
+  ],
+  "comment": "WITH CTE 常规引用",
+  "sql": "WITH top AS (SELECT user_id, SUM(amount) AS total FROM orders GROUP BY user_id) SELECT user_id FROM top WHERE total > 1000"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "trino-cte-recursive",
+  "dialect": "trino",
+  "features": [
+    "cte",
+    "recursive"
+  ],
+  "comment": "WITH RECURSIVE 递归 CTE——引擎边界，如实入格",
+  "sql": "WITH RECURSIVE r (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 10) SELECT n FROM r"
+}

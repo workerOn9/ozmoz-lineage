@@ -1,0 +1,10 @@
+{
+  "id": "ansi-star-expand-mixed",
+  "dialect": "ansi",
+  "features": [
+    "star-expand",
+    "join"
+  ],
+  "comment": "SELECT o.* 与具名列混排（星号展开关键 case）",
+  "sql": "SELECT o.*, u.name AS user_name FROM orders o JOIN users u ON o.user_id = u.id"
+}

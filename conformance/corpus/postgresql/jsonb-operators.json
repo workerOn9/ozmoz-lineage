@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-jsonb-operators",
+  "dialect": "postgresql",
+  "features": [
+    "json",
+    "function"
+  ],
+  "comment": "JSONB 取值运算符过滤",
+  "sql": "SELECT id, payload->>'event' AS event FROM events WHERE payload->>'type' = 'click'"
+}

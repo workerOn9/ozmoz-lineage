@@ -1,0 +1,9 @@
+{
+  "id": "hive-window-row-number",
+  "dialect": "hive",
+  "features": [
+    "window"
+  ],
+  "comment": "ROW_NUMBER() OVER 分区排名",
+  "sql": "SELECT id, user_id, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY amount DESC) AS rn FROM payments"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "tsql-update-output",
+  "dialect": "tsql",
+  "kind": "UPDATE",
+  "features": [
+    "update",
+    "output"
+  ],
+  "comment": "UPDATE + OUTPUT 子句",
+  "sql": "UPDATE users SET status = 'active' OUTPUT inserted.id, inserted.status WHERE last_login < '2025-01-01'"
+}

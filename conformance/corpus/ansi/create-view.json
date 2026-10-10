@@ -1,0 +1,11 @@
+{
+  "id": "ansi-create-view",
+  "dialect": "ansi",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "view"
+  ],
+  "comment": "CREATE VIEW 视图定义",
+  "sql": "CREATE VIEW active_users AS SELECT id, name FROM users WHERE status = 'active'"
+}

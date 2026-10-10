@@ -1,0 +1,9 @@
+{
+  "id": "hive-union-all",
+  "dialect": "hive",
+  "features": [
+    "union"
+  ],
+  "comment": "UNION ALL 合并",
+  "sql": "SELECT user_id FROM orders UNION ALL SELECT user_id FROM payments"
+}

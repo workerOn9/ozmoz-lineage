@@ -1,0 +1,10 @@
+{
+  "id": "mysql-multi-statement-script",
+  "dialect": "mysql",
+  "features": [
+    "multi-statement",
+    "ddl"
+  ],
+  "comment": "DDL + DML + 查询的多语句脚本",
+  "sql": "CREATE TABLE t1 (a INT);\nINSERT INTO t1 VALUES (1);\nSELECT a FROM t1;"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "spark-create-table-as",
+  "dialect": "spark",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "ctas",
+    "aggregate"
+  ],
+  "comment": "CREATE TABLE AS 聚合落表",
+  "sql": "CREATE TABLE hot_orders AS SELECT user_id, SUM(amount) AS total FROM orders GROUP BY user_id"
+}

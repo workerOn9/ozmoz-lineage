@@ -1,0 +1,9 @@
+{
+  "id": "tsql-bracket-identifiers",
+  "dialect": "tsql",
+  "features": [
+    "quoted-identifier"
+  ],
+  "comment": "方括号 schema 限定标识符",
+  "sql": "SELECT [id], [name] FROM [dbo].[users] WHERE [age] > 18"
+}

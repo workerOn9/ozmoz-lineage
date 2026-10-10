@@ -1,0 +1,11 @@
+{
+  "id": "hive-complex-type-ddl",
+  "dialect": "hive",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "complex-type"
+  ],
+  "comment": "ARRAY/MAP/STRUCT 复杂类型建表",
+  "sql": "CREATE TABLE user_profiles (id BIGINT, tags ARRAY<STRING>, prefs MAP<STRING, STRING>, addr STRUCT<city: STRING, zip: STRING>)"
+}

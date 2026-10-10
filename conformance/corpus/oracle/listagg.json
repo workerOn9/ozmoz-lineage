@@ -1,0 +1,10 @@
+{
+  "id": "oracle-listagg",
+  "dialect": "oracle",
+  "features": [
+    "aggregate",
+    "function"
+  ],
+  "comment": "LISTAGG WITHIN GROUP 聚合拼接",
+  "sql": "SELECT user_id, LISTAGG(tag, ';') WITHIN GROUP (ORDER BY tag) AS tags FROM user_tags GROUP BY user_id"
+}

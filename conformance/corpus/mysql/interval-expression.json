@@ -1,0 +1,10 @@
+{
+  "id": "mysql-interval-expression",
+  "dialect": "mysql",
+  "features": [
+    "function",
+    "expression"
+  ],
+  "comment": "NOW() - INTERVAL 相对时间过滤",
+  "sql": "SELECT id FROM orders WHERE created_at > NOW() - INTERVAL 7 DAY"
+}

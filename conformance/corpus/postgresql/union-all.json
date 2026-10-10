@@ -1,0 +1,9 @@
+{
+  "id": "postgresql-union-all",
+  "dialect": "postgresql",
+  "features": [
+    "union"
+  ],
+  "comment": "UNION ALL 不去重合并",
+  "sql": "SELECT user_id FROM orders UNION ALL SELECT user_id FROM payments"
+}

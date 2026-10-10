@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-coalesce-default",
+  "dialect": "postgresql",
+  "features": [
+    "function",
+    "null-handling"
+  ],
+  "comment": "COALESCE 兜底默认值",
+  "sql": "SELECT COALESCE(remark, '') AS remark, COALESCE(discount, 0) AS discount FROM orders"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "ansi-join-inner",
+  "dialect": "ansi",
+  "features": [
+    "join"
+  ],
+  "comment": "内连接与 JOIN_KEY 等价传递",
+  "sql": "SELECT o.id, u.name FROM orders o INNER JOIN users u ON o.user_id = u.id"
+}

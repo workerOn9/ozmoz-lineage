@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-update-from",
+  "dialect": "postgresql",
+  "kind": "UPDATE",
+  "features": [
+    "update",
+    "join"
+  ],
+  "comment": "UPDATE ... FROM 跨表赋值",
+  "sql": "UPDATE products p SET price = i.unit_price FROM order_items i WHERE i.product_id = p.id"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "hive-create-row-format",
+  "dialect": "hive",
+  "kind": "DDL",
+  "features": [
+    "ddl"
+  ],
+  "comment": "ROW FORMAT DELIMITED 文本表",
+  "sql": "CREATE TABLE raw_logs (line STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' STORED AS TEXTFILE"
+}

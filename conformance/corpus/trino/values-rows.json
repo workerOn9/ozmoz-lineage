@@ -1,0 +1,10 @@
+{
+  "id": "trino-values-rows",
+  "dialect": "trino",
+  "features": [
+    "values",
+    "derived-table"
+  ],
+  "comment": "内联 VALUES 派生表",
+  "sql": "SELECT t.id, t.name FROM (VALUES (1, 'a'), (2, 'b')) AS t(id, name)"
+}

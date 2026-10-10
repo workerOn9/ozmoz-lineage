@@ -1,0 +1,9 @@
+{
+  "id": "hive-date-functions",
+  "dialect": "hive",
+  "features": [
+    "function"
+  ],
+  "comment": "to_date / datediff 日期函数",
+  "sql": "SELECT id, to_date(created_at) AS day, datediff('2026-10-10', to_date(created_at)) AS days FROM orders"
+}

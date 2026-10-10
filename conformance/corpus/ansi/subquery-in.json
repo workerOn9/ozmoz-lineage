@@ -1,0 +1,10 @@
+{
+  "id": "ansi-subquery-in",
+  "dialect": "ansi",
+  "features": [
+    "subquery",
+    "in-list"
+  ],
+  "comment": "IN 子查询过滤",
+  "sql": "SELECT name FROM users WHERE id IN (SELECT user_id FROM orders WHERE amount > 100)"
+}

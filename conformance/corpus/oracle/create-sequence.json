@@ -1,0 +1,11 @@
+{
+  "id": "oracle-create-sequence",
+  "dialect": "oracle",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "sequence"
+  ],
+  "comment": "CREATE SEQUENCE 序列定义",
+  "sql": "CREATE SEQUENCE audit_seq START WITH 1 INCREMENT BY 1 NOCACHE"
+}

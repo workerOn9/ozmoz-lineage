@@ -1,0 +1,10 @@
+{
+  "id": "ansi-coalesce-nullif",
+  "dialect": "ansi",
+  "features": [
+    "function",
+    "null-handling"
+  ],
+  "comment": "COALESCE 与 NULLIF 空值处理",
+  "sql": "SELECT COALESCE(nickname, name, 'anonymous') AS display_name, NULLIF(status, 'unknown') AS status FROM users"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "spark-partitioned-table",
+  "dialect": "spark",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "partition"
+  ],
+  "comment": "PARTITIONED BY 分区表定义",
+  "sql": "CREATE TABLE events (id BIGINT) PARTITIONED BY (dt STRING) STORED AS PARQUET"
+}

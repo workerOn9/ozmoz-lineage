@@ -1,0 +1,12 @@
+{
+  "id": "hive-alter-drop-partition",
+  "dialect": "hive",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "partition",
+    "alter"
+  ],
+  "comment": "ALTER TABLE DROP PARTITION",
+  "sql": "ALTER TABLE events DROP PARTITION (dt = '2026-01-01')"
+}

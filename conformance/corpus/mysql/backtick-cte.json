@@ -1,0 +1,10 @@
+{
+  "id": "mysql-backtick-cte",
+  "dialect": "mysql",
+  "features": [
+    "cte",
+    "quoted-identifier"
+  ],
+  "comment": "反引号标识符 + CTE",
+  "sql": "WITH top_users AS (SELECT `id`, `name` FROM `users` WHERE `age` > 18) SELECT `id`, `name` FROM `top_users`"
+}

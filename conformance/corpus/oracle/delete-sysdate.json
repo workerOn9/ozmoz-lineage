@@ -1,0 +1,10 @@
+{
+  "id": "oracle-delete-sysdate",
+  "dialect": "oracle",
+  "kind": "DELETE",
+  "features": [
+    "delete"
+  ],
+  "comment": "DELETE + SYSDATE 相对过滤",
+  "sql": "DELETE FROM sessions WHERE expires_at < SYSDATE"
+}

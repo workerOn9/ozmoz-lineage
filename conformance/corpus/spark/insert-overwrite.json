@@ -1,0 +1,12 @@
+{
+  "id": "spark-insert-overwrite",
+  "dialect": "spark",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "overwrite",
+    "aggregate"
+  ],
+  "comment": "INSERT OVERWRITE 覆盖写入",
+  "sql": "INSERT OVERWRITE TABLE daily_report SELECT dt, COUNT(*) FROM events GROUP BY dt"
+}

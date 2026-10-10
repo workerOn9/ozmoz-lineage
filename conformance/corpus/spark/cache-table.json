@@ -1,0 +1,10 @@
+{
+  "id": "spark-cache-table",
+  "dialect": "spark",
+  "kind": "OTHER",
+  "features": [
+    "cache"
+  ],
+  "comment": "CACHE TABLE 物化引用",
+  "sql": "CACHE TABLE hot AS SELECT user_id, amount FROM payments WHERE dt = '2026-10-09'"
+}

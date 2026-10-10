@@ -1,0 +1,10 @@
+{
+  "id": "ansi-case-expression",
+  "dialect": "ansi",
+  "features": [
+    "expression",
+    "case"
+  ],
+  "comment": "CASE WHEN 多分支派生列",
+  "sql": "SELECT id, CASE WHEN age < 18 THEN 'minor' WHEN age < 60 THEN 'adult' ELSE 'senior' END AS age_group FROM users"
+}

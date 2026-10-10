@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-array-any",
+  "dialect": "postgresql",
+  "features": [
+    "array",
+    "filter"
+  ],
+  "comment": "= ANY(ARRAY[...]) 数组成员过滤",
+  "sql": "SELECT id, name FROM users WHERE id = ANY(ARRAY[1, 2, 3])"
+}

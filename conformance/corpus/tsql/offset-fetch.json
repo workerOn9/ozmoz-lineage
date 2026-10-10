@@ -1,0 +1,10 @@
+{
+  "id": "tsql-offset-fetch",
+  "dialect": "tsql",
+  "features": [
+    "limit",
+    "offset"
+  ],
+  "comment": "ORDER BY ... OFFSET ... FETCH NEXT",
+  "sql": "SELECT id, name FROM users ORDER BY id OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY"
+}

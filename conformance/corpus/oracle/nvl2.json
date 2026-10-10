@@ -1,0 +1,10 @@
+{
+  "id": "oracle-nvl2",
+  "dialect": "oracle",
+  "features": [
+    "function",
+    "null-handling"
+  ],
+  "comment": "NVL2 三参空值分支",
+  "sql": "SELECT NVL2(mobile, mobile, email) AS contact FROM users"
+}

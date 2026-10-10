@@ -1,0 +1,10 @@
+{
+  "id": "hive-insert-into-values",
+  "dialect": "hive",
+  "kind": "INSERT",
+  "features": [
+    "insert"
+  ],
+  "comment": "INSERT INTO TABLE VALUES",
+  "sql": "INSERT INTO TABLE audit_log VALUES ('job-1', 'done')"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "ansi-cast-columns",
+  "dialect": "ansi",
+  "features": [
+    "cast"
+  ],
+  "comment": "CAST 类型转换",
+  "sql": "SELECT id, CAST(age AS VARCHAR) AS age_text, CAST(price AS DECIMAL(10, 2)) AS price_num FROM products"
+}

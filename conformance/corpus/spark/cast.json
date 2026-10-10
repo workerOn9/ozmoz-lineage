@@ -1,0 +1,9 @@
+{
+  "id": "spark-cast",
+  "dialect": "spark",
+  "features": [
+    "cast"
+  ],
+  "comment": "CAST 类型转换",
+  "sql": "SELECT id, CAST(age AS STRING) AS age_text FROM users"
+}

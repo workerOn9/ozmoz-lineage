@@ -1,0 +1,10 @@
+{
+  "id": "ansi-join-key-filter-mixed",
+  "dialect": "ansi",
+  "features": [
+    "join",
+    "filter"
+  ],
+  "comment": "JOIN_KEY 与 PREDICATE 过滤引用并存",
+  "sql": "SELECT o.id, u.name FROM orders o JOIN users u ON o.user_id = u.id WHERE o.amount > 100"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "hive-distribute-sort",
+  "dialect": "hive",
+  "features": [
+    "order"
+  ],
+  "comment": "DISTRIBUTE BY + SORT BY",
+  "sql": "SELECT user_id, amount FROM payments DISTRIBUTE BY user_id SORT BY amount DESC"
+}

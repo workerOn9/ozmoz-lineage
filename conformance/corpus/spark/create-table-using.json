@@ -1,0 +1,12 @@
+{
+  "id": "spark-create-table-using",
+  "dialect": "spark",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "datasource-table",
+    "partition"
+  ],
+  "comment": "USING PARQUET 数据源表 + OPTIONS",
+  "sql": "CREATE TABLE events_silver (id BIGINT, user_id BIGINT) USING PARQUET OPTIONS (compression = 'snappy') PARTITIONED BY (dt STRING)"
+}

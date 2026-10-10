@@ -1,0 +1,9 @@
+{
+  "id": "tsql-pivot",
+  "dialect": "tsql",
+  "features": [
+    "pivot"
+  ],
+  "comment": "PIVOT 行转列——引擎边界，如实入格",
+  "sql": "SELECT city, [hangzhou], [shanghai] FROM (SELECT city, district FROM users) src PIVOT (COUNT(district) FOR district IN ([hangzhou], [shanghai])) pvt"
+}

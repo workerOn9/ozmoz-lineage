@@ -1,0 +1,9 @@
+{
+  "id": "trino-unnest",
+  "dialect": "trino",
+  "features": [
+    "unnest"
+  ],
+  "comment": "CROSS JOIN UNNEST 数组展开",
+  "sql": "SELECT id, tag FROM posts CROSS JOIN UNNEST(tags) AS t(tag)"
+}

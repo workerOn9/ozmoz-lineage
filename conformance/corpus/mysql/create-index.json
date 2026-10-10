@@ -1,0 +1,11 @@
+{
+  "id": "mysql-create-index",
+  "dialect": "mysql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "index"
+  ],
+  "comment": "CREATE INDEX ... USING BTREE",
+  "sql": "CREATE INDEX idx_orders_user ON orders (user_id) USING BTREE"
+}

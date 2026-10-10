@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-generate-series",
+  "dialect": "postgresql",
+  "features": [
+    "function",
+    "aggregate"
+  ],
+  "comment": "generate_series 表函数 + LEFT JOIN 对齐",
+  "sql": "SELECT g.x, COUNT(o.id) FROM generate_series(1, 12) AS g(x) LEFT JOIN orders o ON date_part('month', o.created_at) = g.x GROUP BY g.x"
+}

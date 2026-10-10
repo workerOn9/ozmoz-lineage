@@ -1,0 +1,12 @@
+{
+  "id": "hive-create-external-table",
+  "dialect": "hive",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "partition",
+    "external-table"
+  ],
+  "comment": "EXTERNAL TABLE + PARTITIONED BY + STORED AS",
+  "sql": "CREATE EXTERNAL TABLE IF NOT EXISTS events (id BIGINT, user_id BIGINT, payload STRING) PARTITIONED BY (dt STRING) STORED AS PARQUET LOCATION '/warehouse/events'"
+}

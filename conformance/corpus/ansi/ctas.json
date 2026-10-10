@@ -1,0 +1,12 @@
+{
+  "id": "ansi-ctas",
+  "dialect": "ansi",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "ctas",
+    "aggregate"
+  ],
+  "comment": "CREATE TABLE AS SELECT 落表",
+  "sql": "CREATE TABLE user_order_stats AS SELECT user_id, COUNT(*) AS order_count FROM orders GROUP BY user_id"
+}

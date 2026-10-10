@@ -1,0 +1,12 @@
+{
+  "id": "postgresql-cte-data-modifying",
+  "dialect": "postgresql",
+  "kind": "INSERT",
+  "features": [
+    "cte",
+    "delete",
+    "returning"
+  ],
+  "comment": "数据修改型 CTE（DELETE RETURNING 喂 INSERT）——引擎边界，如实入格",
+  "sql": "WITH removed AS (DELETE FROM sessions WHERE expires_at < '2026-01-01' RETURNING user_id) INSERT INTO cleanup_log (user_id) SELECT user_id FROM removed"
+}

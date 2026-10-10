@@ -1,0 +1,9 @@
+{
+  "id": "hive-if-function",
+  "dialect": "hive",
+  "features": [
+    "function"
+  ],
+  "comment": "IF() 条件函数",
+  "sql": "SELECT id, IF(amount > 100, 'big', 'small') AS bucket FROM orders"
+}

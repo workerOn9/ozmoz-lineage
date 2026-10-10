@@ -1,0 +1,10 @@
+{
+  "id": "oracle-cte-recursive-implicit",
+  "dialect": "oracle",
+  "features": [
+    "cte",
+    "recursive"
+  ],
+  "comment": "Oracle 递归 CTE（无 RECURSIVE 关键字，自引用隐式递归）",
+  "sql": "WITH r (n) AS (SELECT 1 FROM dual UNION ALL SELECT n + 1 FROM r WHERE n < 10) SELECT n FROM r"
+}

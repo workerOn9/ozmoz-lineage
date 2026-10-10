@@ -1,0 +1,10 @@
+{
+  "id": "spark-lateral-view",
+  "dialect": "spark",
+  "features": [
+    "lateral-view",
+    "explode"
+  ],
+  "comment": "LATERAL VIEW EXPLODE 展开",
+  "sql": "SELECT id, tag FROM posts LATERAL VIEW EXPLODE(tags) t AS tag"
+}

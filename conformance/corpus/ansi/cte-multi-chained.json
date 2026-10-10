@@ -1,0 +1,10 @@
+{
+  "id": "ansi-cte-multi-chained",
+  "dialect": "ansi",
+  "features": [
+    "cte",
+    "multi-cte"
+  ],
+  "comment": "多 CTE 且后者引用前者（链式定义）",
+  "sql": "WITH recent AS (SELECT id, user_id FROM orders WHERE created_at > '2026-01-01'), totals AS (SELECT user_id, COUNT(*) AS n FROM recent GROUP BY user_id) SELECT u.name, t.n FROM users u JOIN totals t ON t.user_id = u.id"
+}

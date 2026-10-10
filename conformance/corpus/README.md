@@ -4,6 +4,11 @@
 `ozml matrix --corpus ./conformance/corpus --out ./docs/compat-matrix.json` 会把它跑成
 引擎 × 语料的实测矩阵（每格带失败原因前 40 字与 commit 溯源）。
 
+当前规模：**200 条**，分层口径（M1）：8 方言（`ansi` / `mysql` / `postgresql` / `hive` /
+`spark` / `trino` / `oracle` / `tsql`）× 语句类型（SELECT / INSERT / UPDATE / DELETE /
+MERGE / DDL / OTHER）× 特性标签（join / subquery / cte / union / window / aggregate /
+ddl / upsert / returning / 方言专属语法…）。
+
 ## case 文件格式
 
 ```json

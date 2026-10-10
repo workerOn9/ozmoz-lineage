@@ -1,0 +1,10 @@
+{
+  "id": "tsql-isnull",
+  "dialect": "tsql",
+  "features": [
+    "function",
+    "null-handling"
+  ],
+  "comment": "ISNULL 空值兜底",
+  "sql": "SELECT ISNULL(nickname, name) AS display_name FROM users"
+}

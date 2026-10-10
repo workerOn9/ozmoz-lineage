@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-cte-nested-window",
+  "dialect": "postgresql",
+  "features": [
+    "cte",
+    "window"
+  ],
+  "comment": "CTE 链 + 窗口排名截断",
+  "sql": "WITH base AS (SELECT user_id, amount FROM orders WHERE status = 'paid'), ranked AS (SELECT user_id, amount, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY amount DESC) AS rn FROM base) SELECT user_id, amount FROM ranked WHERE rn <= 3"
+}

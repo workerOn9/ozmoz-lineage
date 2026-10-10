@@ -1,0 +1,9 @@
+{
+  "id": "tsql-getdate-datediff",
+  "dialect": "tsql",
+  "features": [
+    "function"
+  ],
+  "comment": "GETDATE / DATEDIFF 日期函数",
+  "sql": "SELECT id, DATEDIFF(DAY, created_at, GETDATE()) AS age_days FROM orders"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "spark-date-functions",
+  "dialect": "spark",
+  "features": [
+    "function"
+  ],
+  "comment": "to_date / date_add 日期函数",
+  "sql": "SELECT id, to_date(created_at) AS day, date_add(to_date(created_at), 1) AS next_day FROM orders"
+}

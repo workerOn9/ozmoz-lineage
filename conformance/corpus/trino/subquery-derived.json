@@ -1,0 +1,11 @@
+{
+  "id": "trino-subquery-derived",
+  "dialect": "trino",
+  "features": [
+    "subquery",
+    "derived-table",
+    "aggregate"
+  ],
+  "comment": "派生表聚合",
+  "sql": "SELECT t.user_id, t.total FROM (SELECT user_id, SUM(amount) AS total FROM payments GROUP BY user_id) t"
+}

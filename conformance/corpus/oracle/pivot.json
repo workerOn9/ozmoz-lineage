@@ -1,0 +1,9 @@
+{
+  "id": "oracle-pivot",
+  "dialect": "oracle",
+  "features": [
+    "pivot"
+  ],
+  "comment": "PIVOT 行转列——引擎边界，如实入格",
+  "sql": "SELECT * FROM (SELECT city, age FROM users) PIVOT (COUNT(*) FOR city IN ('hangzhou', 'shanghai'))"
+}

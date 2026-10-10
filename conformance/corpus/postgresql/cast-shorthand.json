@@ -1,0 +1,9 @@
+{
+  "id": "postgresql-cast-shorthand",
+  "dialect": "postgresql",
+  "features": [
+    "cast"
+  ],
+  "comment": ":: 双冒号类型转换简写",
+  "sql": "SELECT id, age::text AS age_text, created_at::date AS day FROM users"
+}

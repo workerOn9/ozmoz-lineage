@@ -1,0 +1,9 @@
+{
+  "id": "oracle-analytic-sum",
+  "dialect": "oracle",
+  "features": [
+    "window"
+  ],
+  "comment": "分析函数 SUM OVER（PARTITION BY + ORDER BY）",
+  "sql": "SELECT user_id, amount, SUM(amount) OVER (PARTITION BY user_id ORDER BY created_at) AS running_total FROM payments"
+}

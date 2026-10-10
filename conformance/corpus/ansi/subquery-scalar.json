@@ -1,0 +1,10 @@
+{
+  "id": "ansi-subquery-scalar",
+  "dialect": "ansi",
+  "features": [
+    "subquery",
+    "aggregate"
+  ],
+  "comment": "标量子查询（逐行聚合）",
+  "sql": "SELECT u.name, (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count FROM users u"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "mysql-replace-into",
+  "dialect": "mysql",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "replace"
+  ],
+  "comment": "REPLACE INTO 覆盖式写入",
+  "sql": "REPLACE INTO sessions (id, user_id, expires_at) VALUES ('s1', 1, '2026-12-31')"
+}
