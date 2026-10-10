@@ -51,11 +51,11 @@ class ConvertCommandTest {
     fun `未注册方言给出带合法值清单的错`() {
         val f = tempSql("SELECT 1")
         val result = command.test(
-            "--to ansi -f ${f.absolutePath}",
+            "--to redshift -f ${f.absolutePath}",
         )
         assertTrue(result.statusCode != 0, result.stdout)
         // option 前置 require 报错（Clikt UsageError）走 usage 输出
-        assertContains(result.stderr, "ansi")
+        assertContains(result.stderr, "redshift")
     }
 
     @Test

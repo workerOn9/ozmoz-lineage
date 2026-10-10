@@ -43,8 +43,21 @@ internal object LineagePipeline {
      */
     val ENGINE_IDS: List<String> = listOf(JSqlParserEngine.ID)
 
-    /** 注册的全部引擎实例（`ozml matrix` 等按列表逐个跑的入口用）。 */
+    /** 注册的引擎实例（`ozml matrix` 等按列表逐个跑的入口用）。 */
     fun engines(): List<SqlEngine> = ENGINE_IDS.map { engine(it) }
+
+    /**
+     * **可渲染**引擎实例（`ozml matrix --convert` 的方言转换矩阵用）：
+     * 注册的引擎里声明 [io.github.workeron9.ozmoz.lineage.engine.Feature.DIALECT_RENDER] 的。
+     * 与 [engines]（血缘主力，仅 [ENGINE_IDS]）分开——calcite / jooq 只做方言，
+     * 没语义模型，不进血缘矩阵。
+     */
+    fun renderEngines(): List<SqlEngine> =
+        allEngines().filter { it.capabilities.supports(io.github.workeron9.ozmoz.lineage.engine.Feature.DIALECT_RENDER) }
+
+    /** 全部已注册引擎实例（parse / convert 等非血缘入口的完整面）。 */
+    fun allEngines(): List<SqlEngine> =
+        listOf(JSqlParserEngine.ID, CalciteEngine.ID, JooqEngine.ID).map { engine(it) }
 
     /**
      * 输入路径 → (来源文件, SQL 文本) 列表：

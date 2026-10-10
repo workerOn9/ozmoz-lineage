@@ -33,8 +33,10 @@ class CalciteEngineTest {
         // 注册的方言 = 承诺的方言（含别名 tsql）
         assertTrue("tsql" in engine.capabilities.dialects)
         assertTrue("mssql" in engine.capabilities.dialects)
-        // AnsiSqlDialect 有缺陷（抽测 E4：quoting 读不回），有意未注册
-        assertTrue("ansi" !in engine.capabilities.dialects)
+        // AnsiSqlDialect 类有缺陷（抽测 E4：quoting 读不回），**类本身**不使用；
+        // 但对外 id `ansi` 是语料里的无方言族——别名到 `calcite` 主档（同配置）。
+        assertTrue("ansi" in engine.capabilities.dialects)
+        assertTrue("mysql" in engine.capabilities.dialects)
     }
 
     // ————— parse：按方言配解析器 —————
@@ -126,7 +128,7 @@ class CalciteEngineTest {
 
     @Test
     fun `parse 未注册方言给 dialect_unknown 并列出已注册方言`() {
-        val outcome = engine.parse("SELECT 1", ParseRequest(dialect = "ansi"))
+        val outcome = engine.parse("SELECT 1", ParseRequest(dialect = "redshift"))
         assertTrue(outcome.hasErrors)
         val code = outcome.diagnostics.first().code
         assertEquals(CalciteEngine.CODE_DIALECT_UNKNOWN, code)
@@ -170,7 +172,7 @@ class CalciteEngineTest {
     @Test
     fun `render 未注册目标方言给可解释的 Unknown`() {
         val result = engine.render(
-            RenderRequest("SELECT 1", fromDialect = "mysql", toDialect = "ansi"),
+            RenderRequest("SELECT 1", fromDialect = "mysql", toDialect = "redshift"),
         )
         assertTrue(result is Resolved.Unknown)
         assertTrue((result as Resolved.Unknown).reason.contains(CalciteEngine.CODE_DIALECT_UNKNOWN))
