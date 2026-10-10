@@ -30,8 +30,9 @@ import io.github.workeron9.ozmoz.lineage.graph.ImpactResult
  * 设计约定：
  * - **解析失败不是 HTTP 错误**：「解析不了 / 查不到」是**数据**（诊断 / unknown /
  *   null 路径），给 200；仅**请求本身非法**（缺 `sql`、未知引擎 id、内联 DDL 解析
- *   失败、非法 direction / depth）才 400；请求合法但**无法满足**（0 / 多条可建模语句、
- *   目标列不在图里）才 422。
+ *   失败、非法 direction / depth、aggregate 与非 json format 互斥）才 400；请求合法但
+ *   **无法满足**（0 / 多条可建模语句、目标列不在图里）才 422（多条有 `aggregate=true`
+ *   的 opt-in 合并出口，2026-10-10 拍板，缺省不变）。
  * - 图算法的权威实现只在 `graph` 模块（[LineageGraph]）；`cli` 与本模块都消费它，
  *   不在各自层里重写遍历。
  * - 离线红线：本模块**不代理任何外部服务**；schema 只接受请求体内的内联 DDL 文本。
@@ -82,6 +83,14 @@ public fun Application.serverModule() {
                         )
                 }
             }
+            // aggregate（opt-in 聚合）与非 json 的 format 导出互斥（导出器吃单模型）→ 400
+            // 在建图**之前**短路（与 unknown_format / unknown_engine 同层）。
+            if (query.aggregate && exporter != null) {
+                return@post call.badRequest(
+                    error = "aggregate_with_format",
+                    reason = "aggregate=true 返回合并图 JSON，与非 json 的 format 导出互斥（format 与缺省同义时可用）",
+                )
+            }
             val engine = ServerPipeline.engineById(query.engine ?: ServerPipeline.DEFAULT_ENGINE)
                 ?: return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
             val schema = query.schema?.let {
@@ -94,12 +103,16 @@ public fun Application.serverModule() {
             when (val built = ServerPipeline.models(query.sql, engine, query.dialect, schema)) {
                 // 整段语法解析失败：错误是数据（reason + span），200，不是 4xx。
                 is Resolved.Unknown -> call.respond(UnknownReport(unknown = built))
-                is Resolved.Known -> when (built.value.size) {
-                    0 -> call.respondUnprocessableEntity(
+                is Resolved.Known -> when {
+                    // opt-in 聚合（2026-10-10 拍板）：不论语句数统一回合并图，
+                    // 与 CLI `ozml lineage --format graph-json` 同形；0 条仍 422。
+                    query.aggregate && built.value.isNotEmpty() ->
+                        call.respond(GraphReportDto.from(LineageGraph.of(built.value)))
+                    built.value.isEmpty() -> call.respondUnprocessableEntity(
                         error = "no_modelable_statement",
                         reason = "未从输入提取到可建模的语句（可能只含 DDL / MERGE 等不产出列级血缘的语句）",
                     )
-                    1 -> {
+                    built.value.size == 1 -> {
                         val model = built.value.single()
                         if (exporter == null) {
                             call.respond(model)
@@ -111,7 +124,7 @@ public fun Application.serverModule() {
                     }
                     else -> call.respondUnprocessableEntity(
                         error = "multi_statement_input",
-                        reason = "HTTP 层只接受一条可建模语句；多条语句请用 CLI " +
+                        reason = "HTTP 层缺省只接受一条可建模语句（多语句用 aggregate=true 拿合并图）或用 CLI " +
                             "（ozml lineage -f <目录> --graph <db>）落库后查询",
                         statementCount = built.value.size,
                     )

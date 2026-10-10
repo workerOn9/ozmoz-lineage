@@ -173,6 +173,60 @@ class ServerEndpointsTest {
         assertEquals(2, body.getValue("statementCount").jsonPrimitive.content.toInt())
     }
 
+    // ————— aggregate（opt-in 聚合模式，2026-10-10 拍板） —————
+
+    @Test
+    fun `lineage 多语句 aggregate 返回合并图`() {
+        val (status, text) = request(
+            "/api/lineage",
+            """{"sql": "SELECT a FROM t; SELECT b FROM t", "aggregate": true}""",
+        )
+
+        assertEquals(200, status)
+        val body = parse(text)
+        val nodes = body.getValue("nodes").jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.content }
+        val edges = body.getValue("edges").jsonArray.map { it.jsonObject }
+        // 两句各有 t.a→a / t.b→b（OUTPUT）+ 表级哨兵 t（SOURCE）：节点含 a / b / 哨兵 t。
+        assertTrue("a" in nodes && "b" in nodes, nodes.toString())
+        assertEquals(4, edges.size) // 2 OUTPUT + 2 SOURCE
+        assertEquals(2, edges.count { it.getValue("kind").jsonPrimitive.content == "OUTPUT" })
+    }
+
+    @Test
+    fun `lineage 单语句 aggregate 也返回图形状`() {
+        val (status, text) = request(
+            "/api/lineage",
+            """{"sql": "SELECT a FROM t", "aggregate": true}""",
+        )
+
+        assertEquals(200, status)
+        val body = parse(text)
+        // aggregate=true 统一走 {nodes, edges}：单语句回模型形状会造成「同开关两种形状」。
+        assertTrue("nodes" in body && "edges" in body)
+        assertEquals(2, body.getValue("edges").jsonArray.size)
+    }
+
+    @Test
+    fun `lineage aggregate 与非 json format 互斥返回 400`() {
+        val (status, text) = request(
+            "/api/lineage",
+            """{"sql": "SELECT a FROM t", "aggregate": true, "format": "mermaid"}""",
+        )
+
+        assertEquals(400, status)
+        assertEquals("aggregate_with_format", parse(text).getValue("error").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `lineage aggregate 与可省格式 json 相容`() {
+        val (status, text) = request(
+            "/api/lineage",
+            """{"sql": "SELECT a FROM t", "aggregate": true, "format": "json"}""",
+        )
+        assertEquals(200, status)
+        assertTrue("nodes" in parse(text))
+    }
+
     @Test
     fun `lineage 整段语法错误返回 200 unknown`() {
         val (status, text) = request("/api/lineage", """{"sql": "SELEC a FROM"}""")
