@@ -1,0 +1,10 @@
+{
+  "id": "oracle-outer-join-plus",
+  "dialect": "oracle",
+  "features": [
+    "join",
+    "outer-join"
+  ],
+  "comment": "(+) 旧式外连接记法",
+  "sql": "SELECT o.id, u.name FROM orders o, users u WHERE o.user_id = u.id(+) AND u.status(+) = 'active'"
+}

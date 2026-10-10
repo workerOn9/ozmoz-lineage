@@ -1,0 +1,9 @@
+{
+  "id": "trino-date-add",
+  "dialect": "trino",
+  "features": [
+    "function"
+  ],
+  "comment": "date_add 单位制日期函数",
+  "sql": "SELECT id, date_add('day', 1, created_at) AS next_day FROM orders"
+}

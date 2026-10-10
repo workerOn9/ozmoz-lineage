@@ -1,0 +1,10 @@
+{
+  "id": "spark-delta-update",
+  "dialect": "spark",
+  "kind": "UPDATE",
+  "features": [
+    "update"
+  ],
+  "comment": "UPDATE 语句（Delta 语义）",
+  "sql": "UPDATE inventory SET quantity = quantity - 1 WHERE sku = 'A-1'"
+}

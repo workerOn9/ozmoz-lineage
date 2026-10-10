@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-window-frame",
+  "dialect": "postgresql",
+  "features": [
+    "window",
+    "frame"
+  ],
+  "comment": "滑动窗口帧（ROWS BETWEEN）",
+  "sql": "SELECT id, user_id, amount, SUM(amount) OVER (PARTITION BY user_id ORDER BY created_at ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS moving_sum FROM payments"
+}

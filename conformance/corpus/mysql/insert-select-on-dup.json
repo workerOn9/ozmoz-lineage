@@ -1,0 +1,12 @@
+{
+  "id": "mysql-insert-select-on-dup",
+  "dialect": "mysql",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "upsert",
+    "aggregate"
+  ],
+  "comment": "INSERT ... SELECT ... ON DUPLICATE KEY UPDATE",
+  "sql": "INSERT INTO daily_stats (stat_date, pv) SELECT order_date, COUNT(*) FROM orders GROUP BY order_date ON DUPLICATE KEY UPDATE pv = pv + 1"
+}

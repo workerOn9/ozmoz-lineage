@@ -1,0 +1,10 @@
+{
+  "id": "spark-struct-access",
+  "dialect": "spark",
+  "features": [
+    "expression",
+    "struct-access"
+  ],
+  "comment": "STRUCT 字段点号访问",
+  "sql": "SELECT id, addr.city FROM users"
+}

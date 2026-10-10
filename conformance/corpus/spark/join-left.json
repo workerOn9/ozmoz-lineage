@@ -1,0 +1,9 @@
+{
+  "id": "spark-join-left",
+  "dialect": "spark",
+  "features": [
+    "join"
+  ],
+  "comment": "LEFT JOIN",
+  "sql": "SELECT u.id, o.id AS order_id FROM users u LEFT JOIN orders o ON o.user_id = u.id"
+}

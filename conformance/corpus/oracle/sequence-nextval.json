@@ -1,0 +1,11 @@
+{
+  "id": "oracle-sequence-nextval",
+  "dialect": "oracle",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "sequence"
+  ],
+  "comment": "序列 NEXTVAL 取号插入",
+  "sql": "INSERT INTO audit_log (id, action) VALUES (audit_seq.NEXTVAL, 'login')"
+}

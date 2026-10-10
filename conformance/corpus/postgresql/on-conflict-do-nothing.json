@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-on-conflict-do-nothing",
+  "dialect": "postgresql",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "upsert"
+  ],
+  "comment": "ON CONFLICT DO NOTHING 冲突跳过",
+  "sql": "INSERT INTO favorites (user_id, product_id) VALUES (1, 42) ON CONFLICT DO NOTHING"
+}

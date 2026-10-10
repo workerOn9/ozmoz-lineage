@@ -1,0 +1,11 @@
+{
+  "id": "hive-nested-subquery",
+  "dialect": "hive",
+  "features": [
+    "subquery",
+    "derived-table",
+    "aggregate"
+  ],
+  "comment": "派生表聚合",
+  "sql": "SELECT t.user_id, t.total FROM (SELECT user_id, SUM(amount) AS total FROM orders GROUP BY user_id) t"
+}

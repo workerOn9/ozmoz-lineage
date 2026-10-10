@@ -1,0 +1,9 @@
+{
+  "id": "trino-try-function",
+  "dialect": "trino",
+  "features": [
+    "function"
+  ],
+  "comment": "TRY() 吞错转换",
+  "sql": "SELECT user_id, TRY(amount / quantity) AS safe_ratio FROM payments"
+}

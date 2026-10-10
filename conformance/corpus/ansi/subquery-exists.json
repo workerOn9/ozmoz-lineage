@@ -1,0 +1,10 @@
+{
+  "id": "ansi-subquery-exists",
+  "dialect": "ansi",
+  "features": [
+    "subquery",
+    "exists"
+  ],
+  "comment": "EXISTS 相关子查询",
+  "sql": "SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "hive-group-by-having",
+  "dialect": "hive",
+  "features": [
+    "aggregate",
+    "having"
+  ],
+  "comment": "GROUP BY + HAVING",
+  "sql": "SELECT user_id, COUNT(*) AS n FROM orders GROUP BY user_id HAVING COUNT(*) > 5"
+}

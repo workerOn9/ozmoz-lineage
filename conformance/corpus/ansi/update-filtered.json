@@ -1,0 +1,10 @@
+{
+  "id": "ansi-update-filtered",
+  "dialect": "ansi",
+  "kind": "UPDATE",
+  "features": [
+    "update"
+  ],
+  "comment": "UPDATE SET + WHERE",
+  "sql": "UPDATE users SET status = 'active', updated_at = '2026-10-10' WHERE last_login < '2025-01-01'"
+}

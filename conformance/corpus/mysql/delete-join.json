@@ -1,0 +1,11 @@
+{
+  "id": "mysql-delete-join",
+  "dialect": "mysql",
+  "kind": "DELETE",
+  "features": [
+    "delete",
+    "join"
+  ],
+  "comment": "多表 DELETE（JOIN 定位）",
+  "sql": "DELETE o FROM orders o JOIN users u ON o.user_id = u.id WHERE u.status = 'closed'"
+}

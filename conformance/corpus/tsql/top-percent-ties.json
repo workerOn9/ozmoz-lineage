@@ -1,0 +1,10 @@
+{
+  "id": "tsql-top-percent-ties",
+  "dialect": "tsql",
+  "features": [
+    "top",
+    "limit"
+  ],
+  "comment": "TOP n PERCENT WITH TIES",
+  "sql": "SELECT TOP 5 PERCENT WITH TIES id, amount FROM payments ORDER BY amount DESC"
+}

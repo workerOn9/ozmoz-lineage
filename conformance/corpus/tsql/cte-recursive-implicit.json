@@ -1,0 +1,10 @@
+{
+  "id": "tsql-cte-recursive-implicit",
+  "dialect": "tsql",
+  "features": [
+    "cte",
+    "recursive"
+  ],
+  "comment": "T-SQL 递归 CTE（无 RECURSIVE 关键字）+ MAXRECURSION",
+  "sql": "WITH r AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM r WHERE n < 10) SELECT n FROM r OPTION (MAXRECURSION 100)"
+}

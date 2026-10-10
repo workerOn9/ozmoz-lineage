@@ -1,0 +1,11 @@
+{
+  "id": "ansi-intersect-except",
+  "dialect": "ansi",
+  "features": [
+    "set-op",
+    "intersect",
+    "except"
+  ],
+  "comment": "INTERSECT 与 EXCEPT 组合",
+  "sql": "SELECT user_id FROM orders INTERSECT SELECT user_id FROM payments EXCEPT SELECT user_id FROM refunds"
+}

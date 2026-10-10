@@ -1,0 +1,12 @@
+{
+  "id": "hive-insert-overwrite-table",
+  "dialect": "hive",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "overwrite",
+    "aggregate"
+  ],
+  "comment": "INSERT OVERWRITE TABLE 覆盖写入",
+  "sql": "INSERT OVERWRITE TABLE daily_report SELECT dt, COUNT(*) AS pv FROM events WHERE dt = '2026-10-09' GROUP BY dt"
+}

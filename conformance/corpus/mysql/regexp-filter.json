@@ -1,0 +1,10 @@
+{
+  "id": "mysql-regexp-filter",
+  "dialect": "mysql",
+  "features": [
+    "filter",
+    "function"
+  ],
+  "comment": "REGEXP 正则过滤",
+  "sql": "SELECT id, name FROM users WHERE name REGEXP '^a'"
+}

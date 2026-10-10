@@ -1,0 +1,12 @@
+{
+  "id": "mysql-ctas-select",
+  "dialect": "mysql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "ctas",
+    "aggregate"
+  ],
+  "comment": "CREATE TABLE ... AS SELECT 聚合落表",
+  "sql": "CREATE TABLE hot_products AS SELECT product_id, SUM(quantity) AS total_qty FROM order_items GROUP BY product_id"
+}

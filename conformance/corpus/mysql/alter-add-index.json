@@ -1,0 +1,12 @@
+{
+  "id": "mysql-alter-add-index",
+  "dialect": "mysql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "alter",
+    "index"
+  ],
+  "comment": "ALTER TABLE 同时加列与索引",
+  "sql": "ALTER TABLE orders ADD COLUMN remark VARCHAR(255), ADD INDEX idx_created (created_at)"
+}

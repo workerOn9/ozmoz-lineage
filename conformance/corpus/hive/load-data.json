@@ -1,0 +1,10 @@
+{
+  "id": "hive-load-data",
+  "dialect": "hive",
+  "kind": "OTHER",
+  "features": [
+    "load"
+  ],
+  "comment": "LOAD DATA 进分区表",
+  "sql": "LOAD DATA INPATH '/data/events/2026-10-09' INTO TABLE events PARTITION (dt = '2026-10-09')"
+}

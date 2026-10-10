@@ -1,0 +1,10 @@
+{
+  "id": "mysql-limit-offset",
+  "dialect": "mysql",
+  "features": [
+    "limit",
+    "offset"
+  ],
+  "comment": "LIMIT/OFFSET 分页",
+  "sql": "SELECT id, name FROM users ORDER BY id LIMIT 20 OFFSET 40"
+}

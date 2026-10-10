@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-serial-ddl",
+  "dialect": "postgresql",
+  "kind": "DDL",
+  "features": [
+    "ddl"
+  ],
+  "comment": "SERIAL 自增主键 + DEFAULT 函数",
+  "sql": "CREATE TABLE audit_log (id SERIAL PRIMARY KEY, action TEXT, created_at TIMESTAMP DEFAULT now())"
+}

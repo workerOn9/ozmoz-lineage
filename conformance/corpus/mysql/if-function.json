@@ -1,0 +1,10 @@
+{
+  "id": "mysql-if-function",
+  "dialect": "mysql",
+  "features": [
+    "function",
+    "expression"
+  ],
+  "comment": "IF() 条件函数派生列",
+  "sql": "SELECT id, IF(age >= 18, 'adult', 'minor') AS age_group FROM users"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "tsql-string-agg",
+  "dialect": "tsql",
+  "features": [
+    "aggregate",
+    "function"
+  ],
+  "comment": "STRING_AGG WITHIN GROUP 聚合拼接",
+  "sql": "SELECT user_id, STRING_AGG(tag, ';') WITHIN GROUP (ORDER BY tag) AS tags FROM user_tags GROUP BY user_id"
+}

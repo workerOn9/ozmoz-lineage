@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-delete-using",
+  "dialect": "postgresql",
+  "kind": "DELETE",
+  "features": [
+    "delete",
+    "join"
+  ],
+  "comment": "DELETE ... USING 跨表定位",
+  "sql": "DELETE FROM orders o USING users u WHERE o.user_id = u.id AND u.status = 'closed'"
+}

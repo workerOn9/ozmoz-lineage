@@ -1,0 +1,10 @@
+{
+  "id": "tsql-select-into-temp",
+  "dialect": "tsql",
+  "features": [
+    "select-into",
+    "temp-table"
+  ],
+  "comment": "SELECT INTO 临时表",
+  "sql": "SELECT id, name INTO #active_users FROM users WHERE status = 'active'"
+}

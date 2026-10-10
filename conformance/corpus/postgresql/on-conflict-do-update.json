@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-on-conflict-do-update",
+  "dialect": "postgresql",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "upsert"
+  ],
+  "comment": "ON CONFLICT DO UPDATE 累加式 upsert",
+  "sql": "INSERT INTO inventory (sku, quantity) VALUES ('A-1', 5) ON CONFLICT (sku) DO UPDATE SET quantity = inventory.quantity + 5"
+}

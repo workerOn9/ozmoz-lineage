@@ -1,0 +1,11 @@
+{
+  "id": "trino-create-view",
+  "dialect": "trino",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "view"
+  ],
+  "comment": "CREATE VIEW 视图定义",
+  "sql": "CREATE VIEW v_recent AS SELECT id, user_id FROM orders WHERE created_at > DATE '2026-09-01'"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "trino-group-by-rollup",
+  "dialect": "trino",
+  "features": [
+    "aggregate",
+    "rollup"
+  ],
+  "comment": "GROUP BY ROLLUP 多维小计",
+  "sql": "SELECT city, district, COUNT(*) FROM users GROUP BY ROLLUP (city, district)"
+}

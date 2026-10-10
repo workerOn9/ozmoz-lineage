@@ -1,0 +1,11 @@
+{
+  "id": "mysql-insert-ignore",
+  "dialect": "mysql",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "ignore"
+  ],
+  "comment": "INSERT IGNORE 冲突静默跳过",
+  "sql": "INSERT IGNORE INTO tags (user_id, tag) VALUES (1, 'vip')"
+}

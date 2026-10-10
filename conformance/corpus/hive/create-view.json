@@ -1,0 +1,11 @@
+{
+  "id": "hive-create-view",
+  "dialect": "hive",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "view"
+  ],
+  "comment": "CREATE VIEW 视图定义",
+  "sql": "CREATE VIEW v_orders AS SELECT id, user_id, amount FROM orders"
+}

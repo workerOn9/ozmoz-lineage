@@ -1,0 +1,10 @@
+{
+  "id": "oracle-update-sysdate",
+  "dialect": "oracle",
+  "kind": "UPDATE",
+  "features": [
+    "update"
+  ],
+  "comment": "UPDATE + SYSDATE 相对过滤",
+  "sql": "UPDATE users SET status = 'active' WHERE last_login > SYSDATE - 30"
+}

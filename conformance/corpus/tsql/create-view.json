@@ -1,0 +1,11 @@
+{
+  "id": "tsql-create-view",
+  "dialect": "tsql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "view"
+  ],
+  "comment": "CREATE VIEW（schema 限定）视图定义",
+  "sql": "CREATE VIEW dbo.v_orders AS SELECT id, user_id, amount FROM dbo.orders"
+}

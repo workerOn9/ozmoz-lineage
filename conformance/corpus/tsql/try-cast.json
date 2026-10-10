@@ -1,0 +1,10 @@
+{
+  "id": "tsql-try-cast",
+  "dialect": "tsql",
+  "features": [
+    "function",
+    "cast"
+  ],
+  "comment": "TRY_CAST 吞错转换",
+  "sql": "SELECT TRY_CAST(age AS INT) AS age_int FROM users"
+}

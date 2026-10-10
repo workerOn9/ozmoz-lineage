@@ -1,0 +1,9 @@
+{
+  "id": "hive-window-sum",
+  "dialect": "hive",
+  "features": [
+    "window"
+  ],
+  "comment": "SUM OVER 分区累计",
+  "sql": "SELECT user_id, dt, amount, SUM(amount) OVER (PARTITION BY user_id ORDER BY dt) AS running_total FROM payments"
+}

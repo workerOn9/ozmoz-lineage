@@ -1,0 +1,10 @@
+{
+  "id": "trino-join-right",
+  "dialect": "trino",
+  "features": [
+    "join",
+    "outer-join"
+  ],
+  "comment": "RIGHT OUTER JOIN",
+  "sql": "SELECT o.id, u.name FROM orders o RIGHT OUTER JOIN users u ON o.user_id = u.id"
+}

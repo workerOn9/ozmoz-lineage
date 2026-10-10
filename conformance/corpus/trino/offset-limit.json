@@ -1,0 +1,10 @@
+{
+  "id": "trino-offset-limit",
+  "dialect": "trino",
+  "features": [
+    "limit",
+    "offset"
+  ],
+  "comment": "OFFSET + LIMIT 分页",
+  "sql": "SELECT id FROM users ORDER BY id OFFSET 40 LIMIT 20"
+}

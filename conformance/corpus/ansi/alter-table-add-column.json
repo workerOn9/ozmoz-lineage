@@ -1,0 +1,11 @@
+{
+  "id": "ansi-alter-table-add-column",
+  "dialect": "ansi",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "alter"
+  ],
+  "comment": "ALTER TABLE 加列",
+  "sql": "ALTER TABLE users ADD COLUMN nickname VARCHAR(64)"
+}

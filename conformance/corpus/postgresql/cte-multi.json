@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-cte-multi",
+  "dialect": "postgresql",
+  "features": [
+    "cte",
+    "multi-cte"
+  ],
+  "comment": "多 CTE 分层定义（聚合 + 排名截断）",
+  "sql": "WITH big_orders AS (SELECT user_id, SUM(amount) AS total FROM orders GROUP BY user_id HAVING SUM(amount) > 1000), vip AS (SELECT user_id FROM big_orders ORDER BY total DESC LIMIT 10) SELECT u.name FROM users u JOIN vip ON vip.user_id = u.id"
+}

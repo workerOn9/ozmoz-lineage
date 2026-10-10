@@ -1,0 +1,10 @@
+{
+  "id": "spark-explain",
+  "dialect": "spark",
+  "kind": "OTHER",
+  "features": [
+    "explain"
+  ],
+  "comment": "EXPLAIN 执行计划前缀——引擎边界，如实入格",
+  "sql": "EXPLAIN SELECT id, user_id FROM orders WHERE amount > 100"
+}

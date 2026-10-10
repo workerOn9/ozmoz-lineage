@@ -1,0 +1,10 @@
+{
+  "id": "tsql-insert-multi-row",
+  "dialect": "tsql",
+  "kind": "INSERT",
+  "features": [
+    "insert"
+  ],
+  "comment": "多行 VALUES 插入",
+  "sql": "INSERT INTO users (id, name) VALUES (1, 'a'), (2, 'b')"
+}

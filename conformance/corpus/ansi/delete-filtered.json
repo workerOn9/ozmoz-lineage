@@ -1,0 +1,10 @@
+{
+  "id": "ansi-delete-filtered",
+  "dialect": "ansi",
+  "kind": "DELETE",
+  "features": [
+    "delete"
+  ],
+  "comment": "DELETE FROM + WHERE",
+  "sql": "DELETE FROM sessions WHERE expires_at < '2026-01-01'"
+}

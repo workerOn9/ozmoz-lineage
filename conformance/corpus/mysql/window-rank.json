@@ -1,0 +1,9 @@
+{
+  "id": "mysql-window-rank",
+  "dialect": "mysql",
+  "features": [
+    "window"
+  ],
+  "comment": "RANK() OVER 窗口排名",
+  "sql": "SELECT user_id, amount, RANK() OVER (PARTITION BY user_id ORDER BY amount DESC) AS r FROM payments"
+}

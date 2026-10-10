@@ -1,0 +1,11 @@
+{
+  "id": "ansi-subquery-derived",
+  "dialect": "ansi",
+  "features": [
+    "subquery",
+    "derived-table",
+    "aggregate"
+  ],
+  "comment": "派生表（FROM 子查询）",
+  "sql": "SELECT d.user_id, d.total FROM (SELECT user_id, SUM(amount) AS total FROM payments GROUP BY user_id) d"
+}

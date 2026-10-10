@@ -1,0 +1,11 @@
+{
+  "id": "hive-multi-insert",
+  "dialect": "hive",
+  "kind": "INSERT",
+  "features": [
+    "insert",
+    "multi-insert"
+  ],
+  "comment": "FROM 多路 INSERT OVERWRITE",
+  "sql": "FROM events INSERT OVERWRITE TABLE click_events SELECT id, user_id WHERE type = 'click' INSERT OVERWRITE TABLE buy_events SELECT id, user_id WHERE type = 'buy'"
+}

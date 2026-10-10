@@ -1,0 +1,11 @@
+{
+  "id": "mysql-ctas-engine-charset",
+  "dialect": "mysql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "ctas"
+  ],
+  "comment": "CREATE TABLE 显式 ENGINE/CHARSET",
+  "sql": "CREATE TABLE order_archive (id BIGINT, user_id BIGINT, amount DECIMAL(12, 2), created_at DATETIME) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "spark-window-lead-lag",
+  "dialect": "spark",
+  "features": [
+    "window"
+  ],
+  "comment": "LEAD / LAG 相邻行窗口",
+  "sql": "SELECT user_id, amount, LEAD(amount, 1) OVER (PARTITION BY user_id ORDER BY dt) AS next_amount, LAG(amount, 1) OVER (PARTITION BY user_id ORDER BY dt) AS prev_amount FROM payments"
+}

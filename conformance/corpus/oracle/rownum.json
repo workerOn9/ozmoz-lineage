@@ -1,0 +1,10 @@
+{
+  "id": "oracle-rownum",
+  "dialect": "oracle",
+  "features": [
+    "rownum",
+    "limit"
+  ],
+  "comment": "ROWNUM 伪列限行",
+  "sql": "SELECT id, name FROM users WHERE ROWNUM <= 10"
+}

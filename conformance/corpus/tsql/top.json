@@ -1,0 +1,10 @@
+{
+  "id": "tsql-top",
+  "dialect": "tsql",
+  "features": [
+    "top",
+    "limit"
+  ],
+  "comment": "TOP N 限行",
+  "sql": "SELECT TOP 10 id, name FROM users ORDER BY id"
+}

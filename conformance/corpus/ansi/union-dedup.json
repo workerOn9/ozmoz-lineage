@@ -1,0 +1,10 @@
+{
+  "id": "ansi-union-dedup",
+  "dialect": "ansi",
+  "features": [
+    "union",
+    "set-op"
+  ],
+  "comment": "UNION 去重合并",
+  "sql": "SELECT id, name FROM users WHERE age > 30 UNION SELECT id, name FROM users WHERE city = 'hangzhou'"
+}

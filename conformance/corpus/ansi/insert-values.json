@@ -1,0 +1,10 @@
+{
+  "id": "ansi-insert-values",
+  "dialect": "ansi",
+  "kind": "INSERT",
+  "features": [
+    "insert"
+  ],
+  "comment": "多行 VALUES 插入",
+  "sql": "INSERT INTO users (id, name, age) VALUES (1, 'alice', 30), (2, 'bob', 25)"
+}

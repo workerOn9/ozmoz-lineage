@@ -1,0 +1,9 @@
+{
+  "id": "postgresql-ilike-filter",
+  "dialect": "postgresql",
+  "features": [
+    "filter"
+  ],
+  "comment": "ILIKE 大小写不敏感匹配",
+  "sql": "SELECT id, email FROM users WHERE email ILIKE '%@example.com'"
+}

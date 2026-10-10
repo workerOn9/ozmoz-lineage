@@ -1,0 +1,9 @@
+{
+  "id": "tsql-cte",
+  "dialect": "tsql",
+  "features": [
+    "cte"
+  ],
+  "comment": "WITH CTE 常规引用",
+  "sql": "WITH recent AS (SELECT id, user_id FROM orders WHERE created_at > '2026-09-01') SELECT id FROM recent"
+}

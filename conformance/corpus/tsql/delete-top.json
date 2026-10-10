@@ -1,0 +1,11 @@
+{
+  "id": "tsql-delete-top",
+  "dialect": "tsql",
+  "kind": "DELETE",
+  "features": [
+    "delete",
+    "top"
+  ],
+  "comment": "DELETE TOP (n) 限量删除",
+  "sql": "DELETE TOP (10) FROM sessions WHERE expires_at < '2026-01-01'"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "hive-lateral-view-outer",
+  "dialect": "hive",
+  "features": [
+    "lateral-view",
+    "explode"
+  ],
+  "comment": "LATERAL VIEW OUTER EXPLODE（空数组也保行）",
+  "sql": "SELECT id, tag FROM posts LATERAL VIEW OUTER EXPLODE(tags) t AS tag"
+}

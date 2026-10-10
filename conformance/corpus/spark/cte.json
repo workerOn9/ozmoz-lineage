@@ -1,0 +1,9 @@
+{
+  "id": "spark-cte",
+  "dialect": "spark",
+  "features": [
+    "cte"
+  ],
+  "comment": "WITH CTE 常规引用",
+  "sql": "WITH recent AS (SELECT id, user_id FROM orders WHERE dt = '2026-10-09') SELECT id, user_id FROM recent"
+}

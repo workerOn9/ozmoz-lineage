@@ -1,0 +1,10 @@
+{
+  "id": "ansi-group-by-having",
+  "dialect": "ansi",
+  "features": [
+    "aggregate",
+    "having"
+  ],
+  "comment": "分组聚合 + HAVING 过滤",
+  "sql": "SELECT city, COUNT(*) AS cnt FROM users GROUP BY city HAVING COUNT(*) > 10 ORDER BY cnt DESC"
+}

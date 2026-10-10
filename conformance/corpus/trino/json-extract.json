@@ -1,0 +1,10 @@
+{
+  "id": "trino-json-extract",
+  "dialect": "trino",
+  "features": [
+    "json",
+    "function"
+  ],
+  "comment": "JSON_EXTRACT 取值",
+  "sql": "SELECT id, JSON_EXTRACT(payload, '$.page') AS page FROM events"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "trino-lambda-filter",
+  "dialect": "trino",
+  "features": [
+    "lambda",
+    "function"
+  ],
+  "comment": "lambda 高阶函数 filter(x -> ...)——引擎边界，如实入格",
+  "sql": "SELECT id, filter(tags, x -> x LIKE 'p%') AS p_tags FROM posts"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "mysql-straight-join",
+  "dialect": "mysql",
+  "features": [
+    "join",
+    "optimizer-hint"
+  ],
+  "comment": "STRAIGHT_JOIN 连接顺序提示",
+  "sql": "SELECT STRAIGHT_JOIN o.id, u.name FROM orders o INNER JOIN users u ON o.user_id = u.id"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "tsql-alter-table",
+  "dialect": "tsql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "alter"
+  ],
+  "comment": "ALTER TABLE ADD 列",
+  "sql": "ALTER TABLE users ADD nickname NVARCHAR(64) NULL"
+}

@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 /**
  * `ozml matrix` 端到端：临时语料（坏文件共存）→ 真实引擎（`engine-jsqlparser`）跑矩阵
  * → stdout JSON / `--out` 落盘两种模式；坏语料不静默（WARN 继续可跑、全坏则非零退出）。
- * 另跑仓库自带的 `conformance/corpus/` 首批语料，验证矩阵对真实方言 case 的判定
+ * 另跑仓库自带的 `conformance/corpus/` 全量语料（200 条级），验证矩阵对真实方言 case 的判定
  *（吃不下就记失败，不粉饰）。
  */
 class MatrixCommandTest {
@@ -88,9 +88,10 @@ class MatrixCommandTest {
         assertEquals(0, result.statusCode)
         val matrix = CorpusLoader.jsonBuilder().decodeFromString(CompatMatrix.serializer(), result.stdout)
 
-        assertEquals(24, matrix.meta.caseCount)
+        assertEquals(200, matrix.meta.caseCount)
         assertEquals(matrix.meta.caseCount * matrix.meta.engineCount, matrix.cells.size)
-        // 防粉饰：多方言语料至少要有一格吃不下（没有就说明语料全过——矩阵仍如实）。
+        // 防粉饰：失败格必须如实保留（引擎边界不是要消灭的东西），方言分层也要在。
+        assertTrue(matrix.cells.any { !it.ok }, "方言专属语法应有如实记录的失败格")
         assertTrue(matrix.coverage.keys.size >= 8, "方言分层应覆盖 mysql/pg/hive/spark/trino/oracle/tsql/ansi：${matrix.coverage.keys}")
     }
 

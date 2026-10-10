@@ -1,0 +1,9 @@
+{
+  "id": "mysql-date-format",
+  "dialect": "mysql",
+  "features": [
+    "function"
+  ],
+  "comment": "DATE_FORMAT 日期格式化",
+  "sql": "SELECT id, DATE_FORMAT(created_at, '%Y-%m-%d') AS day FROM orders"
+}

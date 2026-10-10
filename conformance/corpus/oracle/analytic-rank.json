@@ -1,0 +1,9 @@
+{
+  "id": "oracle-analytic-rank",
+  "dialect": "oracle",
+  "features": [
+    "window"
+  ],
+  "comment": "RANK() OVER 分区排名",
+  "sql": "SELECT user_id, amount, RANK() OVER (PARTITION BY user_id ORDER BY amount DESC) AS r FROM payments"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "ansi-window-partition",
+  "dialect": "ansi",
+  "features": [
+    "window"
+  ],
+  "comment": "窗口聚合（PARTITION BY + ORDER BY）",
+  "sql": "SELECT id, user_id, amount, SUM(amount) OVER (PARTITION BY user_id ORDER BY created_at) AS running_total FROM payments"
+}

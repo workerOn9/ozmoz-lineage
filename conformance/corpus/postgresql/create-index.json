@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-create-index",
+  "dialect": "postgresql",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "index"
+  ],
+  "comment": "CREATE INDEX 倒序索引",
+  "sql": "CREATE INDEX idx_orders_created ON orders (created_at DESC)"
+}

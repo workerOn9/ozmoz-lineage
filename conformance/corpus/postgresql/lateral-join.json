@@ -1,0 +1,11 @@
+{
+  "id": "postgresql-lateral-join",
+  "dialect": "postgresql",
+  "features": [
+    "lateral",
+    "subquery",
+    "join"
+  ],
+  "comment": "CROSS JOIN LATERAL 逐行子查询",
+  "sql": "SELECT u.id, recent.order_id FROM users u CROSS JOIN LATERAL (SELECT id AS order_id FROM orders o WHERE o.user_id = u.id ORDER BY o.created_at DESC LIMIT 3) recent"
+}

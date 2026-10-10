@@ -1,0 +1,10 @@
+{
+  "id": "postgresql-subquery-exists",
+  "dialect": "postgresql",
+  "features": [
+    "subquery",
+    "exists"
+  ],
+  "comment": "EXISTS 相关子查询",
+  "sql": "SELECT p.id, p.title FROM products p WHERE EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id AND oi.quantity > 100)"
+}

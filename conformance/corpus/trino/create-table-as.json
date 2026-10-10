@@ -1,0 +1,12 @@
+{
+  "id": "trino-create-table-as",
+  "dialect": "trino",
+  "kind": "DDL",
+  "features": [
+    "ddl",
+    "ctas",
+    "aggregate"
+  ],
+  "comment": "CREATE TABLE AS SELECT 聚合落表",
+  "sql": "CREATE TABLE order_summary AS SELECT user_id, COUNT(*) AS n FROM orders GROUP BY user_id"
+}

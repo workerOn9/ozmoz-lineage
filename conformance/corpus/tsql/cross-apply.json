@@ -1,0 +1,11 @@
+{
+  "id": "tsql-cross-apply",
+  "dialect": "tsql",
+  "features": [
+    "apply",
+    "subquery",
+    "join"
+  ],
+  "comment": "CROSS APPLY 逐行关联",
+  "sql": "SELECT u.id, recent.order_id FROM users u CROSS APPLY (SELECT TOP 3 id AS order_id FROM orders o WHERE o.user_id = u.id ORDER BY o.created_at DESC) recent"
+}
