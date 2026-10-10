@@ -3,6 +3,8 @@ package io.github.workeron9.ozmoz.lineage.server
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
+import io.github.workeron9.ozmoz.lineage.engine.calcite.CalciteEngine
+import io.github.workeron9.ozmoz.lineage.engine.jooq.JooqEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
@@ -26,11 +28,21 @@ internal object ServerPipeline {
     /** 引擎注册表：id → 实例；未注册返回 null（HTTP 层报 `unknown_engine`）。 */
     public fun engineById(id: String): SqlEngine? = when (id) {
         JSqlParserEngine.ID -> JSqlParserEngine()
+        CalciteEngine.ID -> CalciteEngine()
+        JooqEngine.ID -> JooqEngine()
         else -> null
     }
 
-    /** 全部已注册引擎（`/api/engines` 的清单）。 */
-    public fun allEngines(): List<SqlEngine> = listOf(JSqlParserEngine())
+    /**
+     * 全部已注册引擎（`/api/engines` 的清单，与 CLI 的注册面一致）。
+     * 血缘能力各异的引擎在 `/api/lineage` 按能力表自然分流：
+     * jooq 无 `SEMANTIC_MODEL`，`analyzeAll` 回落 Resolved.Unknown（错误是数据，200）。
+     */
+    public fun allEngines(): List<SqlEngine> = listOf(
+        JSqlParserEngine(),
+        CalciteEngine(),
+        JooqEngine(),
+    )
 
     /**
      * 解析内联 DDL（请求体 `schema` 字段）。走**严格**版

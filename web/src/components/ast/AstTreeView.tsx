@@ -14,11 +14,11 @@ const TYPE_COLORS: Array<[RegExp, string]> = [
   [/^group|^order/, 'text-fuchsia-300'],
 ]
 
-function typeColor(type: string): string {
+export function typeColor(type: string): string {
   return TYPE_COLORS.find(([re]) => re.test(type))?.[1] ?? 'text-neutral-300'
 }
 
-function truncate(text: string, max = 48): string {
+export function truncate(text: string, max = 48): string {
   const single = text.replace(/\s+/g, ' ').trim()
   return single.length > max ? `${single.slice(0, max)}…` : single
 }

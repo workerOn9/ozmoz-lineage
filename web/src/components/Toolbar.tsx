@@ -12,6 +12,8 @@ export function Toolbar() {
   const setDialect = useAppStore((s) => s.setDialect)
   const run = useAppStore((s) => s.run)
   const loadSample = useAppStore((s) => s.loadSample)
+  const view = useAppStore((s) => s.view)
+  const setView = useAppStore((s) => s.setView)
 
   const backendBadge =
     backend === 'ok' ? (
@@ -38,6 +40,20 @@ export function Toolbar() {
     <div className="flex items-center gap-3 border-b border-neutral-800 bg-neutral-950 px-3 py-2">
       <span className="text-[14px] font-semibold text-neutral-100">ozmoz-lineage</span>
       {backendBadge}
+      <div className="ml-3 flex overflow-hidden rounded border border-neutral-700 text-[12px]">
+        <button
+          className={`px-2 py-1 ${view === 'main' ? 'bg-neutral-700 text-neutral-100' : 'text-neutral-400 hover:bg-neutral-800'}`}
+          onClick={() => setView('main')}
+        >
+          三栏
+        </button>
+        <button
+          className={`border-l border-neutral-700 px-2 py-1 ${view === 'ast-diff' ? 'bg-neutral-700 text-neutral-100' : 'text-neutral-400 hover:bg-neutral-800'}`}
+          onClick={() => setView('ast-diff')}
+        >
+          AST 对比
+        </button>
+      </div>
       <label className="ml-auto flex items-center gap-1.5 text-[12px] text-neutral-400">
         引擎
         <select

@@ -63,14 +63,14 @@ class ServerEndpointsTest {
     }
 
     @Test
-    fun `engines 列出 jsqlparser 及其能力`() {
+    fun `engines 列出全部注册引擎及能力`() {
         val (status, text) = request("/api/engines")
 
         assertEquals(200, status)
         val engines = json.parseToJsonElement(text).jsonArray
-        assertEquals(1, engines.size)
+        // 与 CLI LineagePipeline.allEngines() 的注册面一致：jsqlparser / calcite / jooq。
+        assertEquals(listOf("jsqlparser", "calcite", "jooq"), engines.map { it.jsonObject.getValue("id").jsonPrimitive.content })
         val engine = engines[0].jsonObject
-        assertEquals("jsqlparser", engine.getValue("id").jsonPrimitive.content)
         val features = engine.getValue("features").jsonArray.map { it.jsonPrimitive.content }
         assertTrue("MULTI_STATEMENT" in features)
         assertTrue("SEMANTIC_MODEL" in features)
@@ -85,6 +85,17 @@ class ServerEndpointsTest {
         assertEquals("select", body.getValue("root").jsonObject.getValue("type").jsonPrimitive.content)
         assertEquals("s", body.getValue("tables").jsonArray[0].jsonObject.getValue("name").jsonPrimitive.content)
         assertEquals(0, body.getValue("diagnostics").jsonArray.size)
+    }
+
+    @Test
+    fun `parse 支持 engine 选择 calcite 与 jooq`() {
+        // AST 对比（web T4.2）的底座：/api/parse 能按 engine 出不同引擎的归一化树。
+        for (engine in listOf("calcite", "jooq")) {
+            val (status, text) = request("/api/parse", """{"sql": "SELECT a FROM s", "engine": "$engine"}""")
+            assertEquals(200, status)
+            val body = parse(text)
+            assertEquals("select", body.getValue("root").jsonObject.getValue("type").jsonPrimitive.content)
+        }
     }
 
     @Test

@@ -29,7 +29,9 @@ describe('契约夹具（真实后端输出）', () => {
       engineReportSchema.parse(e)
     }
     const ids = (raw as Array<{ id: string }>).map((e) => e.id)
-    expect(ids).toContain('jsqlparser')
+    // server 注册面 = CLI LineagePipeline.allEngines()（jsqlparser / calcite / jooq，
+    // 2026-10-10 AST 对比 T4.2 起三引擎全注册）。
+    expect(ids).toEqual(['jsqlparser', 'calcite', 'jooq'])
   })
 
   it('parse-report.json 符合 ParseReport', () => {
@@ -46,6 +48,18 @@ describe('契约夹具（真实后端输出）', () => {
     expect(report.root.type).toBe('empty')
     expect(report.diagnostics).toHaveLength(1)
     expect(report.diagnostics[0].severity).toBe('ERROR')
+  })
+
+  it('parse-report-calcite.json / parse-report-jooq.json：跨引擎 AST 对比夹具符合 ParseReport', () => {
+    for (const name of ['parse-report-calcite.json', 'parse-report-jooq.json']) {
+      const report = parseReportSchema.parse(fixture(name))
+      expect(report.root.type).not.toBe('')
+      expect(report.diagnostics).toHaveLength(0)
+    }
+    // 同一份示例 SQL 的 jsqlparser 夹具早已入库（parse-report.json），
+    // 三份夹具并排放置供 astdiff.test.ts 做真实跨引擎 diff。
+    const calcite = parseReportSchema.parse(fixture('parse-report-calcite.json'))
+    expect(calcite.root.type).toBe('order_by') // calcite 把 ORDER BY 包在根上——与 jsqlparser 不同形
   })
 
   it('lineage-model.json 符合 LineageModel', () => {
