@@ -1,0 +1,38 @@
+name: web
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# 前端轴（web/ 独立 Vite 子项目）：Node 22 下按锁文件干净安装，
+# typecheck + 单测 + 产物构建全绿才算过。与 JVM 轴相互独立，互不等待。
+jobs:
+  web:
+    name: web build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 按锁文件安装依赖
+        run: npm ci
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 前端单测
+        run: npm test
+
+      - name: 构建产物
+        run: npm run build
