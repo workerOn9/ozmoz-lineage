@@ -37,14 +37,22 @@ public object OzmlLineageServer {
      *
      * [webRoot] 非空时把该目录作为静态资源托管到 `/`（SPA：未知非 `/api` 路径
      * 回落 index.html），与 `/api` 共存于同一端口（web 设计稿 §6.4 形态 1）。
+     *
+     * [graphRoot] 非空时开启**图库浏览**（ADR-0015）：`/api/impact` / `/api/path`
+     * 可用 `graph` 字段读 `ozml lineage --graph` 落下的 SQLite 库，`/api/graphs` 列清单。
+     * **缺省 null = 该能力整体关闭**——公开 demo（`--host 0.0.0.0`、零鉴权）有意不开，
+     * 避免把服务端文件系统变成匿名可探测面。
      */
     public fun start(
         port: Int = DEFAULT_PORT,
         host: String = DEFAULT_HOST,
         webRoot: Path? = null,
+        graphRoot: Path? = null,
         wait: Boolean = true,
     ): AutoCloseable {
-        val server = embeddedServer(Netty, port = port, host = host) { serverModule(webRoot) }
+        val server = embeddedServer(Netty, port = port, host = host) {
+            serverModule(webRoot, GraphRoot.ofOrNull(graphRoot))
+        }
         server.start(wait = wait)
         return AutoCloseable { server.stop(1000, 1000) }
     }

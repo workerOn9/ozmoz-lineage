@@ -8,6 +8,7 @@ import {
   engineReportSchema,
   formatReportSchema,
   graphReportSchema,
+  graphsReportSchema,
   lineageModelSchema,
   parseReportSchema,
   scopeKindSchema,
@@ -168,5 +169,24 @@ describe('契约夹具（真实后端输出）', () => {
     expect(report.diagnostics).toHaveLength(1)
     expect(report.diagnostics[0].severity).toBe('ERROR')
     expect(report.diagnostics[0].code).toBe('validate.skipped')
+  })
+
+  it('graphs.json 符合 GraphsReport（图库清单，ADR-0015）', () => {
+    const report = graphsReportSchema.parse(fixture('graphs.json'))
+    expect(report.graphs).toHaveLength(1)
+    // 库名是「纯文件名」——前端只回传它，目录由后端 --graph-root 决定。
+    expect(report.graphs[0].name).toBe('reports.db')
+    expect(report.graphs[0].name).not.toContain('/')
+    expect(report.graphs[0].modelCount).toBe(2)
+  })
+
+  it('lineage-graph-store.json：图库模式回整库合并图（与 aggregate 同形、边可渲染）', () => {
+    const report = graphReportSchema.parse(fixture('lineage-graph-store.json'))
+    expect(report.nodes.length).toBeGreaterThan(0)
+    expect(report.edges.length).toBeGreaterThan(0)
+    // 多语句合并时各模型的边各自从 e0 编号 → id 可重复（前端 mapGraphReport 追加 #n 去重）。
+    expect(report.edges.map((e) => e.id)).toContain('e0')
+    // SOURCE 边的 from 是表级哨兵（无 table 限定的表名），前端据此成 table: 前缀节点。
+    expect(report.edges.some((e) => e.kind === 'SOURCE')).toBe(true)
   })
 })

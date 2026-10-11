@@ -5,6 +5,7 @@ import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.format.LineageExporters
 import io.github.workeron9.ozmoz.lineage.graph.Direction
 import io.github.workeron9.ozmoz.lineage.graph.LineageGraph
+import io.github.workeron9.ozmoz.lineage.graph.SqliteLineageStore
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
@@ -45,7 +46,10 @@ import io.github.workeron9.ozmoz.lineage.graph.ImpactResult
  * [webRoot] 非空时追加 SPA 静态托管（见文件尾部的 [staticWeb]）：
  * `/api` 路由优先匹配，其余 GET 先找实体文件，找不到回落 `index.html`。
  */
-public fun Application.serverModule(webRoot: java.nio.file.Path? = null) {
+public fun Application.serverModule(
+    webRoot: java.nio.file.Path? = null,
+    graphRoot: GraphRoot? = null,
+) {
     install(ContentNegotiation) {
         json(ServerJson.json)
     }
@@ -67,6 +71,29 @@ public fun Application.serverModule(webRoot: java.nio.file.Path? = null) {
             )
         }
 
+        post("/api/graphs") {
+            // 能力表路由（ADR-0015）：未配置 --graph-root 就没有这个能力，给可解释的 400。
+            val root = graphRoot
+                ?: return@post call.badRequest(
+                    error = "unsupported_capability",
+                    reason = "本服务未开启图库浏览（ozml serve --graph-root <目录>）；" +
+                        "公开部署有意不开，本地用请显式指定白名单根",
+                )
+            call.respond(
+                GraphsReportDto(
+                    graphs = root.list().map { path ->
+                        // 只 count 不 load：列个清单不该把全库模型反序列化一遍。
+                        val count = try {
+                            SqliteLineageStore.open(path).use { it.count() }
+                        } catch (_: Exception) {
+                            0
+                        }
+                        GraphsReportDto.GraphEntryDto(name = path.fileName.toString(), modelCount = count)
+                    },
+                ),
+            )
+        }
+
         post("/api/parse") {
             val query = call.receiveQuery<ParseQuery>() ?: return@post call.badRequest("invalid_request", bodyShape("sql"))
             val engine = ServerPipeline.engineById(query.engine ?: ServerPipeline.DEFAULT_ENGINE)
@@ -77,7 +104,31 @@ public fun Application.serverModule(webRoot: java.nio.file.Path? = null) {
         }
 
         post("/api/lineage") {
-            val query = call.receiveQuery<LineageQuery>() ?: return@post call.badRequest("invalid_request", bodyShape("sql"))
+            val query = call.receiveQuery<LineageQuery>()
+                ?: return@post call.badRequest("invalid_request", bodyShape("sql", "（或 graph）"))
+            // 图库模式（ADR-0015）：读已落库的整库合并图，返回与 aggregate=true 同形的 GraphReportDto。
+            // 与 sql 互斥；format 非 json 导出器吃单模型，同样互斥（复用 aggregate_with_format 错误码）。
+            if (query.graph != null) {
+                if (query.sql != null) {
+                    return@post call.badRequest(
+                        error = "invalid_request",
+                        reason = "必须且只能给出 sql（现建现查）或 graph（已落库的图库名）之一",
+                    )
+                }
+                if (query.format != null && !query.format.equals("json", ignoreCase = true)) {
+                    return@post call.badRequest(
+                        error = "aggregate_with_format",
+                        reason = "graph 模式返回合并图 JSON，与非 json 的 format 导出互斥",
+                    )
+                }
+                val stored = call.loadStoredGraph(graphRoot, query.graph) ?: return@post
+                return@post call.respond(GraphReportDto.from(stored))
+            }
+            val sql = query.sql
+                ?: return@post call.badRequest(
+                    error = "invalid_request",
+                    reason = "必须且只能给出 sql（现建现查）或 graph（已落库的图库名）之一",
+                )
             // 导出格式按 id 查 format 模块注册表（与 CLI --format 取值同名）；显式 "json"
             // 与缺省同义（LineageModel 本体响应）。未注册 id → 400，在建图**之前**短路。
             val exporter = query.format?.let { requested ->
@@ -108,7 +159,7 @@ public fun Application.serverModule(webRoot: java.nio.file.Path? = null) {
                     return@post call.badRequest("invalid_schema", e.message ?: e.toString())
                 }
             }
-            when (val built = ServerPipeline.models(query.sql, engine, query.dialect, schema)) {
+            when (val built = ServerPipeline.models(sql, engine, query.dialect, schema)) {
                 // 整段语法解析失败：错误是数据（reason + span），200，不是 4xx。
                 is Resolved.Unknown -> call.respond(UnknownReport(unknown = built))
                 is Resolved.Known -> when {
@@ -210,16 +261,21 @@ public fun Application.serverModule(webRoot: java.nio.file.Path? = null) {
 
         post("/api/impact") {
             val query = call.receiveQuery<ImpactQuery>()
-                ?: return@post call.badRequest("invalid_request", bodyShape("sql", "on"))
+                ?: return@post call.badRequest("invalid_request", bodyShape("on", "（sql 或 graph 二选一）"))
             val direction = parseDirection(query.direction, Direction.UPSTREAM)
                 ?: return@post call.badRequest("invalid_direction", "direction 必须是 upstream / downstream / both")
             if ((query.depth ?: 0) < 0) return@post call.badRequest("invalid_depth", "depth 不能为负数")
-            if (query.engine != null && ServerPipeline.engineById(query.engine) == null) {
-                return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
-            }
-            val graph = call.graphOf(query.engine) { engine, schema ->
-                modelsToGraph(query.sql, engine, query.dialect, schema)
-            } ?: return@post
+            // 图来源二选一（ADR-0015）：sql 现建现查，或 graph 读已落库的库。
+            val graph = call.resolveGraph(
+                graphRoot = graphRoot,
+                sql = query.sql,
+                graphName = query.graph,
+                engineId = query.engine,
+                dialect = query.dialect,
+                build = { qsql: String, qengine: SqlEngine, qdialect: String? ->
+                    modelsToGraph(qsql, qengine, qdialect, null)
+                },
+            ) ?: return@post
             val origin = query.on.lowercase()
             if (origin !in graph.nodeIds) {
                 call.respondUnprocessableEntity(
@@ -234,15 +290,20 @@ public fun Application.serverModule(webRoot: java.nio.file.Path? = null) {
 
         post("/api/path") {
             val query = call.receiveQuery<PathQuery>()
-                ?: return@post call.badRequest("invalid_request", bodyShape("sql", "from", "to"))
+                ?: return@post call.badRequest("invalid_request", bodyShape("from", "to", "（sql 或 graph 二选一）"))
             val direction = parseDirection(query.direction, Direction.DOWNSTREAM)
                 ?: return@post call.badRequest("invalid_direction", "direction 必须是 upstream / downstream / both")
-            if (query.engine != null && ServerPipeline.engineById(query.engine) == null) {
-                return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
-            }
-            val graph = call.graphOf(query.engine) { engine, schema ->
-                modelsToGraph(query.sql, engine, query.dialect, schema)
-            } ?: return@post
+            // 图来源二选一（ADR-0015）：sql 现建现查，或 graph 读已落库的库。
+            val graph = call.resolveGraph(
+                graphRoot = graphRoot,
+                sql = query.sql,
+                graphName = query.graph,
+                engineId = query.engine,
+                dialect = query.dialect,
+                build = { qsql: String, qengine: SqlEngine, qdialect: String? ->
+                    modelsToGraph(qsql, qengine, qdialect, null)
+                },
+            ) ?: return@post
             val from = query.from.lowercase()
             val to = query.to.lowercase()
             val missing = listOf(query.from, query.to).filter { it.lowercase() !in graph.nodeIds }
@@ -324,7 +385,7 @@ internal fun parseDirection(raw: String?, default: Direction): Direction? =
 /**
  * 一段 SQL → 合并血缘图（现建现查，与 `ozml impact` 的 `-f` 行为一致）。
  * 多条可建模语句自然合并成一张图；0 条或整段语法错误抛
- * [NoModelableStatement]（由 [ApplicationCall.graphOf] 统一转成 422 / 200）。
+ * [NoModelableStatement]（由 [ApplicationCall.resolveGraph] 统一转成 422 / 200）。
  */
 internal fun modelsToGraph(
     sql: String,
@@ -350,26 +411,110 @@ internal class SemanticUnavailable(public val reason: String) : Exception(reason
 internal class NoModelableStatement : Exception()
 
 /**
- * 建图 + 统一错误翻译：建图失败（语法错误 / 无可建模语句）时直接写错误响应并返回
- * null，调用方拿到 null 就 `return@post`。
+ * 图来源二选一（ADR-0015）：`sql`（现建现查）或 `graph`（读已落库的全库血缘图）。
+ *
+ * 恰好给一个：都给 / 都不给 → 400 `invalid_request`。`graph` 路径下 [engineId] / 方言 /
+ * schema **被忽略**（库里的模型是落库时的产物，重解析没有意义）——静默忽略是有意的，
+ * 免得前端为两种来源做条件分支（ADR-0015 的后果节写明）。
+ *
+ * 失败一律写响应并返回 null，调用方 `?: return@post`：
+ * - 图来源非法（都不是 / 都是）→ 400 `invalid_request`；
+ * - 未配置 `--graph-root` 却用 `graph` → 400 `unsupported_capability`（能力表路由）；
+ * - 库名非法（绝对路径 / 逃逸 / 非 .db）→ 400 `invalid_graph_ref`；
+ * - 库里没有这个文件 / 空库 → 422 `graph_not_found`；
+ * - `sql` 路径的语法错误 → 200 `{unknown}`（错误是数据，与 `/api/lineage` 同口径）；
+ * - `sql` 路径无任何可建模语句 → 422 `no_modelable_statement`。
  */
-private suspend fun ApplicationCall.graphOf(
+private suspend fun ApplicationCall.resolveGraph(
+    graphRoot: GraphRoot?,
+    sql: String?,
+    graphName: String?,
     engineId: String?,
-    build: (engine: SqlEngine, schema: SchemaProvider?) -> LineageGraph,
-): LineageGraph? {
-    val engine = ServerPipeline.engineById(engineId ?: ServerPipeline.DEFAULT_ENGINE)!!
-    return try {
-        build(engine, null)
-    } catch (e: SemanticUnavailable) {
-        respond(UnknownReport(unknown = Resolved.Unknown(reason = e.reason)))
-        null
-    } catch (e: NoModelableStatement) {
-        respondUnprocessableEntity(
-            error = "no_modelable_statement",
-            reason = "未从输入提取到可建模的语句（可能只含 DDL / MERGE 等不产出列级血缘的语句）",
-        )
+    dialect: String?,
+    build: (sql: String, engine: SqlEngine, dialect: String?) -> LineageGraph,
+): LineageGraph? = when {
+    (sql == null) == (graphName == null) -> {
+        badRequest("invalid_request", "必须且只能给出 sql（现建现查）或 graph（已落库的图库名）之一")
         null
     }
+    graphName != null -> loadStoredGraph(graphRoot, graphName)
+    // 未注册引擎在建图**之前**短路（旧契约不变）；graph 模式不适用——库里的模型已定型，
+    // engine / dialect / schema 一并忽略（ADR-0015）。
+    engineId != null && ServerPipeline.engineById(engineId) == null -> {
+        badRequest("unknown_engine", "未注册的引擎：$engineId")
+        null
+    }
+    else -> buildGraphFromSql(
+        sql = sql!!,
+        engine = ServerPipeline.engineById(engineId ?: ServerPipeline.DEFAULT_ENGINE)!!,
+        dialect = dialect,
+        build = build,
+    )
+}
+
+/** `graph` 路径：白名单根校验 → 开库 → 载模型 → 现建图（与 CLI `ImpactCommand.loadGraph` 同一入口）。 */
+private suspend fun ApplicationCall.loadStoredGraph(graphRoot: GraphRoot?, name: String): LineageGraph? {
+    val root = graphRoot
+        ?: return run {
+            badRequest(
+                error = "unsupported_capability",
+                reason = "本服务未开启图库浏览（ozml serve --graph-root <目录>）；" +
+                    "公开部署有意不开，本地用请显式指定白名单根",
+            )
+            null
+        }
+    val path = root.resolve(name)
+        ?: return run {
+            badRequest(
+                error = "invalid_graph_ref",
+                reason = "库名必须是白名单根下的 .db 文件名（不含路径分隔符）：$name",
+            )
+            null
+        }
+    if (!java.nio.file.Files.isRegularFile(path)) {
+        respondUnprocessableEntity(
+            error = "graph_not_found",
+            reason = "图库里没有这个文件：$name（可用 /api/graphs 看可用库）",
+        )
+        return null
+    }
+    val models = try {
+        SqliteLineageStore.open(path).use { store -> store.load().map { it.model } }
+    } catch (e: Exception) {
+        // 打不开 / 不是本项目的库：请求无法满足，422（不泄漏底层异常细节到 4xx 之外）。
+        respondUnprocessableEntity(
+            error = "graph_not_found",
+            reason = "无法打开图库 $name（不是 ozml lineage --graph 的产物？）：${e.message}",
+        )
+        return null
+    }
+    if (models.isEmpty()) {
+        respondUnprocessableEntity(
+            error = "graph_not_found",
+            reason = "图库 $name 里没有任何语句（先跑 ozml lineage --graph <db> 落库）",
+        )
+        return null
+    }
+    return LineageGraph.of(models)
+}
+
+/** `sql` 路径：现建现查（与旧行为一致）。 */
+private suspend fun ApplicationCall.buildGraphFromSql(
+    sql: String,
+    engine: SqlEngine,
+    dialect: String?,
+    build: (sql: String, engine: SqlEngine, dialect: String?) -> LineageGraph,
+): LineageGraph? = try {
+    build(sql, engine, dialect)
+} catch (e: SemanticUnavailable) {
+    respond(UnknownReport(unknown = Resolved.Unknown(reason = e.reason)))
+    null
+} catch (e: NoModelableStatement) {
+    respondUnprocessableEntity(
+        error = "no_modelable_statement",
+        reason = "未从输入提取到可建模的语句（可能只含 DDL / MERGE 等不产出列级血缘的语句）",
+    )
+    null
 }
 
 /** 请求体反序列化：坏 JSON / 缺必填字段 → null（调用方据此给 `invalid_request`）。 */
