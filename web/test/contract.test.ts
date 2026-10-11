@@ -6,6 +6,7 @@ import {
   astNodeSchema,
   edgeKindSchema,
   engineReportSchema,
+  graphReportSchema,
   lineageModelSchema,
   parseReportSchema,
   scopeKindSchema,
@@ -67,6 +68,20 @@ describe('契约夹具（真实后端输出）', () => {
     expect(model.scopes.length).toBeGreaterThan(0)
     expect(model.edges.length).toBeGreaterThan(0)
     expect(model.unknowns.length).toBeGreaterThan(0) // 该输入含无限定聚合列
+  })
+
+  it('lineage-graph-aggregate.json 符合 GraphReport（aggregate 合并图）', () => {
+    const report = graphReportSchema.parse(fixture('lineage-graph-aggregate.json'))
+    expect(report.nodes.length).toBeGreaterThan(0)
+    expect(report.edges.length).toBeGreaterThan(0)
+    // 合并图含表级哨兵节点（SOURCE 边的 from，id 即表限定名）与输出列标记。
+    expect(report.nodes.some((n) => !n.isOutput)).toBe(true)
+    expect(report.nodes.some((n) => n.isOutput)).toBe(true)
+    for (const e of report.edges) {
+      edgeKindSchema.parse(e.kind)
+      transformKindSchema.parse(e.transform)
+    }
+    expect(report.edges.some((e) => e.kind === 'SOURCE')).toBe(true)
   })
 
   it('lineage-model-unknowns.json：unknown 的形状是 {reason, span?}（无多态判别字段）', () => {

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { ApiError } from '../api/client'
 import { endpoints } from '../api/endpoints'
-import type { EngineReport, LineageModel, ParseReport } from '../types'
+import type { EngineReport, GraphReport, LineageModel, ParseReport } from '../types'
 import { SAMPLE_SQL } from '../lib/sample'
 import { diffAstTrees } from '../lib/astDiff'
 import type { AstDiff } from '../lib/astDiff'
@@ -32,6 +32,12 @@ interface AppState {
   runError: string | null
   parseReport: ParseReport | null
   lineage: LineageModel | null
+  /**
+   * aggregate（聚合多语句）开关：true 时 `/api/lineage` 带 `aggregate: true`，
+   * 回合并图（GraphReport，ADR-0011 opt-in 契约）；跳过 /api/parse（多语句无单树）。
+   */
+  aggregate: boolean
+  graphReport: GraphReport | null
   graphMode: GraphMode
   /** path 模式下已选起点。 */
   pathFromId: string | null
@@ -49,6 +55,7 @@ interface AppState {
   setSql: (sql: string) => void
   setEngineId: (id: string | null) => void
   setDialect: (d: string) => void
+  setAggregate: (on: boolean) => void
   init: () => Promise<void>
   run: () => Promise<void>
   loadSample: () => void
@@ -83,6 +90,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   runError: null,
   parseReport: null,
   lineage: null,
+  aggregate: false,
+  graphReport: null,
   graphMode: 'none',
   pathFromId: null,
   selectedNodeId: null,
@@ -98,6 +107,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSql: (sql) => set({ sql }),
   setEngineId: (engineId) => set({ engineId }),
   setDialect: (dialect) => set({ dialect }),
+  setAggregate: (aggregate) => set({ aggregate }),
 
   init: async () => {
     try {
@@ -122,30 +132,54 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   run: async () => {
-    const { sql, engineId, dialect } = get()
+    const { sql, engineId, dialect, aggregate } = get()
     if (get().backend !== 'ok' || sql.trim() === '') return
     set({ running: true, runError: null })
     const query = { sql, ...(engineId != null ? { engine: engineId } : {}), ...(dialect !== '' ? { dialect } : {}) }
     try {
-      const [parseRaw, lineageRaw] = await Promise.all([
-        endpoints.parse(query) as Promise<unknown>,
-        endpoints.lineage(query) as Promise<unknown>,
-      ])
-      const parseUnknown = unknownReason(parseRaw)
-      const lineageUnknown = unknownReason(lineageRaw)
-      set({
-        parseReport: parseRaw as ParseReport,
-        lineage: lineageUnknown == null ? (lineageRaw as LineageModel) : null,
-        runError: parseUnknown ?? lineageUnknown,
-        selectedNodeId: null,
-        selectedEdgeId: null,
-        highlight: null,
-        graphMode: 'none',
-        pathFromId: null,
-      })
+      if (aggregate) {
+        // 聚合模式（ADR-0011 opt-in）：只打 /api/lineage（aggregate=true 回合并图
+        // GraphReport）；多语句没有单棵归一化树，/api/parse 跳过、中栏显示说明。
+        const raw = (await endpoints.lineage({ ...query, aggregate: true })) as unknown
+        const lineageUnknown = unknownReason(raw)
+        set({
+          parseReport: null,
+          lineage: null,
+          graphReport: lineageUnknown == null ? (raw as GraphReport) : null,
+          runError: lineageUnknown,
+          selectedNodeId: null,
+          selectedEdgeId: null,
+          highlight: null,
+          graphMode: 'none',
+          pathFromId: null,
+        })
+      } else {
+        const [parseRaw, lineageRaw] = await Promise.all([
+          endpoints.parse(query) as Promise<unknown>,
+          endpoints.lineage(query) as Promise<unknown>,
+        ])
+        const parseUnknown = unknownReason(parseRaw)
+        const lineageUnknown = unknownReason(lineageRaw)
+        set({
+          parseReport: parseRaw as ParseReport,
+          lineage: lineageUnknown == null ? (lineageRaw as LineageModel) : null,
+          graphReport: null,
+          runError: parseUnknown ?? lineageUnknown,
+          selectedNodeId: null,
+          selectedEdgeId: null,
+          highlight: null,
+          graphMode: 'none',
+          pathFromId: null,
+        })
+      }
     } catch (e) {
       const reason = e instanceof ApiError ? (e.body?.reason ?? e.message) : String(e)
-      set({ runError: reason })
+      // 422 multi_statement_input：后端 reason 已说明 aggregate=true，补一句前端落点。
+      const hint =
+        e instanceof ApiError && e.body?.error === 'multi_statement_input'
+          ? `${reason}（可勾选工具栏「聚合多语句」后重新解析）`
+          : reason
+      set({ runError: hint })
     } finally {
       set({ running: false })
     }

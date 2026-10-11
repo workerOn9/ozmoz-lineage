@@ -50,6 +50,7 @@ export default function App() {
   const sql = useAppStore((s) => s.sql)
   const parseReport = useAppStore((s) => s.parseReport)
   const lineage = useAppStore((s) => s.lineage)
+  const graphReport = useAppStore((s) => s.graphReport)
   const backend = useAppStore((s) => s.backend)
   const view = useAppStore((s) => s.view)
 
@@ -90,11 +91,19 @@ export default function App() {
         />
         {view === 'main' ? (
           <>
-            {/* 中：归一化树 */}
+            {/* 中：归一化树（aggregate 合并图模式没有单语句树，显示说明） */}
             <section className="flex min-w-0 flex-col" style={{ width: `${widths.mid}%` }}>
               <PanelTitle title="归一化树" />
               <div className="min-h-0 flex-1">
-                <AstTreeView root={parseReport?.root ?? null} />
+                {graphReport != null ? (
+                  <div className="flex h-full items-center justify-center p-3 text-center text-[12px] leading-5 text-neutral-500">
+                    聚合模式：多语句已合并为一张血缘图（右栏），
+                    <br />
+                    无单语句归一化树
+                  </div>
+                ) : (
+                  <AstTreeView root={parseReport?.root ?? null} />
+                )}
               </div>
             </section>
             <DragHandle
@@ -111,7 +120,7 @@ export default function App() {
               <div className="min-h-0 flex-[3]">
                 <LineageGraphView />
               </div>
-              <EdgeLegend model={lineage} />
+              <EdgeLegend model={lineage ?? graphReport} />
               <div className="min-h-0 flex-[2] border-t border-neutral-800">
                 <NodeInspector />
               </div>

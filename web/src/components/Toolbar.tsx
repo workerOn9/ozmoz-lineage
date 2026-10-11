@@ -14,6 +14,8 @@ export function Toolbar() {
   const loadSample = useAppStore((s) => s.loadSample)
   const view = useAppStore((s) => s.view)
   const setView = useAppStore((s) => s.setView)
+  const aggregate = useAppStore((s) => s.aggregate)
+  const setAggregate = useAppStore((s) => s.setAggregate)
 
   const backendBadge =
     backend === 'ok' ? (
@@ -76,6 +78,18 @@ export function Toolbar() {
           value={dialect}
           onChange={(e) => setDialect(e.target.value)}
         />
+      </label>
+      <label
+        className="flex items-center gap-1.5 text-[12px] text-neutral-400"
+        title="多语句输入合并为一张血缘图（/api/lineage aggregate=true，opt-in 契约）；合并图无单语句归一化树"
+      >
+        <input
+          type="checkbox"
+          className="accent-sky-600"
+          checked={aggregate}
+          onChange={(e) => setAggregate(e.target.checked)}
+        />
+        聚合多语句
       </label>
       <button
         className="rounded bg-sky-700 px-3 py-1 text-[13px] text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"

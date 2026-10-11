@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { useAppStore } from '../../state/store'
-import { mapLineageModel } from '../../graph/mapping'
+import { mapGraphReport, mapLineageModel } from '../../graph/mapping'
 import { columnRefId } from '../../types'
 import { revealSpan } from '../../editor/editorHolder'
 
-/** 选中节点 / 边的详情面板（NodeInspector）。 */
+/** 选中节点 / 边的详情面板（NodeInspector）。聚合图（GraphReport）节点无 ColumnRef，只展示 id/label。 */
 
 function Row({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   return (
@@ -19,13 +19,24 @@ function Row({ label, value, mono = true }: { label: string; value: string; mono
 
 export function NodeInspector() {
   const lineage = useAppStore((s) => s.lineage)
+  const graphReport = useAppStore((s) => s.graphReport)
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
   const selectedEdgeId = useAppStore((s) => s.selectedEdgeId)
 
-  const mapped = useMemo(() => (lineage != null ? mapLineageModel(lineage) : null), [lineage])
+  const mapped = useMemo(
+    () =>
+      lineage != null
+        ? mapLineageModel(lineage)
+        : graphReport != null
+          ? mapGraphReport(graphReport)
+          : null,
+    [lineage, graphReport],
+  )
 
   const node = mapped?.nodes.find((n) => n.id === selectedNodeId) ?? null
-  const edge = lineage?.edges.find((e) => e.id === selectedEdgeId) ?? null
+  const edge = lineage?.edges.find((e) => e.id === selectedEdgeId)
+    ?? graphReport?.edges.find((e) => e.id === selectedEdgeId)
+    ?? null
 
   const columnMeta = useMemo(() => {
     if (lineage == null || selectedNodeId == null) return null
@@ -50,27 +61,34 @@ export function NodeInspector() {
             {node.data.isTableNode ? '表节点' : '列节点'}
           </div>
           <Row label="label" value={node.data.label} />
-          <Row label="raw" value={node.data.ref.raw} />
-          <Row label="canonical" value={node.data.ref.canonical} />
-          {node.data.ref.table != null && <Row label="table" value={node.data.ref.table} />}
-          {node.data.ref.schema != null && <Row label="schema" value={node.data.ref.schema} />}
-          {columnMeta != null && (
+          {node.data.ref != null ? (
             <>
-              <Row label="isOutput" value={String(columnMeta.isOutput)} />
-              {columnMeta.scopeId != null && <Row label="scope" value={columnMeta.scopeId} />}
-              {columnMeta.type != null && <Row label="type" value={columnMeta.type} />}
-              {columnMeta.nullable != null && (
-                <Row label="nullable" value={String(columnMeta.nullable)} />
+              <Row label="raw" value={node.data.ref.raw} />
+              <Row label="canonical" value={node.data.ref.canonical} />
+              {node.data.ref.table != null && <Row label="table" value={node.data.ref.table} />}
+              {node.data.ref.schema != null && <Row label="schema" value={node.data.ref.schema} />}
+              {columnMeta != null && (
+                <>
+                  <Row label="isOutput" value={String(columnMeta.isOutput)} />
+                  {columnMeta.scopeId != null && <Row label="scope" value={columnMeta.scopeId} />}
+                  {columnMeta.type != null && <Row label="type" value={columnMeta.type} />}
+                  {columnMeta.nullable != null && (
+                    <Row label="nullable" value={String(columnMeta.nullable)} />
+                  )}
+                </>
+              )}
+              {node.data.ref.span != null && (
+                <button
+                  className="text-[12px] text-sky-400 hover:underline"
+                  onClick={() => revealSpan(node.data.ref!.span!)}
+                >
+                  定位到 SQL（{node.data.ref.span.start.line}:{node.data.ref.span.start.column}）
+                </button>
               )}
             </>
-          )}
-          {node.data.ref.span != null && (
-            <button
-              className="text-[12px] text-sky-400 hover:underline"
-              onClick={() => revealSpan(node.data.ref.span!)}
-            >
-              定位到 SQL（{node.data.ref.span.start.line}:{node.data.ref.span.start.column}）
-            </button>
+          ) : (
+            // 聚合图（GraphReport）节点没有 ColumnRef：只能给稳定 id。
+            <Row label="id" value={node.id} />
           )}
         </>
       )}
@@ -79,37 +97,47 @@ export function NodeInspector() {
           <div className="text-[13px] font-semibold text-neutral-100">边 {edge.id}</div>
           <Row label="kind" value={edge.kind} />
           <Row label="transform" value={edge.transform} />
-          <Row
-            label="from"
-            value={
-              edge.fromColumn.table != null
-                ? `${edge.fromColumn.table}.${edge.fromColumn.name}`
-                : edge.fromColumn.name
-            }
-          />
-          <Row
-            label="to"
-            value={
-              edge.toColumn.table != null
-                ? `${edge.toColumn.table}.${edge.toColumn.name}`
-                : edge.toColumn.name
-            }
-          />
-          {edge.expression != null && (
-            <div>
-              <div className="text-[12px] text-neutral-500">expression</div>
-              <pre className="mt-1 overflow-auto rounded bg-neutral-900 p-2 font-mono text-[12px] text-amber-200">
-                {edge.expression}
-              </pre>
-            </div>
-          )}
-          {edge.span != null && (
-            <button
-              className="text-[12px] text-sky-400 hover:underline"
-              onClick={() => revealSpan(edge.span!)}
-            >
-              定位到 SQL（{edge.span.start.line}:{edge.span.start.column}）
-            </button>
+          {'fromColumn' in edge ? (
+            <>
+              <Row
+                label="from"
+                value={
+                  edge.fromColumn.table != null
+                    ? `${edge.fromColumn.table}.${edge.fromColumn.name}`
+                    : edge.fromColumn.name
+                }
+              />
+              <Row
+                label="to"
+                value={
+                  edge.toColumn.table != null
+                    ? `${edge.toColumn.table}.${edge.toColumn.name}`
+                    : edge.toColumn.name
+                }
+              />
+              {edge.expression != null && (
+                <div>
+                  <div className="text-[12px] text-neutral-500">expression</div>
+                  <pre className="mt-1 overflow-auto rounded bg-neutral-900 p-2 font-mono text-[12px] text-amber-200">
+                    {edge.expression}
+                  </pre>
+                </div>
+              )}
+              {edge.span != null && (
+                <button
+                  className="text-[12px] text-sky-400 hover:underline"
+                  onClick={() => revealSpan(edge.span!)}
+                >
+                  定位到 SQL（{edge.span.start.line}:{edge.span.start.column}）
+                </button>
+              )}
+            </>
+          ) : (
+            // 聚合图边：端点是列 id（无 ColumnRef / expression / span）。
+            <>
+              <Row label="from" value={edge.from} />
+              <Row label="to" value={edge.to} />
+            </>
           )}
         </>
       )}

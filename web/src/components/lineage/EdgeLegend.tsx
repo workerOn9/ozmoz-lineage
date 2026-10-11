@@ -1,4 +1,4 @@
-import type { EdgeKind, LineageModel } from '../../types'
+import type { EdgeKind, GraphReport, LineageModel } from '../../types'
 
 /** 边类型 → 颜色（全图唯一出处，图渲染与图例共用）。 */
 
@@ -20,7 +20,8 @@ export const EDGE_KIND_LABELS: Record<EdgeKind, string> = {
   SOURCE: 'SOURCE 表级哨兵',
 }
 
-export function EdgeLegend({ model }: { model: LineageModel | null }) {
+/** 图例 + 各类边计数。两种图形状（单语句 LineageModel / aggregate 合并图 GraphReport）都有 edges[].kind。 */
+export function EdgeLegend({ model }: { model: LineageModel | GraphReport | null }) {
   const counts = new Map<EdgeKind, number>()
   for (const e of model?.edges ?? []) {
     counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1)

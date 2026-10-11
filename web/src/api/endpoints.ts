@@ -11,6 +11,8 @@ export interface ParseQuery {
 
 export interface LineageQuery extends ParseQuery {
   schema?: string
+  /** opt-in 多语句聚合（ADR-0011）：true 回合并图（GraphReport），缺省单语句契约。 */
+  aggregate?: boolean
 }
 
 export const endpoints = {
