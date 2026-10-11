@@ -1,0 +1,30 @@
+# Vercel 构建上下文瘦身：容器服务从源码构建，本地产物与本地痕迹全部排除。
+# AGENTS.md 含本地协作红线，与 .dockerignore 一致，绝不进任何构建上下文。
+
+.git
+.gitignore
+AGENTS.md
+CLAUDE.md
+.claude/
+.opencode/
+.cursor/
+.vscode/
+.idea/
+.vercel/
+
+.gradle/
+.kotlin/
+build/
+**/build/
+web/node_modules/
+web/dist/
+.vite/
+*.tsbuildinfo
+
+*.log
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+local/
+.DS_Store

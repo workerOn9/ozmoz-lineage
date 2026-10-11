@@ -1,0 +1,45 @@
+#
+# Vercel 容器服务镜像（vercel.json 的 services.server 指向本文件）：
+# 只产出 API 进程（/api/*），前端静态资源由 web 服务走 CDN，不进本镜像。
+# 与一体化 Dockerfile 的区别：Vercel 构建机没有本地产物，一切从源码构建；
+# 无 --web-root（SPA 由 web 服务托管），监听地址/端口交给容器平台（--host 0.0.0.0 + PORT）。
+
+# ── stage 1：JVM 构建（JDK 21 + Gradle wrapper，官方源）─────────────────────
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /workspace
+
+# 先复制构建脚本与 wrapper，让依赖解析层可缓存
+COPY gradlew gradlew.bat settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY gradle ./gradle
+# 只产出 API 进程需要的模块（cli 及其依赖闭包）；settings 收录的模块目录必须都在场
+COPY ir ./ir
+COPY engine-api ./engine-api
+COPY engine-jsqlparser ./engine-jsqlparser
+COPY engine-calcite ./engine-calcite
+COPY engine-antlr ./engine-antlr
+COPY engine-jooq ./engine-jooq
+COPY lineage ./lineage
+COPY graph ./graph
+COPY schema ./schema
+COPY format ./format
+COPY server ./server
+COPY cli ./cli
+COPY bench ./bench
+COPY conformance ./conformance
+# installDist 产出可执行发行版（bin/ozml + lib/），不跑测试（测试由 CI 守）
+RUN ./gradlew :cli:installDist --no-daemon
+
+# ── stage 2：运行时（JRE 21，只带 API 进程）──────────────────────────────────
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=build /workspace/cli/build/install/ozml/ /app/
+
+# PORT=80：容器平台注入的 PORT 会覆盖本值；ozml serve 读 PORT 环境变量。
+# JAVA_HOME/PATH 显式声明：容器平台启动进程时可能重置 PATH，导致启动脚本找不到 java。
+ENV PORT=80 \
+    JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+EXPOSE 80
+
+ENTRYPOINT ["/app/bin/ozml", "serve", "--host", "0.0.0.0"]
