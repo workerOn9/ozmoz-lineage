@@ -79,6 +79,15 @@ curl -s localhost:8765/api/lineage -H 'Content-Type: application/json' \
 
 `web/` 是独立前端子项目（不进 Gradle 多模块）：Vite + React 19 + TypeScript + Tailwind 4 + Monaco + React Flow，三栏布局——左 SQL 编辑器，中归一化树，右列级血缘图（dagre 布局，支持上溯 / 下溯 / 短路径高亮与节点详情），底部诊断与 unknowns 面板。
 
+仓库根目录的 `justfile` 统一编排跨工具命令（安装 just：`brew install just`；Gradle 只管 JVM 侧，默认构建不要求 Node）：
+
+```bash
+just web-install   # = npm --prefix web ci（按锁文件装依赖）
+just web-check     # 前端闸：typecheck + 单测
+just web-build     # 产出 web/dist
+just serve         # 构建前端 + ozml serve --web-root web/dist（单端口托管）
+```
+
 ```bash
 # 开发：前端 dev server（/api 代理到 8765）+ 后端
 ozml serve --port 8765 &
