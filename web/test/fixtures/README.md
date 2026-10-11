@@ -28,6 +28,9 @@ curl -s -X POST http://127.0.0.1:8765/api/parse -H 'Content-Type: application/js
 | `format-report.json` | `POST /api/format` | 同上电商示例（缺省多行排版，无诊断） |
 | `format-report-comment.json` | `POST /api/format` | `select a /* keep me */ from t`（含注释 → `jsqlparser.comment_dropped` WARNING） |
 | `format-report-skipped.json` | `POST /api/format` | `select from where`（语法错误 → 无 `sql` + `format.skipped` ERROR，形状恒定） |
+| `validate-report.json` | `POST /api/validate` | 合法 SQL + 内联 DDL schema（回空 `diagnostics`） |
+| `validate-report-error.json` | `POST /api/validate` | `SELECT foo FROM orders` + 内联 DDL（未知列 → `calcite.validate_error` ERROR，带位置） |
+| `validate-report-skipped.json` | `POST /api/validate` | `SELECT a FROM t`（无 schema、SQL 无 DDL → `validate.skipped` ERROR，形状恒定） |
 
 `contract.test.ts` 会对每个夹具做 zod 运行时校验——契约加字段 / 加枚举值 /
 改判别字段时测试会红，提示同步 `src/types/`。

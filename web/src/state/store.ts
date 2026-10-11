@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { ApiError } from '../api/client'
 import { endpoints } from '../api/endpoints'
-import type { EngineReport, GraphReport, LineageModel, ParseReport } from '../types'
-import { SAMPLE_SQL } from '../lib/sample'
+import type { EngineReport, GraphReport, LineageModel, ParseReport, ValidateReport } from '../types'
+import { SAMPLE_SCHEMA, SAMPLE_SQL } from '../lib/sample'
 import { diffAstTrees } from '../lib/astDiff'
 import type { AstDiff } from '../lib/astDiff'
 import type { HighlightResult } from '../graph/traverse'
@@ -59,13 +59,33 @@ interface AppState {
    */
   formatNotice: string | null
 
+  /**
+   * 语义校验（`/api/validate`）用的内联 DDL 文本。空字符串 = 未提供——
+   * 后端退化为从 `sql` 文本自动收 `CREATE TABLE`，收不到则回 `validate.skipped`。
+   */
+  schema: string
+  /** schema 面板是否展开。 */
+  schemaOpen: boolean
+  /** `/api/validate` 请求中（工具栏按钮的 disabled 依据）。 */
+  validating: boolean
+  /** 最近一次校验产物（形状恒定：合法回空诊断、没跑成落 validate.skipped）。 */
+  validateReport: ValidateReport | null
+  /** 最近一次校验的人读错误（4xx / 后端不可达）；与诊断流分开。 */
+  validateError: string | null
+
   setSql: (sql: string) => void
   setEngineId: (id: string | null) => void
   setDialect: (d: string) => void
   setAggregate: (on: boolean) => void
+  setSchema: (ddl: string) => void
+  setSchemaOpen: (open: boolean) => void
   init: () => Promise<void>
   run: () => Promise<void>
   loadSample: () => void
+  /** 对当前 sql + schema 打 `/api/validate` 语义校验，结果进校验诊断流。 */
+  validate: () => Promise<void>
+  /** 清掉上一次校验产物（改 SQL / 改 schema 时避免陈旧诊断滞留）。 */
+  clearValidate: () => void
   /** 对当前 sql 打 `/api/format` 排版，成功则回写编辑器；有损 / 没跑成给提示。 */
   format: () => Promise<void>
   clearFormatNotice: () => void
@@ -115,11 +135,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   diffRunning: false,
   formatting: false,
   formatNotice: null,
+  schema: SAMPLE_SCHEMA,
+  schemaOpen: false,
+  validating: false,
+  validateReport: null,
+  validateError: null,
 
-  setSql: (sql) => set({ sql, formatNotice: null }),
+  setSql: (sql) => set({ sql, formatNotice: null, validateReport: null, validateError: null }),
   setEngineId: (engineId) => set({ engineId }),
   setDialect: (dialect) => set({ dialect }),
   setAggregate: (aggregate) => set({ aggregate }),
+  // 改 schema 后旧校验诊断就失效了（针对的是上一份元数据），清掉避免误导。
+  setSchema: (schema) => set({ schema, validateReport: null, validateError: null }),
+  setSchemaOpen: (schemaOpen) => set({ schemaOpen }),
 
   init: async () => {
     try {
@@ -197,9 +225,40 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  loadSample: () => set({ sql: SAMPLE_SQL }),
+  loadSample: () =>
+    set({
+      sql: SAMPLE_SQL,
+      schema: SAMPLE_SCHEMA,
+      formatNotice: null,
+      validateReport: null,
+      validateError: null,
+    }),
 
   clearFormatNotice: () => set({ formatNotice: null }),
+
+  clearValidate: () => set({ validateReport: null, validateError: null }),
+
+  validate: async () => {
+    const { sql, schema, dialect, backend } = get()
+    if (backend !== 'ok' || sql.trim() === '') return
+    set({ validating: true, validateError: null })
+    try {
+      // 刻意不传 engine：语义校验是 calcite 的能力（唯一申报 VALIDATE_SCHEMA 的引擎），
+      // 正是 /api/validate 的缺省；传用户当前引擎（可能是 jooq/jsqlparser）只会撞 400。
+      const report = await endpoints.validate({
+        sql,
+        ...(dialect !== '' ? { dialect } : {}),
+        // 空白 schema 视同未提供：交给后端从 sql 里收 CREATE TABLE（缺省行为）。
+        ...(schema.trim() !== '' ? { schema } : {}),
+      })
+      set({ validateReport: report })
+    } catch (e) {
+      const reason = e instanceof ApiError ? (e.body?.reason ?? e.message) : String(e)
+      set({ validateReport: null, validateError: reason })
+    } finally {
+      set({ validating: false })
+    }
+  },
 
   format: async () => {
     const { sql, backend } = get()

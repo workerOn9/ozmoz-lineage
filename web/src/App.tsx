@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Toolbar } from './components/Toolbar'
+import { SchemaPanel } from './components/SchemaPanel'
 import { AstTreeView } from './components/ast/AstTreeView'
 import { AstDiffPanel } from './components/ast/AstDiffPanel'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
@@ -55,6 +56,7 @@ export default function App() {
   const view = useAppStore((s) => s.view)
   const formatNotice = useAppStore((s) => s.formatNotice)
   const clearFormatNotice = useAppStore((s) => s.clearFormatNotice)
+  const schemaOpen = useAppStore((s) => s.schemaOpen)
 
   // 左 / 中栏宽度（百分比），右栏吃剩余。
   const [widths, setWidths] = useState({ left: 30, mid: 26 })
@@ -88,14 +90,22 @@ export default function App() {
         </div>
       )}
       <div ref={mainRef} className="flex min-h-0 flex-1">
-        {/* 左：SQL 编辑器（三栏 / AST 对比共用） */}
+        {/* 左：SQL 编辑器（三栏 / AST 对比共用）+ 可选 schema 面板 */}
         <section className="flex min-w-0 flex-col" style={{ width: `${widths.left}%` }}>
           <PanelTitle title="SQL 输入" />
-          <div className="min-h-0 flex-1">
+          <div className={schemaOpen ? 'min-h-0 flex-[3]' : 'min-h-0 flex-1'}>
             <Suspense fallback={<div className="p-3 text-[12px] text-neutral-500">加载编辑器…</div>}>
               <SqlEditor value={sql} onChange={setSql} />
             </Suspense>
           </div>
+          {schemaOpen && (
+            <>
+              <PanelTitle title="Schema（DDL）" />
+              <div className="min-h-0 flex-[2] border-t border-neutral-800">
+                <SchemaPanel />
+              </div>
+            </>
+          )}
         </section>
         <DragHandle
           onDelta={(dx, w) =>

@@ -1,0 +1,1 @@
+{"engine":"calcite","diagnostics":[{"severity":"ERROR","code":"validate.skipped","message":"validate 需要 schema（ValidateRequest.schema 未提供）","engineId":"calcite"}]}
