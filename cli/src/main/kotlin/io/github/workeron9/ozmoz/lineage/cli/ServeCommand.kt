@@ -24,10 +24,10 @@ public class ServeCommand : CliktCommand(name = "serve") {
 
     private val port: Int by option(
         "--port",
-        help = "监听端口（默认 ${OzmlLineageServer.DEFAULT_PORT}）",
+        help = "监听端口（默认 ${OzmlLineageServer.DEFAULT_PORT}；容器平台可用 PORT 环境变量覆盖）",
     )
         .int()
-        .default(OzmlLineageServer.DEFAULT_PORT)
+        .default(resolvePort(System.getenv("PORT"), OzmlLineageServer.DEFAULT_PORT))
 
     private val webRoot: String? by option(
         "--web-root",
@@ -44,3 +44,10 @@ public class ServeCommand : CliktCommand(name = "serve") {
         OzmlLineageServer.start(port = port, host = host, webRoot = root, wait = true)
     }
 }
+
+/**
+ * 解析容器平台注入的 `PORT` 环境变量（Vercel / Fly 等均按 12-factor 约定注入）：
+ * 合法端口（1–65535）用之，缺省 / 非数字 / 越界一律回落 [fallback]，不让坏环境变量把服务起崩。
+ */
+internal fun resolvePort(envPort: String?, fallback: Int): Int =
+    envPort?.toIntOrNull()?.takeIf { it in 1..65535 } ?: fallback

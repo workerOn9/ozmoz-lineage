@@ -104,6 +104,16 @@ docker run --rm -p 8765:8765 ozmoz-lineage
 
 前端类型与 Kotlin `@Serializable` 契约的同步靠「手写 TS 镜像 + golden 夹具」双保险（`web/src/types/` + `web/test/fixtures/`，`npm run test` 校验）。
 
+### 部署到 Vercel（双服务：`web` 静态 + `server` 容器）
+
+仓库根目录的 `vercel.json` 把部署拆成两个服务：`web`（Vite 静态产物，CDN 分发）与 `server`（`Dockerfile.vercel` 构建的 JRE 容器，只跑 `/api/*`）。根级 rewrites 把 `/api/*` 路由到 server 服务、其余回落到 SPA——前端代码零改动（同源相对路径，与 dev 的 vite proxy 同一套语义）。`ozml serve` 在容器内读平台注入的 `PORT` 环境变量（`--port` 显式传入时优先），`--host 0.0.0.0` 由镜像 ENTRYPOINT 显式给出。
+
+```bash
+vercel          # CLI 登录后一键预览；或把仓库导入 Vercel 面板，zero-config 识别 vercel.json
+```
+
+**注意**：`ozml serve` 是无鉴权的单用户工具，Vercel 部署等于把 `/api` 公开到公网——只用于 demo / 个人试用，别把真实 SQL 或元数据贴给公网实例。本地 / 内网的离线优先形态（CLI 与一体化 Docker 镜像）不受影响。
+
 `ozml lineage -f <目录>` 递归读取目录下的 `*.sql`，并可把结果**落库**到 SQLite：
 
 ```bash

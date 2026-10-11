@@ -58,3 +58,6 @@ target/
 *.db-journal
 *.db-wal
 *.db-shm
+
+# Vercel CLI 本地状态
+.vercel/
