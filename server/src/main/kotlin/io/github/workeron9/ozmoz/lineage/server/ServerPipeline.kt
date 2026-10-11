@@ -76,6 +76,27 @@ internal object ServerPipeline {
         engine.parse(sql, ParseRequest(dialect = dialect))
 
     /**
+     * SQL 排版（[Feature.PRETTY_PRINT]，ADR-0014 的 HTTP 出口）。
+     *
+     * 与 `ozml format` 同一组合方式：走引擎的 `format`（内容来源是引擎自己的规范化
+     * 渲染，不重写渲染器）。引擎未申报能力 / 语法错误 → `Resolved.Unknown`，
+     * 由 HTTP 层转成 `{sql: null, diagnostics: [format.skipped]}`（形状恒定）。
+     */
+    public fun format(
+        sql: String,
+        engine: SqlEngine,
+        dialect: String?,
+        multiline: Boolean,
+    ): Resolved<io.github.workeron9.ozmoz.lineage.engine.FormatOutcome> =
+        engine.format(
+            io.github.workeron9.ozmoz.lineage.engine.FormatRequest(
+                sql = sql,
+                dialect = dialect,
+                multiline = multiline,
+            ),
+        )
+
+    /**
      * 结合 schema 做语义校验（[Feature.VALIDATE_SCHEMA]，ADR-0013 的 HTTP 出口）。
      *
      * schema 来源与 `/api/lineage` 同口径：

@@ -173,6 +173,41 @@ public fun Application.serverModule(webRoot: java.nio.file.Path? = null) {
             call.respond(ValidateReportDto(engine = engine.id, dialect = query.dialect, diagnostics = diagnostics))
         }
 
+        post("/api/format") {
+            val query = call.receiveQuery<FormatQuery>() ?: return@post call.badRequest("invalid_request", bodyShape("sql"))
+            val engine = ServerPipeline.engineById(query.engine ?: FormatReportDto.DEFAULT_ENGINE)
+                ?: return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
+            // 能力表路由：引擎没申报 PRETTY_PRINT 直接给可解释的 400（与 CLI 同惯例）。
+            engine.capabilities.reason(Feature.PRETTY_PRINT)?.let { reason ->
+                return@post call.badRequest("unsupported_capability", "引擎 ${engine.id} 不支持排版：$reason")
+            }
+            // 形状恒定：跑成（Known）与没跑成（Unknown）都回 {engine, dialect, sql, diagnostics}；
+            // 后者 sql=null，落一条 format.skipped ERROR（与 CLI 的 stderr 口径一致）。
+            val report = when (val result = ServerPipeline.format(query.sql, engine, query.dialect, query.multiline)) {
+                is Resolved.Known -> FormatReportDto(
+                    engine = engine.id,
+                    dialect = query.dialect,
+                    sql = result.value.sql,
+                    diagnostics = result.value.diagnostics,
+                )
+                is Resolved.Unknown -> FormatReportDto(
+                    engine = engine.id,
+                    dialect = query.dialect,
+                    sql = null,
+                    diagnostics = listOf(
+                        Diagnostic(
+                            severity = Severity.ERROR,
+                            code = FormatReportDto.CODE_FORMAT_SKIPPED,
+                            message = result.reason,
+                            span = result.span,
+                            engineId = engine.id,
+                        ),
+                    ),
+                )
+            }
+            call.respond(report)
+        }
+
         post("/api/impact") {
             val query = call.receiveQuery<ImpactQuery>()
                 ?: return@post call.badRequest("invalid_request", bodyShape("sql", "on"))

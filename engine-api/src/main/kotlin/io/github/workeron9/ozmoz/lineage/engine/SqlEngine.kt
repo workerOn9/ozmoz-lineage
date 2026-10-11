@@ -87,4 +87,21 @@ public interface SqlEngine {
      */
     public fun validate(request: ValidateRequest): Resolved<List<Diagnostic>> =
         Resolved.Unknown(capabilities.reason(Feature.VALIDATE_SCHEMA) ?: "unsupported")
+
+    /**
+     * **格式化（排版）**一条 SQL（[Feature.PRETTY_PRINT]）。**可选**能力。
+     *
+     * 结果契约（与 [render] / [validate] 一处有意不同——格式化产出的是一段 SQL 文本
+     * 加一组**有损告警**）：
+     * - `Resolved.Known(FormatOutcome)` = **格式化真的跑了**：[FormatOutcome.sql] 是重排后的
+     *   SQL；[FormatOutcome.diagnostics] 可含 WARNING——重排**有损**时（如引擎不保留注释）
+     *   如实报出来，不静默丢（Never-wrong 的镜像：有损就说，不假装无损）；
+     * - `Resolved.Unknown(reason, span)` = **格式化没跑成**：引擎未申报能力、SQL 为空、
+     *   解析失败（语法错误）——与 [render] 的 unknown 口径一致，给不出就不给。
+     *
+     * 默认实现用类型表达「不支持」。**不是**方言转换：格式化只做重排，不换方言
+     * （方言转换是 [render]）。
+     */
+    public fun format(request: FormatRequest): Resolved<FormatOutcome> =
+        Resolved.Unknown(capabilities.reason(Feature.PRETTY_PRINT) ?: "unsupported")
 }

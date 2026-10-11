@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml serve`（Ktor `/api` + `web/` 静态托管）可运行；Web UI 已交付三栏起步版，AST 并排 diff 与 Tauri 壳未做）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml serve`（Ktor `/api` + `web/` 静态托管）可运行；Web UI 已交付三栏起步版，AST 并排 diff 与 Tauri 壳未做）。
 
 ## 它要解决什么
 
@@ -26,11 +26,13 @@ ozml impact  --graph ./lineage.db --on db.t.c --depth 3  # 从库查询上溯 / 
 ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查（当前可用）
 ozml matrix   --corpus ./conformance/corpus --out ./docs/compat-matrix.json
 ozml matrix   --convert --corpus ./conformance/corpus  # 方言转换矩阵：20 组方言对 × 渲染引擎（diff 视图数据）
-ozml serve    --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|validate|impact|path（当前可用）
+ozml serve    --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|validate|format|impact|path（当前可用）
 ozml parse   --engine calcite -f q.sql                # Calcite 按方言配解析器（反引号 / 方括号 / 双引号按方言路由）（当前可用）
 ozml convert --from mysql --to postgresql -f q.sql    # 方言转换：parse→render→re-parse 等价门禁，不等价不输出（当前可用）
 ozml convert --engine jooq --from mysql --to trino -f q.sql  # jOOQ 第二实现（12 个 OSS 关系库方言；当前可用）
 ozml validate --schema ddl.sql -f q.sql               # schema 语义校验：未知表 / 未知列 / 歧义给权威诊断（当前可用）
+ozml format   -f q.sql                                 # SQL 排版：子句换行 + 规范化（不换方言；注释丢失如实告警）（当前可用）
+ozml format   -f q.sql --single-line                   # 规范化单行（关键字大写、空白归一）
 ```
 
 `ozml` = **ozmoz** + **lineage**。
@@ -75,11 +77,13 @@ curl -s localhost:8765/api/validate -H 'Content-Type: application/json' \
     -d '{"sql": "SELECT a FROM t", "schema": "CREATE TABLE t (a INT)"}'
 ```
 
-端点：`GET /api/health`、`GET /api/engines`（引擎能力路由表）、`POST /api/parse`（归一化树，与 `ozml parse --format json` 同形）、`POST /api/lineage`（`LineageModel`，仅接受一条可建模语句；可选 `format` 走导出器、`aggregate: true` 走合并图，见下）、`POST /api/validate`（结合 schema 的语义校验，与 `ozml validate` 同形）、`POST /api/impact` / `POST /api/path`（图查询，响应与 `ozml impact --format json` 同形）。**解析失败不是 HTTP 错误**：语法错误以 200 + 结构化 `unknown` 返回（错误是数据）；仅请求本身非法（缺字段、未知引擎、坏 DDL、引擎不支持某能力）才 4xx。
+端点：`GET /api/health`、`GET /api/engines`（引擎能力路由表）、`POST /api/parse`（归一化树，与 `ozml parse --format json` 同形）、`POST /api/lineage`（`LineageModel`，仅接受一条可建模语句；可选 `format` 走导出器、`aggregate: true` 走合并图，见下）、`POST /api/validate`（结合 schema 的语义校验，与 `ozml validate` 同形）、`POST /api/format`（SQL 排版，与 `ozml format --json` 同形）、`POST /api/impact` / `POST /api/path`（图查询，响应与 `ozml impact --format json` 同形）。**解析失败不是 HTTP 错误**：语法错误以 200 + 结构化 `unknown` 返回（错误是数据）；仅请求本身非法（缺字段、未知引擎、坏 DDL、引擎不支持某能力）才 4xx。
 
 `POST /api/lineage` 另有两个可选字段：`format`（导出格式 id，与 CLI `--format` 同名：mermaid / dot / cypher / openlineage / ozmoz-json；缺省或 `"json"` 回 `LineageModel`）与 `aggregate: true`（opt-in 多语句聚合，不论语句数统一回合并图 `{nodes, edges}`，与 CLI `--format graph-json` 同形；与非 json 的 `format` 互斥 → 400）。`schema` 指定时必须为内联 DDL 文本；未指定时自动从 `sql` 文本收集 `CREATE TABLE`（与 CLI 的目录行为一致）。
 
 `POST /api/validate` 结合 schema 做语义校验（Calcite `SqlValidator`）：合法 SQL 回空 `diagnostics`，未知表 / 未知列 / 列歧义 / 函数参数个数不符等给 `calcite.validate_error`（含位置）；**形状恒定**——校验「没跑成」（未给 schema / SQL 为空 / 方言未注册）仍 200，落一条 `validate.skipped`。默认引擎 `calcite`（唯一申报校验能力的引擎）；`engine` 指向未申报该能力的引擎 → 400 `unsupported_capability`。请求体 `{"sql": "...", "schema": "CREATE TABLE ..."}`。
+
+`POST /api/format` 排版 SQL（与 `ozml format --json` 同形 `{engine, dialect, sql, diagnostics}`）：缺省多行子句换行，`multiline: false` 产规范化单行；**形状恒定**——语法错误 / 空输入仍 200、`sql` 缺省、落一条 `format.skipped` ERROR；源文本含注释时落一条 `jsqlparser.comment_dropped` WARNING（渲染器不保留注释）。默认引擎 `jsqlparser`（唯一申报 `PRETTY_PRINT` 的引擎）；calcite / jooq 不支持排版 → 400 `unsupported_capability`。请求体 `{"sql": "..."}`。
 
 ### Web UI（`web/`，M4 起步）
 
@@ -157,6 +161,20 @@ ozml validate --schema ddl.sql --dialect mysql -f q.sql  # 方言决定解析器
 ```
 
 诊断输出为 JSON（stdout），存在 ERROR 级诊断（含语法错误——那是可背书的诊断）时非零退出，便于 CI。校验器说不出话的语句种类（纯 DDL 等）不产诊断，不猜。
+
+### SQL 排版（`ozml format`）
+
+把一条 SQL 按**子句换行**重排（能力位 `PRETTY_PRINT`）。与 `ozml convert` 的本质区别：**convert 换方言，format 只重排**——内容来源是引擎自己的规范化渲染（关键字大写、空白归一），本项目**不重写渲染器**，只在规范文本上插换行，因此 `parse → format → re-parse` 语义等价、一个字符都不丢。
+
+```bash
+ozml format -f q.sql                    # 多行排版（子句换行）
+ozml format -f q.sql --single-line      # 规范化单行
+ozml format -f q.sql --json             # output json: {engine, dialect, sql, diagnostics}
+```
+
+换行**上下文感知**：只在子查询里按 `SELECT` / `FROM` / `WHERE` / `GROUP BY` / `ORDER BY` / `HAVING` / `LIMIT` / `OFFSET` / 集合运算 / `JOIN` 家族换行；函数参数里的 `FROM`（如 `EXTRACT(YEAR FROM d)`）所在括号**不透明**，整段原样保留（这是纯文本切分会误伤、而结构化换行能避开的关键点）；字符串 / 带引号标识符 / `[方括号]` 内的关键字不触发换行。
+
+**有损如实报**：JSqlParser 的词法器把注释当 `SPECIAL_TOKEN` 跳过，渲染器因此**必然丢注释**——检测到源文本含注释时落一条 `jsqlparser.comment_dropped` WARNING（带第一条注释位置，stdout 是 SQL 文本时诊断走 stderr），不静默丢。默认引擎 `jsqlparser`（唯一申报排版的引擎）；calcite / jooq 明说不支持排版 → 可解释的错。
 
 ### 方言转换矩阵（`ozml matrix --convert`）
 

@@ -595,4 +595,87 @@ class ServerEndpointsTest {
         assertTrue(diagnostics.size > 0)
         assertEquals("ERROR", diagnostics[0].jsonObject.getValue("severity").jsonPrimitive.content)
     }
+
+    // ——— /api/format（ADR-0014） ———
+
+    @Test
+    fun `format 多行排版按子句换行`() {
+        val (status, text) = request(
+            "/api/format",
+            """{"sql": "select t.a, u.b from t join u on t.id=u.id where t.x=1 order by t.a desc"}""",
+        )
+
+        assertEquals(200, status)
+        val body = parse(text)
+        assertEquals("jsqlparser", body.getValue("engine").jsonPrimitive.content)
+        val sql = body.getValue("sql").jsonPrimitive.content
+        assertEquals(
+            "SELECT t.a, u.b\nFROM t\nJOIN u ON t.id = u.id\nWHERE t.x = 1\nORDER BY t.a DESC",
+            sql,
+        )
+        assertTrue(body.getValue("diagnostics").jsonArray.isEmpty())
+    }
+
+    @Test
+    fun `format multiline false 产规范化单行`() {
+        val (status, text) = request(
+            "/api/format",
+            """{"sql": "select a,b from t where x=1", "multiline": false}""",
+        )
+
+        assertEquals(200, status)
+        assertEquals("SELECT a, b FROM t WHERE x = 1", parse(text).getValue("sql").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `format 注释丢失落 WARNING 且 sql 仍输出`() {
+        val (status, text) = request("/api/format", """{"sql": "select a /* keep */ from t"}""")
+
+        assertEquals(200, status)
+        val body = parse(text)
+        assertEquals("SELECT a\nFROM t", body.getValue("sql").jsonPrimitive.content)
+        val d = body.getValue("diagnostics").jsonArray[0].jsonObject
+        assertEquals("jsqlparser.comment_dropped", d.getValue("code").jsonPrimitive.content)
+        assertEquals("WARNING", d.getValue("severity").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `format 语法错误形状恒定 sql 为 null 落 skipped 诊断`() {
+        val (status, text) = request("/api/format", """{"sql": "select from where"}""")
+
+        assertEquals(200, status)
+        val body = parse(text)
+        // explicitNulls=false：null 字段被省略，故断言 "sql" 不在响应里
+        assertTrue(!body.containsKey("sql"))
+        val d = body.getValue("diagnostics").jsonArray[0].jsonObject
+        assertEquals("format.skipped", d.getValue("code").jsonPrimitive.content)
+        assertEquals("ERROR", d.getValue("severity").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `format 不支持排版的引擎返回 400`() {
+        // calcite / jooq 未申报 PRETTY_PRINT：能力表路由给可解释的 400。
+        val (status, text) = request("/api/format", """{"sql": "SELECT 1", "engine": "calcite"}""")
+
+        assertEquals(400, status)
+        val body = parse(text)
+        assertEquals("unsupported_capability", body.getValue("error").jsonPrimitive.content)
+        assertTrue(body.getValue("reason").jsonPrimitive.content.contains("calcite"))
+    }
+
+    @Test
+    fun `format 未知引擎返回 400`() {
+        val (status, text) = request("/api/format", """{"sql": "SELECT 1", "engine": "mine"}""")
+
+        assertEquals(400, status)
+        assertEquals("unknown_engine", parse(text).getValue("error").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `format 缺 sql 返回 400`() {
+        val (status, text) = request("/api/format", """{"engine": "jsqlparser"}""")
+
+        assertEquals(400, status)
+        assertEquals("invalid_request", parse(text).getValue("error").jsonPrimitive.content)
+    }
 }
