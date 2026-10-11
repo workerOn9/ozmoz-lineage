@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { MappedEdge, MappedNode } from '../src/graph/mapping'
-import { mapLineageModel, tableNodeId } from '../src/graph/mapping'
+import { mapGraphReport, mapLineageModel, tableNodeId } from '../src/graph/mapping'
 import { reachableSet, subgraphHighlight } from '../src/graph/traverse'
 import { shortestPath } from '../src/graph/path'
 import { layoutGraph } from '../src/graph/layout'
-import { lineageModelSchema } from '../src/types'
+import { graphReportSchema, lineageModelSchema } from '../src/types'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -13,6 +13,12 @@ const here = dirname(fileURLToPath(import.meta.url))
 
 function loadModel(name: string) {
   return lineageModelSchema.parse(
+    JSON.parse(readFileSync(join(here, 'fixtures', name), 'utf-8')),
+  )
+}
+
+function loadGraphReport(name: string) {
+  return graphReportSchema.parse(
     JSON.parse(readFileSync(join(here, 'fixtures', name), 'utf-8')),
   )
 }
@@ -45,6 +51,43 @@ describe('mapLineageModel', () => {
   it('表哨兵 id 不与同名裸列冲突', () => {
     const id = tableNodeId('Orders')
     expect(id).toBe('table:orders')
+  })
+})
+
+describe('mapGraphReport（aggregate 合并图）', () => {
+  it('真实夹具：SOURCE 边 from 收成 table: 哨兵节点，节点 id 唯一', () => {
+    const mapped = mapGraphReport(loadGraphReport('lineage-graph-aggregate.json'))
+    const ids = mapped.nodes.map((n) => n.id)
+    expect(new Set(ids).size).toBe(ids.length)
+
+    // 表级哨兵 t → table:t 节点；裸列 a / b 保留原 id（同名不冲突）。
+    const sentinel = mapped.nodes.find((n) => n.data.isTableNode)
+    expect(sentinel).toBeDefined()
+    expect(sentinel!.id).toBe('table:t')
+    expect(sentinel!.data.label).toBe('t')
+    expect(mapped.nodes.some((n) => n.id === 'a' && !n.data.isTableNode)).toBe(true)
+
+    for (const e of mapped.edges.filter((e) => e.data.kind === 'SOURCE')) {
+      expect(e.source).toBe('table:t')
+    }
+  })
+
+  it('跨语句重复的边 id 按出现序追加 #n（React Flow 要求边 id 唯一）', () => {
+    const mapped = mapGraphReport(loadGraphReport('lineage-graph-aggregate.json'))
+    const edgeIds = mapped.edges.map((e) => e.id)
+    expect(new Set(edgeIds).size).toBe(edgeIds.length)
+    // 真实夹具两句各有 e0 / e1：第二条重复 id 必须被改写。
+    expect(edgeIds).toContain('e0')
+    expect(edgeIds).toContain('e0#2')
+  })
+
+  it('合并图节点无 ColumnRef（ref 缺省，NodeInspector 走 id 降级）', () => {
+    const mapped = mapGraphReport(loadGraphReport('lineage-graph-aggregate.json'))
+    for (const n of mapped.nodes) {
+      expect(n.data.ref).toBeUndefined()
+    }
+    // 输出列标记从后端 isOutput 透传。
+    expect(mapped.nodes.find((n) => n.id === 'a')!.data.isOutput).toBe(true)
   })
 })
 

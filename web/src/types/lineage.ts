@@ -100,3 +100,29 @@ export const lineageModelSchema = z.object({
   diagnostics: z.array(diagnosticSchema).default([]),
 })
 export type LineageModel = z.infer<typeof lineageModelSchema>
+
+// GraphReportDto 契约镜像（server/Dtos.kt）：`/api/lineage` `aggregate=true`
+// （opt-in 聚合，ADR-0011）的合并图响应，与 CLI `ozml lineage --format graph-json`
+// 同形。节点只带 id/label/isOutput（无 ColumnRef / span），边只带五元组
+//（无 expression）——比 LineageModel 粗，是多语句合并图的展示专用形状。
+export const graphNodeSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  isOutput: z.boolean(),
+})
+export type GraphNode = z.infer<typeof graphNodeSchema>
+
+export const graphEdgeSchema = z.object({
+  id: z.string(),
+  from: z.string(),
+  to: z.string(),
+  kind: edgeKindSchema,
+  transform: transformKindSchema,
+})
+export type GraphEdge = z.infer<typeof graphEdgeSchema>
+
+export const graphReportSchema = z.object({
+  nodes: z.array(graphNodeSchema),
+  edges: z.array(graphEdgeSchema),
+})
+export type GraphReport = z.infer<typeof graphReportSchema>

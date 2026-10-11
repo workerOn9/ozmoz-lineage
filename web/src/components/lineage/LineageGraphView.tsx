@@ -14,7 +14,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../../state/store'
 import type { GraphNodeData, MappedGraph } from '../../graph/mapping'
-import { mapLineageModel } from '../../graph/mapping'
+import { mapGraphReport, mapLineageModel } from '../../graph/mapping'
 import { layoutGraph } from '../../graph/layout'
 import { reachableSet, subgraphHighlight } from '../../graph/traverse'
 import { shortestPath } from '../../graph/path'
@@ -64,9 +64,18 @@ function pathHighlight(mapped: MappedGraph, path: string[]) {
 
 export function LineageGraphView() {
   const lineage = useAppStore((s) => s.lineage)
+  const graphReport = useAppStore((s) => s.graphReport)
   const highlight = useAppStore((s) => s.highlight)
 
-  const mapped = useMemo(() => (lineage != null ? mapLineageModel(lineage) : null), [lineage])
+  const mapped = useMemo(
+    () =>
+      lineage != null
+        ? mapLineageModel(lineage)
+        : graphReport != null
+          ? mapGraphReport(graphReport)
+          : null,
+    [lineage, graphReport],
+  )
 
   const { nodes, edges } = useMemo(() => {
     if (mapped == null) return { nodes: [] as OzmozNodeType[], edges: [] as Edge[] }
@@ -94,7 +103,7 @@ export function LineageGraphView() {
     return { nodes, edges }
   }, [mapped, highlight])
 
-  if (lineage == null || mapped == null) {
+  if (mapped == null) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-neutral-500">
         运行「解析」后在此展示列级血缘图
