@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml serve`（Ktor `/api` + `web/` 静态托管）可运行；Web UI 已交付三栏起步版，AST 并排 diff 与 Tauri 壳未做）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版 + MCP server 已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml serve`（Ktor `/api` + `web/` 静态托管）/ `ozml mcp`（stdio 工具面）可运行；Web UI 已交付三栏起步版，AST 并排 diff 与 Tauri 壳未做）。
 
 ## 它要解决什么
 
@@ -34,6 +34,7 @@ ozml convert --engine jooq --from mysql --to trino -f q.sql  # jOOQ 第二实现
 ozml validate --schema ddl.sql -f q.sql               # schema 语义校验：未知表 / 未知列 / 歧义给权威诊断（当前可用）
 ozml format   -f q.sql                                 # SQL 排版：子句换行 + 规范化（不换方言；注释丢失如实告警）（当前可用）
 ozml format   -f q.sql --single-line                   # 规范化单行（关键字大写、空白归一）
+ozml mcp                                               # MCP server（stdio）：把能力作为工具暴露给 AI 助手
 ```
 
 `ozml` = **ozmoz** + **lineage**。
@@ -87,6 +88,16 @@ curl -s localhost:8765/api/validate -H 'Content-Type: application/json' \
 `POST /api/validate` 结合 schema 做语义校验（Calcite `SqlValidator`）：合法 SQL 回空 `diagnostics`，未知表 / 未知列 / 列歧义 / 函数参数个数不符等给 `calcite.validate_error`（含位置）；**形状恒定**——校验「没跑成」（未给 schema / SQL 为空 / 方言未注册）仍 200，落一条 `validate.skipped`。默认引擎 `calcite`（唯一申报校验能力的引擎）；`engine` 指向未申报该能力的引擎 → 400 `unsupported_capability`。请求体 `{"sql": "...", "schema": "CREATE TABLE ..."}`。
 
 `POST /api/format` 排版 SQL（与 `ozml format --json` 同形 `{engine, dialect, sql, diagnostics}`）：缺省多行子句换行，`multiline: false` 产规范化单行；**形状恒定**——语法错误 / 空输入仍 200、`sql` 缺省、落一条 `format.skipped` ERROR；源文本含注释时落一条 `jsqlparser.comment_dropped` WARNING（渲染器不保留注释）。默认引擎 `jsqlparser`（唯一申报 `PRETTY_PRINT` 的引擎）；calcite / jooq 不支持排版 → 400 `unsupported_capability`。请求体 `{"sql": "..."}`。
+
+### MCP server（`ozml mcp`）
+
+`ozml mcp` 以 **stdio** 起 MCP（Model Context Protocol）服务端，把上面能力作为**工具**暴露给 AI 助手（Claude Desktop / Cursor 等），在宿主配置里指向 `ozml mcp` 即可：
+
+```json
+{ "mcpServers": { "ozml": { "command": "ozml", "args": ["mcp"] } } }
+```
+
+工具面（响应与对应 CLI / `/api` JSON **同形**）：`ozml_engines`（能力路由表）、`ozml_parse`、`ozml_lineage`（`aggregate: true` 多语句合并图）、`ozml_impact`、`ozml_path`、`ozml_validate`、`ozml_format`、`ozml_convert`。错误语义与 HTTP 镜像：语法错误 / unknown / 不可达是**数据**（`isError=false`）；缺参数 / 未知引擎 / 坏 DDL / 目标列不在图里才是 `isError=true`（内容为 `{error, reason}`）。stdout 是协议信道——运行期间勿把它重定向给别的消费方；v1 只做 stdio + sql 现建现查，图库与导出器有意不进工具面。
 
 ### Web UI（`web/`，M4 起步）
 
