@@ -1,0 +1,1 @@
+{"engine":"calcite","diagnostics":[{"severity":"ERROR","code":"calcite.validate_error","message":"From line 1, column 8 to line 1, column 10: Column 'foo' not found in any table","span":{"start":{"offset":7,"line":1,"column":8},"end":{"offset":10,"line":1,"column":11}}}]}

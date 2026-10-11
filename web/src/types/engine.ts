@@ -38,6 +38,19 @@ export const formatReportSchema = z.object({
 })
 export type FormatReport = z.infer<typeof formatReportSchema>
 
+/**
+ * `POST /api/validate` 响应（ValidateReportDto：{engine, dialect?, diagnostics}），
+ * 与 `ozml validate` 的 stdout JSON 同形。**形状恒定**：校验「没跑成」（未给 schema、
+ * SQL 为空、方言未注册）仍 200、落一条 `validate.skipped` ERROR——validate 的产物
+ * **本身就是诊断流**（ADR-0013），「没跑成」也是一种诊断。
+ */
+export const validateReportSchema = z.object({
+  engine: z.string(),
+  dialect: z.string().optional(),
+  diagnostics: z.array(diagnosticSchema),
+})
+export type ValidateReport = z.infer<typeof validateReportSchema>
+
 /** 4xx / 422 统一错误体（ErrorResponse）。 */
 export const errorResponseSchema = z.object({
   error: z.string(),

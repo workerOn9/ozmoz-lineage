@@ -13,6 +13,7 @@ import {
   scopeKindSchema,
   severitySchema,
   transformKindSchema,
+  validateReportSchema,
 } from '../src/types'
 
 // 契约夹具校验（web 设计稿 §5.2）：类型漂移的第一道闸。
@@ -144,5 +145,28 @@ describe('契约夹具（真实后端输出）', () => {
     expect(report.diagnostics[0].severity).toBe('ERROR')
     expect(report.diagnostics[0].code).toBe('format.skipped')
     expect(report.engine).toBe('jsqlparser')
+  })
+
+  it('validate-report.json 符合 ValidateReport（合法：空诊断）', () => {
+    const report = validateReportSchema.parse(fixture('validate-report.json'))
+    expect(report.engine).toBe('calcite')
+    expect(report.diagnostics).toHaveLength(0)
+  })
+
+  it('validate-report-error.json：语义错误是 calcite.validate_error（ERROR，带位置）', () => {
+    const report = validateReportSchema.parse(fixture('validate-report-error.json'))
+    expect(report.engine).toBe('calcite')
+    expect(report.diagnostics.length).toBeGreaterThan(0)
+    expect(report.diagnostics[0].code).toBe('calcite.validate_error')
+    expect(report.diagnostics[0].severity).toBe('ERROR')
+    expect(report.diagnostics[0].span).toBeDefined()
+  })
+
+  it('validate-report-skipped.json：形状恒定——没跑成时落 validate.skipped ERROR', () => {
+    const report = validateReportSchema.parse(fixture('validate-report-skipped.json'))
+    expect(report.engine).toBe('calcite')
+    expect(report.diagnostics).toHaveLength(1)
+    expect(report.diagnostics[0].severity).toBe('ERROR')
+    expect(report.diagnostics[0].code).toBe('validate.skipped')
   })
 })

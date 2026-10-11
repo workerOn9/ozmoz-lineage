@@ -18,6 +18,10 @@ export function Toolbar() {
   const setAggregate = useAppStore((s) => s.setAggregate)
   const formatSql = useAppStore((s) => s.format)
   const formatting = useAppStore((s) => s.formatting)
+  const validate = useAppStore((s) => s.validate)
+  const validating = useAppStore((s) => s.validating)
+  const schemaOpen = useAppStore((s) => s.schemaOpen)
+  const setSchemaOpen = useAppStore((s) => s.setSchemaOpen)
 
   const backendBadge =
     backend === 'ok' ? (
@@ -99,6 +103,25 @@ export function Toolbar() {
         onClick={() => void run()}
       >
         {running ? '解析中…' : '解析'}
+      </button>
+      <button
+        className="rounded border border-neutral-700 px-2 py-1 text-[12px] text-neutral-300 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
+        title="结合 schema 做语义校验（calcite SqlValidator）：未知表 / 未知列 / 列歧义等 → 诊断面板「校验」页"
+        disabled={backend !== 'ok' || sql.trim() === '' || validating}
+        onClick={() => void validate()}
+      >
+        {validating ? '校验中…' : '校验'}
+      </button>
+      <button
+        className={`rounded border px-2 py-1 text-[12px] ${
+          schemaOpen
+            ? 'border-sky-700 bg-sky-950 text-sky-300'
+            : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+        }`}
+        title="展开 / 收起 schema（CREATE TABLE 文本）输入面板"
+        onClick={() => setSchemaOpen(!schemaOpen)}
+      >
+        Schema
       </button>
       <button
         className="rounded border border-neutral-700 px-2 py-1 text-[12px] text-neutral-300 hover:bg-neutral-800"
