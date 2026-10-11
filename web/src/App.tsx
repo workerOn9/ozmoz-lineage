@@ -53,6 +53,8 @@ export default function App() {
   const graphReport = useAppStore((s) => s.graphReport)
   const backend = useAppStore((s) => s.backend)
   const view = useAppStore((s) => s.view)
+  const formatNotice = useAppStore((s) => s.formatNotice)
+  const clearFormatNotice = useAppStore((s) => s.clearFormatNotice)
 
   // 左 / 中栏宽度（百分比），右栏吃剩余。
   const [widths, setWidths] = useState({ left: 30, mid: 26 })
@@ -68,6 +70,17 @@ export default function App() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <Toolbar />
+      {formatNotice != null && (
+        <div className="flex items-center gap-2 border-b border-amber-900 bg-amber-950/50 px-3 py-1 text-[12px] text-amber-200">
+          <span className="truncate">SQL 排版：{formatNotice}</span>
+          <button
+            className="ml-auto shrink-0 text-amber-400 hover:text-amber-200"
+            onClick={clearFormatNotice}
+          >
+            知道了
+          </button>
+        </div>
+      )}
       {backend === 'down' && (
         <div className="border-b border-rose-900 bg-rose-950/60 px-3 py-1 text-[12px] text-rose-200">
           未连接本地后端——解析不可用。请启动 <code className="font-mono">ozml serve</code>

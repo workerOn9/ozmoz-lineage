@@ -21,6 +21,8 @@ export function SqlEditor({ value, onChange }: SqlEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  // 程序化 setValue 期间为 true：屏蔽 onChange，区分「外部写回」与「用户输入」。
+  const suppressRef = useRef(false)
 
   useEffect(() => {
     const container = containerRef.current
@@ -44,7 +46,10 @@ export function SqlEditor({ value, onChange }: SqlEditorProps) {
       editContext: false,
     })
     editorHolder.current = editor
-    const sub = editor.onDidChangeModelContent(() => onChangeRef.current(editor.getValue()))
+    const sub = editor.onDidChangeModelContent(() => {
+      if (suppressRef.current) return
+      onChangeRef.current(editor.getValue())
+    })
     return () => {
       sub.dispose()
       if (editorHolder.current === editor) editorHolder.current = null
@@ -54,11 +59,14 @@ export function SqlEditor({ value, onChange }: SqlEditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 外部赋值（示例 SQL / 其他面板写回）时同步进编辑器，不打断正在输入的用户。
+  // 外部赋值（示例 SQL / 排版回写）时同步进编辑器；外部写入是「非用户输入」，
+  // 期间屏蔽 onChange，避免绕一圈把 store 里刚设好的形态（如排版提示）又冲掉。
   useEffect(() => {
     const editor = editorHolder.current
     if (editor != null && editor.getValue() !== value) {
+      suppressRef.current = true
       editor.setValue(value)
+      suppressRef.current = false
     }
   }, [value])
 

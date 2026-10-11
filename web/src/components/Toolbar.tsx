@@ -16,6 +16,8 @@ export function Toolbar() {
   const setView = useAppStore((s) => s.setView)
   const aggregate = useAppStore((s) => s.aggregate)
   const setAggregate = useAppStore((s) => s.setAggregate)
+  const formatSql = useAppStore((s) => s.format)
+  const formatting = useAppStore((s) => s.formatting)
 
   const backendBadge =
     backend === 'ok' ? (
@@ -103,6 +105,14 @@ export function Toolbar() {
         onClick={loadSample}
       >
         示例 SQL
+      </button>
+      <button
+        className="rounded border border-neutral-700 px-2 py-1 text-[12px] text-neutral-300 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
+        title="对当前 SQL 打 /api/format 排版（子句换行 + 规范化），回写编辑器；注释丢失时有损提示"
+        disabled={backend !== 'ok' || sql.trim() === '' || formatting}
+        onClick={() => void formatSql()}
+      >
+        {formatting ? '排版中…' : '格式化'}
       </button>
     </div>
   )
