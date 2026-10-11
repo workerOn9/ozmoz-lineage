@@ -6,6 +6,7 @@ import {
   astNodeSchema,
   edgeKindSchema,
   engineReportSchema,
+  formatReportSchema,
   graphReportSchema,
   lineageModelSchema,
   parseReportSchema,
@@ -84,8 +85,7 @@ describe('契约夹具（真实后端输出）', () => {
     expect(report.edges.some((e) => e.kind === 'SOURCE')).toBe(true)
   })
 
-  it('lineage-model-unknowns.json：unknown 的形状是 {reason, span?}（无多态判别字段）', () => {
-    const model = lineageModelSchema.parse(fixture('lineage-model-unknowns.json'))
+  it('lineage-model-unknowns.json：unknown 的形状是 {reason, span?}（无多态判别字段）', () => {    const model = lineageModelSchema.parse(fixture('lineage-model-unknowns.json'))
     expect(model.unknowns.length).toBeGreaterThan(0)
     for (const u of model.unknowns) {
       expect(Object.keys(u).sort()).toEqual(['reason', 'span'].sort())
@@ -119,5 +119,30 @@ describe('契约夹具（真实后端输出）', () => {
   it('astNodeSchema 递归自洽且宽容缺省 children', () => {
     const node = astNodeSchema.parse({ type: 'select', text: 'SELECT 1' })
     expect(node.children).toEqual([])
+  })
+
+  it('format-report.json 符合 FormatReport（排版成功：有 sql、无诊断）', () => {
+    const report = formatReportSchema.parse(fixture('format-report.json'))
+    expect(report.engine).toBe('jsqlparser')
+    expect(report.sql).toBeDefined()
+    expect(report.sql).toContain('\n') // 缺省多行排版
+    expect(report.diagnostics).toHaveLength(0)
+  })
+
+  it('format-report-comment.json：注释丢失是有损 WARNING（sql 仍在、可回写）', () => {
+    const report = formatReportSchema.parse(fixture('format-report-comment.json'))
+    expect(report.sql).toBeDefined()
+    expect(report.diagnostics).toHaveLength(1)
+    expect(report.diagnostics[0].severity).toBe('WARNING')
+    expect(report.diagnostics[0].code).toBe('jsqlparser.comment_dropped')
+  })
+
+  it('format-report-skipped.json：形状恒定——没跑成时 sql 缺省 + format.skipped ERROR', () => {
+    const report = formatReportSchema.parse(fixture('format-report-skipped.json'))
+    expect(report.sql).toBeUndefined()
+    expect(report.diagnostics).toHaveLength(1)
+    expect(report.diagnostics[0].severity).toBe('ERROR')
+    expect(report.diagnostics[0].code).toBe('format.skipped')
+    expect(report.engine).toBe('jsqlparser')
   })
 })

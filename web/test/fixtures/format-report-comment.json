@@ -1,0 +1,1 @@
+{"engine":"jsqlparser","sql":"SELECT a\nFROM t","diagnostics":[{"severity":"WARNING","code":"jsqlparser.comment_dropped","message":"重排不保留注释（JSqlParser 渲染器丢弃注释）","span":{"start":{"offset":9,"line":1,"column":10},"end":{"offset":22,"line":1,"column":23}}}]}

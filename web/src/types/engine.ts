@@ -25,6 +25,19 @@ export const parseReportSchema = z.object({
 })
 export type ParseReport = z.infer<typeof parseReportSchema>
 
+/**
+ * `POST /api/format` 响应（FormatReportDto：{engine, dialect, sql, diagnostics}），
+ * 与 `ozml format --json` 同形。**形状恒定**：排版「没跑成」时 `sql` 缺省、
+ * `diagnostics` 含 `format.skipped` ERROR——「没跑成」也是一种诊断（ADR-0014）。
+ */
+export const formatReportSchema = z.object({
+  engine: z.string(),
+  dialect: z.string().optional(),
+  sql: z.string().optional(),
+  diagnostics: z.array(diagnosticSchema),
+})
+export type FormatReport = z.infer<typeof formatReportSchema>
+
 /** 4xx / 422 统一错误体（ErrorResponse）。 */
 export const errorResponseSchema = z.object({
   error: z.string(),

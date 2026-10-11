@@ -51,6 +51,13 @@ interface AppState {
   diffResult: AstDiff | null
   diffError: string | null
   diffRunning: boolean
+  /** `/api/format` 排版中（工具栏按钮的 disabled 依据）。 */
+  formatting: boolean
+  /**
+   * 排版结果提示（非 null 时工具栏下沿展示）：有损（注释丢失 WARNING）或
+   * 没跑成（format.skipped ERROR，`sql` 不回写）——文案已人读化。
+   */
+  formatNotice: string | null
 
   setSql: (sql: string) => void
   setEngineId: (id: string | null) => void
@@ -59,6 +66,9 @@ interface AppState {
   init: () => Promise<void>
   run: () => Promise<void>
   loadSample: () => void
+  /** 对当前 sql 打 `/api/format` 排版，成功则回写编辑器；有损 / 没跑成给提示。 */
+  format: () => Promise<void>
+  clearFormatNotice: () => void
   setGraphMode: (mode: GraphMode) => void
   setPathFrom: (id: string | null) => void
   selectNode: (id: string | null) => void
@@ -103,8 +113,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   diffResult: null,
   diffError: null,
   diffRunning: false,
+  formatting: false,
+  formatNotice: null,
 
-  setSql: (sql) => set({ sql }),
+  setSql: (sql) => set({ sql, formatNotice: null }),
   setEngineId: (engineId) => set({ engineId }),
   setDialect: (dialect) => set({ dialect }),
   setAggregate: (aggregate) => set({ aggregate }),
@@ -186,6 +198,38 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadSample: () => set({ sql: SAMPLE_SQL }),
+
+  clearFormatNotice: () => set({ formatNotice: null }),
+
+  format: async () => {
+    const { sql, backend } = get()
+    if (backend !== 'ok' || sql.trim() === '') return
+    set({ formatting: true, formatNotice: null })
+    try {
+      // 刻意不传 engine：排版是「规范化渲染」而非方言/引擎选择，由后端取默认
+      // jsqlparser（唯一申报 PRETTY_PRINT 的引擎）；这正是 /api/format 的缺省。
+      const report = await endpoints.format({ sql })
+      if (report.sql == null) {
+        // 形状恒定：没跑成时 sql 缺省，诊断里是 format.skipped ERROR（输入不构成一次排版）。
+        const reason = report.diagnostics[0]?.message ?? '排版未跑成'
+        set({ formatNotice: `排版未跑成：${reason}` })
+      } else {
+        // 有损如实报：注释丢失时回 jsqlparser.comment_dropped（WARNING）——文本已回写，
+        // 但要提示用户「注释没保留」，避免静默改稿。
+        const lossy = report.diagnostics.filter((d) => d.severity !== 'INFO')
+        set({
+          sql: report.sql,
+          formatNotice:
+            lossy.length > 0 ? `已排版（有损）：${lossy.map((d) => d.message).join('；')}` : null,
+        })
+      }
+    } catch (e) {
+      const reason = e instanceof ApiError ? (e.body?.reason ?? e.message) : String(e)
+      set({ formatNotice: `排版失败：${reason}` })
+    } finally {
+      set({ formatting: false })
+    }
+  },
   setGraphMode: (graphMode) => set({ graphMode, highlight: null, pathFromId: null }),
   setPathFrom: (pathFromId) => set({ pathFromId }),
   selectNode: (selectedNodeId) => set({ selectedNodeId, selectedEdgeId: null }),
