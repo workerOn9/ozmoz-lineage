@@ -1,6 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.server
 
 import io.github.workeron9.ozmoz.lineage.engine.Feature
+import io.github.workeron9.ozmoz.lineage.engine.calcite.CalciteEngine
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
@@ -208,10 +209,59 @@ public data class PathReportDto(
     )
 }
 
+/**
+ * `POST /api/validate` 请求（结合 schema 做语义校验，ADR-0013 的 HTTP 出口）。
+ *
+ * [schema] 与 `/api/lineage` 同口径：给出时是**内联 DDL 文本**（CREATE TABLE），
+ * 解析失败 → 400；未给出时**从 [sql] 文本顺手收集** `CREATE TABLE`
+ * （[io.github.workeron9.ozmoz.lineage.schema.DdlFileSchemaProvider.parseTolerant]）。
+ * 两条路都收不到 schema 时，校验**没跑成**——仍 200，[ValidateReportDto.diagnostics]
+ * 里落一条 `validate.skipped`（Never-wrong：没有校验目标就如实说，不猜）。
+ */
+@Serializable
+public data class ValidateQuery(
+    val sql: String,
+    /** 引擎 id（默认 `calcite`——唯一申报 `VALIDATE_SCHEMA` 的引擎）；未注册 → 400，不支持校验 → 400。 */
+    val engine: String? = null,
+    /** 方言名（决定解析器的 quoting 配置）。 */
+    val dialect: String? = null,
+    /** 内联 DDL 文本（CREATE TABLE）；给出时**优先**（权威元数据，解析失败 → 400）。 */
+    val schema: String? = null,
+)
+
+/**
+ * `POST /api/validate` 响应——与 `ozml validate` 的 stdout JSON **同形**
+ * （{engine, dialect, diagnostics}），HTTP 层不发明第二个形状。
+ *
+ * **形状恒定**：不论校验「跑成」（[io.github.workeron9.ozmoz.lineage.ir.Resolved.Known]，
+ * diagnostics 可空可含 ERROR）还是「没跑成」（`Unknown`），响应都是本形状——
+ * 后者落一条 [CODE_VALIDATE_SKIPPED] ERROR 诊断（与 CLI 的 stderr 口径一字不差）。
+ * 这与 `/api/lineage` 的 `{unknown: {...}}` 取舍不同，是有意的：validate 的产物
+ * **本身就是诊断流**（ADR-0013），「没跑成」也是一种诊断。
+ */
+@Serializable
+public data class ValidateReportDto(
+    val engine: String,
+    val dialect: String? = null,
+    val diagnostics: List<Diagnostic> = emptyList(),
+) {
+    public companion object {
+        /** 默认校验引擎：calcite——唯一申报 `VALIDATE_SCHEMA` 的引擎（ADR-0013）。 */
+        public const val DEFAULT_ENGINE: String = CalciteEngine.ID
+
+        /**
+         * 诊断码：校验**没跑成**时统一用它（引擎未给 schema / SQL 为空 / 方言未注册）。
+         * 与 CLI `ValidateCommand.CODE_VALIDATE_SKIPPED` **同一字符串契约**——
+         * `cli` 与 `server` 是两个入口层（不可互相依赖），此处按既有惯例镜像常量。
+         */
+        public const val CODE_VALIDATE_SKIPPED: String = "validate.skipped"
+    }
+}
+
 /** 4xx / 422 的统一错误体。 */
 @Serializable
 public data class ErrorResponse(
-    /** 机器可判的短码：`invalid_request` / `unknown_engine` / `unknown_format` / `invalid_schema` / `invalid_direction` / `invalid_depth` / `no_modelable_statement` / `multi_statement_input` / `aggregate_with_format` / `column_not_found`。 */
+    /** 机器可判的短码：`invalid_request` / `unknown_engine` / `unknown_format` / `unsupported_capability` / `invalid_schema` / `invalid_direction` / `invalid_depth` / `no_modelable_statement` / `multi_statement_input` / `aggregate_with_format` / `column_not_found`。 */
     val error: String,
     /** 人读原因。 */
     val reason: String? = null,

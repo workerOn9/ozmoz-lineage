@@ -5,8 +5,10 @@ import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.format.LineageExporters
 import io.github.workeron9.ozmoz.lineage.graph.Direction
 import io.github.workeron9.ozmoz.lineage.graph.LineageGraph
+import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
+import io.github.workeron9.ozmoz.lineage.ir.Severity
 import io.github.workeron9.ozmoz.lineage.schema.SchemaProvider
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -136,6 +138,39 @@ public fun Application.serverModule(webRoot: java.nio.file.Path? = null) {
                     )
                 }
             }
+        }
+
+        post("/api/validate") {
+            val query = call.receiveQuery<ValidateQuery>() ?: return@post call.badRequest("invalid_request", bodyShape("sql"))
+            val engine = ServerPipeline.engineById(query.engine ?: ValidateReportDto.DEFAULT_ENGINE)
+                ?: return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
+            // 能力表路由：引擎没申报 VALIDATE_SCHEMA 直接给可解释的 400（与 CLI 的
+            // UsageError 同惯例，不靠异常碰运气）。reason 带出引擎自陈的不支持原因。
+            engine.capabilities.reason(Feature.VALIDATE_SCHEMA)?.let { reason ->
+                return@post call.badRequest("unsupported_capability", "引擎 ${engine.id} 不支持 schema 校验：$reason")
+            }
+            val schema = query.schema?.let {
+                try {
+                    ServerPipeline.schemaFromInlineDdl(it)
+                } catch (e: Exception) {
+                    return@post call.badRequest("invalid_schema", e.message ?: e.toString())
+                }
+            }
+            // 形状恒定：跑成（Known）与没跑成（Unknown）都回 {engine, dialect, diagnostics}；
+            // 后者落一条 validate.skipped ERROR（与 CLI 的 stderr 口径一致，Never-wrong）。
+            val diagnostics = when (val result = ServerPipeline.validate(query.sql, engine, query.dialect, schema)) {
+                is Resolved.Known -> result.value
+                is Resolved.Unknown -> listOf(
+                    Diagnostic(
+                        severity = Severity.ERROR,
+                        code = ValidateReportDto.CODE_VALIDATE_SKIPPED,
+                        message = result.reason,
+                        span = result.span,
+                        engineId = engine.id,
+                    ),
+                )
+            }
+            call.respond(ValidateReportDto(engine = engine.id, dialect = query.dialect, diagnostics = diagnostics))
         }
 
         post("/api/impact") {

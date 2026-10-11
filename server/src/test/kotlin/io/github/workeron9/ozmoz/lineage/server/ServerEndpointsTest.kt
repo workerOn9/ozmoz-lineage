@@ -455,4 +455,144 @@ class ServerEndpointsTest {
         assertEquals(400, status)
         assertEquals("unknown_engine", parse(text).getValue("error").jsonPrimitive.content)
     }
+
+    // ————— validate（结合 schema 的语义校验，ADR-0013 的 HTTP 出口） —————
+
+    @Test
+    fun `validate 合法 SQL 通过 返回空诊断`() {
+        val (status, text) = request(
+            "/api/validate",
+            """{"sql": "SELECT id FROM orders WHERE amount > 1", "schema": "CREATE TABLE orders (id INT, amount DECIMAL(10,2))"}""",
+        )
+
+        assertEquals(200, status)
+        val body = parse(text)
+        assertEquals("calcite", body.getValue("engine").jsonPrimitive.content)
+        assertEquals(0, body.getValue("diagnostics").jsonArray.size)
+    }
+
+    @Test
+    fun `validate 未知表给 ERROR 诊断`() {
+        val (status, text) = request(
+            "/api/validate",
+            """{"sql": "SELECT * FROM nope", "schema": "CREATE TABLE orders (id INT)"}""",
+        )
+
+        assertEquals(200, status)
+        val diagnostics = parse(text).getValue("diagnostics").jsonArray
+        assertTrue(diagnostics.size > 0)
+        val d = diagnostics[0].jsonObject
+        assertEquals("ERROR", d.getValue("severity").jsonPrimitive.content)
+        assertEquals("calcite.validate_error", d.getValue("code").jsonPrimitive.content)
+        assertTrue(d.getValue("message").jsonPrimitive.content.lowercase().contains("nope"))
+    }
+
+    @Test
+    fun `validate 未知列给 ERROR 诊断`() {
+        val (status, text) = request(
+            "/api/validate",
+            """{"sql": "SELECT foo FROM orders", "schema": "CREATE TABLE orders (id INT)"}""",
+        )
+
+        assertEquals(200, status)
+        val diagnostics = parse(text).getValue("diagnostics").jsonArray
+        assertTrue(diagnostics.size > 0)
+        assertEquals("calcite.validate_error", diagnostics[0].jsonObject.getValue("code").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `validate 无 schema 参数时从 sql 自动收集 DDL`() {
+        val (status, text) = request(
+            "/api/validate",
+            """{"sql": "CREATE TABLE orders (id INT); SELECT id FROM orders"}""",
+        )
+
+        assertEquals(200, status)
+        assertEquals(0, parse(text).getValue("diagnostics").jsonArray.size)
+    }
+
+    @Test
+    fun `validate 内联 DDL 解析失败返回 400`() {
+        val (status, text) = request(
+            "/api/validate",
+            """{"sql": "SELECT id FROM orders", "schema": "THIS IS NOT SQL"}""",
+        )
+
+        assertEquals(400, status)
+        assertEquals("invalid_schema", parse(text).getValue("error").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `validate 无任何 schema 时校验没跑成 仍 200 且落 skipped 诊断`() {
+        // 请求合法但没有校验目标：错误是数据（形状恒定），落 validate.skipped（Never-wrong）。
+        val (status, text) = request("/api/validate", """{"sql": "SELECT id FROM orders"}""")
+
+        assertEquals(200, status)
+        val body = parse(text)
+        assertEquals("calcite", body.getValue("engine").jsonPrimitive.content)
+        val diagnostics = body.getValue("diagnostics").jsonArray
+        assertEquals(1, diagnostics.size)
+        val d = diagnostics[0].jsonObject
+        assertEquals("validate.skipped", d.getValue("code").jsonPrimitive.content)
+        assertEquals("ERROR", d.getValue("severity").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `validate SQL 为空 校验没跑成 落 skipped 诊断`() {
+        val (status, text) = request(
+            "/api/validate",
+            """{"sql": "   ", "schema": "CREATE TABLE orders (id INT)"}""",
+        )
+
+        assertEquals(200, status)
+        val diagnostics = parse(text).getValue("diagnostics").jsonArray
+        assertEquals(1, diagnostics.size)
+        assertEquals("validate.skipped", diagnostics[0].jsonObject.getValue("code").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `validate 引擎不支持校验能力返回 400`() {
+        // jsqlparser 未申报 VALIDATE_SCHEMA：能力表路由给可解释的 400，不靠异常。
+        val (status, text) = request(
+            "/api/validate",
+            """{"sql": "SELECT id FROM orders", "engine": "jsqlparser", "schema": "CREATE TABLE orders (id INT)"}""",
+        )
+
+        assertEquals(400, status)
+        val body = parse(text)
+        assertEquals("unsupported_capability", body.getValue("error").jsonPrimitive.content)
+        assertTrue(body.getValue("reason").jsonPrimitive.content.contains("jsqlparser"))
+    }
+
+    @Test
+    fun `validate 未知引擎返回 400`() {
+        val (status, text) = request(
+            "/api/validate",
+            """{"sql": "SELECT id FROM orders", "engine": "mine", "schema": "CREATE TABLE orders (id INT)"}""",
+        )
+
+        assertEquals(400, status)
+        assertEquals("unknown_engine", parse(text).getValue("error").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `validate 缺 sql 返回 400`() {
+        val (status, text) = request("/api/validate", """{"schema": "CREATE TABLE orders (id INT)"}""")
+
+        assertEquals(400, status)
+        assertEquals("invalid_request", parse(text).getValue("error").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `validate 解析失败给可背书的 ERROR 诊断（不是 4xx）`() {
+        val (status, text) = request(
+            "/api/validate",
+            """{"sql": "SELECT FROM FROM", "schema": "CREATE TABLE orders (id INT)"}""",
+        )
+
+        assertEquals(200, status)
+        val diagnostics = parse(text).getValue("diagnostics").jsonArray
+        assertTrue(diagnostics.size > 0)
+        assertEquals("ERROR", diagnostics[0].jsonObject.getValue("severity").jsonPrimitive.content)
+    }
 }

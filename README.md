@@ -26,7 +26,7 @@ ozml impact  --graph ./lineage.db --on db.t.c --depth 3  # 从库查询上溯 / 
 ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查（当前可用）
 ozml matrix   --corpus ./conformance/corpus --out ./docs/compat-matrix.json
 ozml matrix   --convert --corpus ./conformance/corpus  # 方言转换矩阵：20 组方言对 × 渲染引擎（diff 视图数据）
-ozml serve    --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|impact|path（当前可用）
+ozml serve    --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|validate|impact|path（当前可用）
 ozml parse   --engine calcite -f q.sql                # Calcite 按方言配解析器（反引号 / 方括号 / 双引号按方言路由）（当前可用）
 ozml convert --from mysql --to postgresql -f q.sql    # 方言转换：parse→render→re-parse 等价门禁，不等价不输出（当前可用）
 ozml convert --engine jooq --from mysql --to trino -f q.sql  # jOOQ 第二实现（12 个 OSS 关系库方言；当前可用）
@@ -71,9 +71,15 @@ ozml serve --port 8765 &
 curl -s localhost:8765/api/health
 curl -s localhost:8765/api/lineage -H 'Content-Type: application/json' \
     -d '{"sql": "SELECT * FROM t", "schema": "CREATE TABLE t (a INT)"}'
+curl -s localhost:8765/api/validate -H 'Content-Type: application/json' \
+    -d '{"sql": "SELECT a FROM t", "schema": "CREATE TABLE t (a INT)"}'
 ```
 
-端点：`GET /api/health`、`GET /api/engines`（引擎能力路由表）、`POST /api/parse`（归一化树，与 `ozml parse --format json` 同形）、`POST /api/lineage`（`LineageModel`，仅接受一条可建模语句）、`POST /api/impact` / `POST /api/path`（图查询，响应与 `ozml impact --format json` 同形）。**解析失败不是 HTTP 错误**：语法错误以 200 + 结构化 `unknown` 返回（错误是数据）；仅请求本身非法（缺字段、未知引擎、坏 DDL）才 4xx。`schema` 指定时必须为内联 DDL 文本；未指定时自动从 `sql` 文本收集 `CREATE TABLE`（与 CLI 的目录行为一致）。
+端点：`GET /api/health`、`GET /api/engines`（引擎能力路由表）、`POST /api/parse`（归一化树，与 `ozml parse --format json` 同形）、`POST /api/lineage`（`LineageModel`，仅接受一条可建模语句；可选 `format` 走导出器、`aggregate: true` 走合并图，见下）、`POST /api/validate`（结合 schema 的语义校验，与 `ozml validate` 同形）、`POST /api/impact` / `POST /api/path`（图查询，响应与 `ozml impact --format json` 同形）。**解析失败不是 HTTP 错误**：语法错误以 200 + 结构化 `unknown` 返回（错误是数据）；仅请求本身非法（缺字段、未知引擎、坏 DDL、引擎不支持某能力）才 4xx。
+
+`POST /api/lineage` 另有两个可选字段：`format`（导出格式 id，与 CLI `--format` 同名：mermaid / dot / cypher / openlineage / ozmoz-json；缺省或 `"json"` 回 `LineageModel`）与 `aggregate: true`（opt-in 多语句聚合，不论语句数统一回合并图 `{nodes, edges}`，与 CLI `--format graph-json` 同形；与非 json 的 `format` 互斥 → 400）。`schema` 指定时必须为内联 DDL 文本；未指定时自动从 `sql` 文本收集 `CREATE TABLE`（与 CLI 的目录行为一致）。
+
+`POST /api/validate` 结合 schema 做语义校验（Calcite `SqlValidator`）：合法 SQL 回空 `diagnostics`，未知表 / 未知列 / 列歧义 / 函数参数个数不符等给 `calcite.validate_error`（含位置）；**形状恒定**——校验「没跑成」（未给 schema / SQL 为空 / 方言未注册）仍 200，落一条 `validate.skipped`。默认引擎 `calcite`（唯一申报校验能力的引擎）；`engine` 指向未申报该能力的引擎 → 400 `unsupported_capability`。请求体 `{"sql": "...", "schema": "CREATE TABLE ..."}`。
 
 ### Web UI（`web/`，M4 起步）
 

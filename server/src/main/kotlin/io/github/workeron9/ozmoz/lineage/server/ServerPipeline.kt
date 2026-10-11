@@ -2,7 +2,9 @@ package io.github.workeron9.ozmoz.lineage.server
 
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
+import io.github.workeron9.ozmoz.lineage.engine.SchemaLookup
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
+import io.github.workeron9.ozmoz.lineage.engine.ValidateRequest
 import io.github.workeron9.ozmoz.lineage.engine.calcite.CalciteEngine
 import io.github.workeron9.ozmoz.lineage.engine.jooq.JooqEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
@@ -72,4 +74,32 @@ internal object ServerPipeline {
     /** `engine.parse` 的薄代理（`/api/parse` 用，保持语义模型 ⊥ 归一化树的分工）。 */
     public fun parse(sql: String, engine: SqlEngine, dialect: String?): ParseOutcome =
         engine.parse(sql, ParseRequest(dialect = dialect))
+
+    /**
+     * 结合 schema 做语义校验（[Feature.VALIDATE_SCHEMA]，ADR-0013 的 HTTP 出口）。
+     *
+     * schema 来源与 `/api/lineage` 同口径：
+     * - [schema] 显式给出 → **严格** [DdlFileSchemaProvider.parse]（权威元数据，解析失败抛，
+     *   由 HTTP 层转 400 `invalid_schema`）；
+     * - 未给出 → 从 [sql] 文本**顺手收集** `CREATE TABLE`（[DdlFileSchemaProvider.parseTolerant]，
+     *   与 CLI `ozml validate` 的目录行为一致）；收不到则 `schema = null`，
+     *   引擎按 Never-wrong 返回 `Unknown`（校验没跑成）。
+     *
+     * 装配点用 SAM 转换把 [SchemaProvider] 包成 engine-api 的 [SchemaLookup]——同签名，零胶水。
+     */
+    public fun validate(
+        sql: String,
+        engine: SqlEngine,
+        dialect: String?,
+        schema: SchemaProvider?,
+    ): Resolved<List<io.github.workeron9.ozmoz.lineage.ir.Diagnostic>> {
+        val effective = schema ?: DdlFileSchemaProvider.parseTolerant(id = "ddl:auto", sqlTexts = arrayOf(sql))
+        return engine.validate(
+            ValidateRequest(
+                sql = sql,
+                dialect = dialect,
+                schema = effective?.let { provider -> SchemaLookup { ref -> provider.table(ref) } },
+            ),
+        )
+    }
 }
