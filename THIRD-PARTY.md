@@ -36,6 +36,11 @@
 
 > Calcite 系运行时依赖的许可证均在上游 POM 核对（2026-10-10）：calcite-core / calcite-linq4j / avatica / guava 及其注解类传递依赖全为 Apache-2.0（checker-qual 为 MIT）；`calcite-core` 的 POM 同时声明 slf4j-api（MIT，见上表 SLF4J 行，版本 2.0.20 由 slf4j-nop 对齐）。
 | [SLF4J](https://github.com/qos-ch/slf4j)（slf4j-nop，`server`） | 2.0.20 | MIT | 静默 Netty / Ktor 启动时的「No SLF4J providers were found」告警；本地工具无日志需求，绑空实现是有意取舍（2026-10-10 开发记录踩坑 8） |
+| [MCP Java SDK](https://github.com/modelcontextprotocol/java-sdk)（`io.modelcontextprotocol.sdk:mcp` 聚合 = mcp-core + mcp-json-jackson3，`server`） | 2.0.1 | MIT（mcp / mcp-core / mcp-json-jackson3 上游 POM 均已核对） | `ozml mcp` 的 stdio 服务端（2026-10-11 引入；传输只用 `StdioServerTransportProvider`，servlet / HTTP 传输组件不使用） |
+| [Jackson 3（databind / core / dataformat-yaml，`tools.jackson`）](https://github.com/FasterXML/jackson-core)（MCP SDK 传递） | 3.1.4 | Apache-2.0 | MCP SDK 的 JSON 编解码（协议消息 + 工具 schema 解析） |
+| [Jackson 2（databind / core / dataformat-yaml / annotations，`com.fasterxml.jackson`）](https://github.com/FasterXML/jackson)（json-schema-validator 传递） | 2.18.6 / annotations 2.21 | Apache-2.0 | json-schema-validator 的 JSON 处理（与 Jackson 3 同组不同代，MCP SDK 传递树中两者共存） |
+| [json-schema-validator](https://github.com/networknt/json-schema-validator)（MCP SDK 传递） | 3.0.6 | Apache-2.0 | MCP 工具入参的 JSON Schema 校验（SDK `validateToolInputs` 默认开） |
+| [Project Reactor](https://github.com/reactor/reactor-core)（MCP SDK 传递） | 3.7.0 | Apache-2.0 | MCP SDK 的响应式运行时（其同步 API 包装异步实现） |
 
 ### JSqlParser 许可证说明（重要）
 

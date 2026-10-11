@@ -334,6 +334,32 @@ public data class FormatReportDto(
     }
 }
 
+/**
+ * `ozml mcp` 的 `ozml_convert` 工具响应——与 CLI `ozml convert --format json` 的
+ * ConvertReport **同形**（{engine, fromDialect, toDialect, sql, diagnostics}），
+ * 按「HTTP 层不发明第二个形状」的惯例镜像。
+ *
+ * **形状恒定**：转换「跑成」（门禁通过）与「没跑成」（render-verified 门禁拦截）
+ * 都回本形状——后者 [sql] 为 null，[diagnostics] 含 [CODE_RENDER_UNVERIFIED] ERROR。
+ */
+@Serializable
+public data class ConvertReportDto(
+    val engine: String,
+    val fromDialect: String? = null,
+    val toDialect: String,
+    val sql: String? = null,
+    val diagnostics: List<Diagnostic> = emptyList(),
+) {
+    public companion object {
+        /**
+         * 诊断码：转换被门禁拦截时统一用它。
+         * 与 CLI `ConvertCommand.CODE_RENDER_UNVERIFIED` **同一字符串契约**——
+         * `cli` 与 `server` 是两个入口层（不可互相依赖），此处按既有惯例镜像常量。
+         */
+        public const val CODE_RENDER_UNVERIFIED: String = "convert.render_unverified"
+    }
+}
+
 /** 4xx / 422 的统一错误体。 */
 @Serializable
 public data class ErrorResponse(

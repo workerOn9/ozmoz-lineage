@@ -20,6 +20,9 @@ dependencies {
     implementation(libs.ktor.server.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.serialization.json)
+    // MCP（Model Context Protocol）官方 Java SDK：ozml mcp 的 stdio 服务端
+    // （工具面镜像 /api；MIT，THIRD-PARTY 已登记）。传输层只用 StdioServerTransportProvider。
+    implementation(libs.mcp)
     // SLF4J 无 provider 时 Netty 启动会打 5 行 NOP 告警；本地工具无日志需求，绑空实现静默
     // （2026-10-10 开发记录踩坑 8 的决策：接受「服务器零日志」换取安静，slf4j-nop MIT）。
     runtimeOnly(libs.slf4j.nop)

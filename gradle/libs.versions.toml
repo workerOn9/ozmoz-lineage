@@ -13,6 +13,7 @@ jgrapht = "1.5.3"
 sqlite = "3.53.4.0"
 slf4j = "2.0.20"
 jmh = "1.37"
+mcp = "2.0.1"
 
 [libraries]
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
@@ -33,6 +34,7 @@ jooq = { module = "org.jooq:jooq", version.ref = "jooq" }
 jgrapht-core = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
 slf4j-nop = { module = "org.slf4j:slf4j-nop", version.ref = "slf4j" }
+mcp = { module = "io.modelcontextprotocol.sdk:mcp", version.ref = "mcp" }
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
 
 [plugins]
