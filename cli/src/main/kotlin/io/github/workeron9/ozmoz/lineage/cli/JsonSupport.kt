@@ -43,6 +43,9 @@ internal object JsonSupport {
 
     fun encodeValidateReport(report: ValidateReport): String =
         json.encodeToString(ValidateReport.serializer(), report)
+
+    fun encodeFormatReport(report: FormatReport): String =
+        json.encodeToString(FormatReport.serializer(), report)
 }
 
 /** `ozml parse --format json` 的稳定输出形状。 */

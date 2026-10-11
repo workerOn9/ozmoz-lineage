@@ -1,14 +1,19 @@
 package io.github.workeron9.ozmoz.lineage.engine.jsqlparser
 
 import io.github.workeron9.ozmoz.lineage.engine.Feature
+import io.github.workeron9.ozmoz.lineage.engine.FormatOutcome
+import io.github.workeron9.ozmoz.lineage.engine.FormatRequest
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
+import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.ir.Severity
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class JSqlParserEngineTest {
@@ -247,5 +252,121 @@ class JSqlParserEngineTest {
     fun `ParseRequest 默认值可用`() {
         val outcome = engine.parse("SELECT 1", ParseRequest.DEFAULT)
         assertFalse(outcome.hasErrors)
+    }
+
+    // ——— 格式化（PRETTY_PRINT） ———
+
+    private fun format(sql: String, multiline: Boolean = true) =
+        engine.format(FormatRequest(sql = sql, multiline = multiline))
+
+    @Test
+    fun `format 能力已申报`() {
+        assertTrue(engine.capabilities.supports(Feature.PRETTY_PRINT))
+        // 申报后 reason 为 null（支持的能力不该有「不支持原因」）
+        assertNull(engine.capabilities.reason(Feature.PRETTY_PRINT))
+    }
+
+    @Test
+    fun `format 多行排版按子句换行`() {
+        val result = assertIs<Resolved.Known<FormatOutcome>>(
+            format("select t.a, u.b from t join u on t.id=u.id where t.x=1 group by t.a,u.b having count(*)>2 order by t.a desc limit 10 offset 5"),
+        )
+        val lines = result.value.sql.lines()
+        assertEquals("SELECT t.a, u.b", lines[0])
+        assertTrue(lines.contains("FROM t"))
+        assertTrue(lines.contains("JOIN u ON t.id = u.id"))
+        assertTrue(lines.contains("WHERE t.x = 1"))
+        assertTrue(lines.contains("GROUP BY t.a, u.b"))
+        assertTrue(lines.contains("HAVING count(*) > 2"))
+        assertTrue(lines.contains("ORDER BY t.a DESC"))
+        assertTrue(lines.contains("LIMIT 10"))
+        assertTrue(lines.contains("OFFSET 5"))
+        assertTrue(result.value.diagnostics.isEmpty())
+    }
+
+    @Test
+    fun `format 单行模式产规范化单行`() {
+        val result = assertIs<Resolved.Known<FormatOutcome>>(
+            format("select a,b from t where x=1", multiline = false),
+        )
+        assertEquals("SELECT a, b FROM t WHERE x = 1", result.value.sql)
+        assertFalse(result.value.sql.contains('\n'))
+    }
+
+    @Test
+    fun `format 子查询缩进且函数参数不换行`() {
+        val result = assertIs<Resolved.Known<FormatOutcome>>(
+            format("select x from (select a as x, b from t where a>1) sub where x<10"),
+        )
+        val sql = result.value.sql
+        // 子查询整体缩进一层
+        assertTrue(sql.contains("\n  SELECT a AS x, b\n"), sql)
+        assertTrue(sql.contains("\n  FROM t\n"), sql)
+        // 闭合括号另起一行回到外层缩进
+        assertTrue(sql.contains("\n) sub\n"), sql)
+
+        // 函数参数里的 FROM 不是子句，不换行（关键回归：纯文本切分会误伤）
+        // 注：EXTRACT 的 unit（year）由 JSqlParser 渲染为小写——格式化器忠于引擎渲染，
+        // 不做二次大小写改写（内容单一来源，见 ADR-0014）。
+        val fn = assertIs<Resolved.Known<FormatOutcome>>(format("select extract(year from d) as y from t"))
+        assertEquals("SELECT EXTRACT(year FROM d) AS y\nFROM t", fn.value.sql)
+    }
+
+    @Test
+    fun `format 集合运算与 CTE`() {
+        // 注：集合运算的 `ALL` 由 JSqlParser 渲染为小写 `all`（引擎既有瑕疵）——
+        // 格式化器忠于引擎渲染，不掩盖（内容单一来源，见 ADR-0014）。
+        val union = assertIs<Resolved.Known<FormatOutcome>>(format("select a from t1 union all select b from t2"))
+        assertEquals(
+            "SELECT a\nFROM t1\nUNION all\nSELECT b\nFROM t2",
+            union.value.sql,
+        )
+
+        val cte = assertIs<Resolved.Known<FormatOutcome>>(format("with c as (select a as x from s) select x from c"))
+        assertEquals(
+            "WITH c AS (\n  SELECT a AS x\n  FROM s\n)\nSELECT x\nFROM c",
+            cte.value.sql,
+        )
+    }
+
+    @Test
+    fun `format 字符串里的关键字不换行`() {
+        val result = assertIs<Resolved.Known<FormatOutcome>>(
+            format("select 'from where join' as x from t"),
+        )
+        assertEquals("SELECT 'from where join' AS x\nFROM t", result.value.sql)
+    }
+
+    @Test
+    fun `format 注释丢失落 WARNING 诊断`() {
+        val result = assertIs<Resolved.Known<FormatOutcome>>(
+            format("select a /* keep me */ from t"),
+        )
+        // 注释被渲染器丢弃（有损），如实报 WARNING
+        assertEquals("SELECT a\nFROM t", result.value.sql)
+        val diag = result.value.diagnostics.single()
+        assertEquals(Severity.WARNING, diag.severity)
+        assertEquals(JSqlParserEngine.CODE_COMMENT_DROPPED, diag.code)
+        assertNotNull(diag.span)
+        // span 指向源文本里的注释
+        assertEquals("/* keep me */", "select a /* keep me */ from t".substring(diag.span!!.start.offset, diag.span!!.end.offset))
+    }
+
+    @Test
+    fun `format 无注释时无诊断`() {
+        val result = assertIs<Resolved.Known<FormatOutcome>>(format("select a from t"))
+        assertTrue(result.value.diagnostics.isEmpty())
+    }
+
+    @Test
+    fun `format 语法错误返回 Unknown`() {
+        val result = format("select from where")
+        assertIs<Resolved.Unknown>(result)
+    }
+
+    @Test
+    fun `format 空输入返回 Unknown`() {
+        val result = format("   ")
+        assertIs<Resolved.Unknown>(result)
     }
 }

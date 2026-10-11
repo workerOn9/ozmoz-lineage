@@ -258,6 +258,52 @@ public data class ValidateReportDto(
     }
 }
 
+/**
+ * `POST /api/format` 请求（SQL 排版，ADR-0014 的 HTTP 出口）。
+ *
+ * [schema] **不参与**（排版不换方言、不依赖 schema）；[engine] 缺省 `jsqlparser`。
+ * [multiline] 缺省 true（多行子句换行）；false 产规范化单行。
+ */
+@Serializable
+public data class FormatQuery(
+    val sql: String,
+    /** 引擎 id（默认 `jsqlparser`——唯一申报 `PRETTY_PRINT` 的引擎）；未注册 → 400，不支持排版 → 400。 */
+    val engine: String? = null,
+    /** 方言名（jsqlparser 无方言概念，仅记录）。 */
+    val dialect: String? = null,
+    /** 多行排版（缺省 true）；false 产规范化单行。 */
+    val multiline: Boolean = true,
+)
+
+/**
+ * `POST /api/format` 响应——与 `ozml format --json` **同形**
+ * （{engine, dialect, sql, diagnostics}），HTTP 层不发明第二个形状。
+ *
+ * **形状恒定**：不论排版「跑成」（`Resolved.Known`）还是「没跑成」（`Resolved.Unknown`），
+ * 响应都是本形状——后者 [sql] 为 null，[diagnostics] 含 `format.skipped` ERROR。
+ * 这与 `/api/lineage` 的 `{unknown: {...}}` 取舍不同，是有意的：format 的产物
+ * 是一段 SQL 文本 + 有损告警，「没跑成」也是一种诊断。
+ */
+@Serializable
+public data class FormatReportDto(
+    val engine: String,
+    val dialect: String? = null,
+    val sql: String? = null,
+    val diagnostics: List<Diagnostic> = emptyList(),
+) {
+    public companion object {
+        /** 默认排版引擎：jsqlparser——唯一申报 `PRETTY_PRINT` 的引擎（ADR-0014）。 */
+        public const val DEFAULT_ENGINE: String = "jsqlparser"
+
+        /**
+         * 诊断码：排版**没跑成**时统一用它（引擎未申报能力 / SQL 为空 / 语法错误）。
+         * 与 CLI `FormatCommand.CODE_FORMAT_SKIPPED` **同一字符串契约**——
+         * `cli` 与 `server` 是两个入口层（不可互相依赖），此处按既有惯例镜像常量。
+         */
+        public const val CODE_FORMAT_SKIPPED: String = "format.skipped"
+    }
+}
+
 /** 4xx / 422 的统一错误体。 */
 @Serializable
 public data class ErrorResponse(

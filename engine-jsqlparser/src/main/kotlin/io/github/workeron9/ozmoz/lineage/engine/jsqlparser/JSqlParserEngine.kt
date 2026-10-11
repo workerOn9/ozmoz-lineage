@@ -2,6 +2,8 @@ package io.github.workeron9.ozmoz.lineage.engine.jsqlparser
 
 import io.github.workeron9.ozmoz.lineage.engine.EngineCapabilities
 import io.github.workeron9.ozmoz.lineage.engine.Feature
+import io.github.workeron9.ozmoz.lineage.engine.FormatOutcome
+import io.github.workeron9.ozmoz.lineage.engine.FormatRequest
 import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
@@ -132,6 +134,44 @@ public class JSqlParserEngine : SqlEngine {
         return Resolved.Known(extracted)
     }
 
+    /**
+     * **格式化（排版）**一条 SQL（[Feature.PRETTY_PRINT]）。
+     *
+     * 内容来源是引擎自己的 [StatementDeParser]（规范化：关键字大写、空白归一）——
+     * 本项目**不重写渲染器**，只在规范文本上按子句插换行（[SqlFormatter]），
+     * 因此 `parse → format → re-parse` 语义等价，且一个字符都不丢。
+     *
+     * **有损如实报**（Never-wrong 镜像）：JSqlParser 的词法器把注释当 `SPECIAL_TOKEN`
+     * 跳过（实测 2026-10-11），DeParser 因此**必然丢注释**——检测到源文本含注释时，
+     * 落一条 [CODE_COMMENT_DROPPED] WARNING（带第一条注释的位置），不静默丢。
+     *
+     * 解析失败（语法错误）→ `Resolved.Unknown`（给不出就不给，与 [render] 同口径）。
+     */
+    override fun format(request: FormatRequest): Resolved<FormatOutcome> {
+        if (request.sql.isBlank()) return Resolved.Unknown("SQL 为空，无可排版内容")
+
+        val statement: Statement = try {
+            CCJSqlParserUtil.parse(request.sql)
+        } catch (e: JSQLParserException) {
+            return Resolved.Unknown(parseFailureReason(request.sql, e), parseFailureSpan(request.sql, e))
+        } catch (e: RuntimeException) {
+            return Resolved.Unknown("解析失败: ${firstLine(e.message) ?: e.javaClass.simpleName}")
+        }
+
+        val canonical = SqlFormatter.canonical(statement)
+        val sql = if (request.multiline) SqlFormatter.format(canonical) else canonical
+        val diagnostics = SqlComments.firstCommentSpan(request.sql)?.let { span ->
+            listOf(
+                Diagnostic.warning(
+                    CODE_COMMENT_DROPPED,
+                    "重排不保留注释（JSqlParser 渲染器丢弃注释）",
+                    span,
+                ),
+            )
+        } ?: emptyList()
+        return Resolved.Known(FormatOutcome(sql = sql, diagnostics = diagnostics))
+    }
+
     /** 解析失败的机器可读原因，复用 [parse] 的位置提取逻辑。 */
     private fun parseFailureReason(sql: String, e: JSQLParserException): String {
         val message = e.findParseException()?.let { firstLine(it.message) }
@@ -185,6 +225,9 @@ public class JSqlParserEngine : SqlEngine {
         /** 诊断码：稳定契约，调用方按它分支，不要按 message 文案分支。 */
         public const val CODE_PARSE_ERROR: String = "jsqlparser.parse_error"
         public const val CODE_EMPTY_INPUT: String = "jsqlparser.empty_input"
+
+        /** 诊断码：格式化时源文本含注释——渲染器丢弃注释，如实告警（有损）。 */
+        public const val CODE_COMMENT_DROPPED: String = "jsqlparser.comment_dropped"
 
         private const val MAX_CAUSE_DEPTH = 10
 
