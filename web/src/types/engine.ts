@@ -51,6 +51,24 @@ export const validateReportSchema = z.object({
 })
 export type ValidateReport = z.infer<typeof validateReportSchema>
 
+/**
+ * `POST /api/graphs` 响应（GraphsReportDto，ADR-0015）——白名单根下可浏览的图库清单。
+ * 只在后端以 `ozml serve --graph-root <目录>` 启动时可用；未开启该能力时端点回
+ * 400 `unsupported_capability`（能力表路由，与 /api/validate 同惯例）。
+ */
+export const graphsReportSchema = z.object({
+  graphs: z.array(
+    z.object({
+      /** 库名（相对白名单根）：直接作为 `/api/lineage` 的 `graph` 字段回传。 */
+      name: z.string(),
+      /** 库里可建模语句数（`lineage_model` 行数；只 count 不载图）。 */
+      modelCount: z.number().int(),
+    }),
+  ),
+})
+export type GraphsReport = z.infer<typeof graphsReportSchema>
+export type GraphEntry = GraphsReport['graphs'][number]
+
 /** 4xx / 422 统一错误体（ErrorResponse）。 */
 export const errorResponseSchema = z.object({
   error: z.string(),

@@ -13,6 +13,15 @@ curl -s http://127.0.0.1:8765/api/engines > web/test/fixtures/engines.json
 curl -s -X POST http://127.0.0.1:8765/api/parse -H 'Content-Type: application/json' \
   -d '{"sql": <good SQL>}' > web/test/fixtures/parse-report.json
 # …其余端点同理（lineage 用同样的请求体）
+
+# 图库夹具（ADR-0015）需要白名单根：先落库，再带 --graph-root 启动
+mkdir -p /tmp/ozml-e2e/sql && printf 'SELECT a FROM t_src;\n' > /tmp/ozml-e2e/sql/q1.sql
+cli/build/install/ozml/bin/ozml lineage -f /tmp/ozml-e2e/sql --graph /tmp/ozml-e2e/reports.db
+cli/build/install/ozml/bin/ozml serve --port 8765 --graph-root /tmp/ozml-e2e &
+curl -s -X POST http://127.0.0.1:8765/api/graphs -H 'Content-Type: application/json' -d '{}' \
+  > web/test/fixtures/graphs.json
+curl -s -X POST http://127.0.0.1:8765/api/lineage -H 'Content-Type: application/json' \
+  -d '{"graph":"reports.db"}' > web/test/fixtures/lineage-graph-store.json
 ```
 
 | 文件 | 端点 | 输入 |
@@ -31,6 +40,8 @@ curl -s -X POST http://127.0.0.1:8765/api/parse -H 'Content-Type: application/js
 | `validate-report.json` | `POST /api/validate` | 合法 SQL + 内联 DDL schema（回空 `diagnostics`） |
 | `validate-report-error.json` | `POST /api/validate` | `SELECT foo FROM orders` + 内联 DDL（未知列 → `calcite.validate_error` ERROR，带位置） |
 | `validate-report-skipped.json` | `POST /api/validate` | `SELECT a FROM t`（无 schema、SQL 无 DDL → `validate.skipped` ERROR，形状恒定） |
+| `graphs.json` | `POST /api/graphs` | —（需后端以 `ozml serve --graph-root <目录>` 启动；未开启时端点回 400 `unsupported_capability`，无夹具） |
+| `lineage-graph-store.json` | `POST /api/lineage` `{"graph": "<库名>"}` | 已落库图库的整库合并图（ADR-0015）；抓取前先 `ozml lineage -f <sql目录> --graph <目录>/reports.db` 落库 |
 
 `contract.test.ts` 会对每个夹具做 zod 运行时校验——契约加字段 / 加枚举值 /
 改判别字段时测试会红，提示同步 `src/types/`。

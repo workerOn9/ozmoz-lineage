@@ -57,6 +57,10 @@ export default function App() {
   const formatNotice = useAppStore((s) => s.formatNotice)
   const clearFormatNotice = useAppStore((s) => s.clearFormatNotice)
   const schemaOpen = useAppStore((s) => s.schemaOpen)
+  const graphSource = useAppStore((s) => s.graphSource)
+  const dataSource = useAppStore((s) => s.dataSource)
+  const graphsError = useAppStore((s) => s.graphsError)
+  const graphName = useAppStore((s) => s.graphName)
 
   // 左 / 中栏宽度（百分比），右栏吃剩余。
   const [widths, setWidths] = useState({ left: 30, mid: 26 })
@@ -81,6 +85,11 @@ export default function App() {
           >
             知道了
           </button>
+        </div>
+      )}
+      {dataSource === 'graph' && graphsError != null && (
+        <div className="border-b border-amber-900 bg-amber-950/50 px-3 py-1 text-[12px] text-amber-200">
+          图库不可用：{graphsError}
         </div>
       )}
       {backend === 'down' && (
@@ -120,9 +129,19 @@ export default function App() {
               <div className="min-h-0 flex-1">
                 {graphReport != null ? (
                   <div className="flex h-full items-center justify-center p-3 text-center text-[12px] leading-5 text-neutral-500">
-                    聚合模式：多语句已合并为一张血缘图（右栏），
-                    <br />
-                    无单语句归一化树
+                    {graphSource === 'store' ? (
+                      <>
+                        图库模式：已载入 <span className="font-mono">{graphName}</span> 的整库血缘图（右栏），
+                        <br />
+                        库内只有模型、没有逐语句归一化树
+                      </>
+                    ) : (
+                      <>
+                        聚合模式：多语句已合并为一张血缘图（右栏），
+                        <br />
+                        无单语句归一化树
+                      </>
+                    )}
                   </div>
                 ) : (
                   <AstTreeView root={parseReport?.root ?? null} />

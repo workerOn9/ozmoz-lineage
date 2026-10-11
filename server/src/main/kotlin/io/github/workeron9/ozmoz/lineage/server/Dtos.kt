@@ -63,7 +63,18 @@ public data class ParseReportDto(
 /** `POST /api/lineage` 请求。 */
 @Serializable
 public data class LineageQuery(
-    val sql: String,
+    /**
+     * 现建现查的 SQL；与 [graph] **二选一**（本字段原有契约不变：给 sql 即走老路径）。
+     */
+    val sql: String? = null,
+    /**
+     * **已落库的图库名**（ADR-0015），与 [sql] 二选一：给出时返回**整库合并图**
+     * （[GraphReportDto]，与 `aggregate=true` **同形**）——这是 Web UI「图库浏览」的数据出口。
+     * 只传库名（相对 `--graph-root` 白名单根解析）；未开启该能力 → 400 `unsupported_capability`，
+     * 库名非法 → 400 `invalid_graph_ref`，库里没有 → 422 `graph_not_found`。
+     * 该模式下 [format] / [engine] / [dialect] / [schema] / [aggregate] **均不参与**。
+     */
+    val graph: String? = null,
     val engine: String? = null,
     val dialect: String? = null,
     /** 内联 DDL 文本（CREATE TABLE）；给出时**优先**（权威元数据，解析失败 → 400）。 */
@@ -147,7 +158,19 @@ public data class GraphReportDto(
  */
 @Serializable
 public data class ImpactQuery(
-    val sql: String,
+    /**
+     * 现建现查的 SQL（与 [graph] **二选一**，ADR-0015）。
+     * 缺省 null：图来自 [graph]（已落库的全库血缘图）。
+     */
+    val sql: String? = null,
+    /**
+     * **已落库的图库名**（`ozml lineage --graph` 的产物，ADR-0015）——与 [sql] 二选一。
+     * 只传**库名**（如 `reports.db`），相对 `ozml serve --graph-root` 的白名单根解析；
+     * 绝对路径 / 逃逸 / 非 `.db` → 400 `invalid_graph_ref`，库里没有 → 422 `graph_not_found`。
+     * 该模式下 [engine] / [dialect] / [schema] **被忽略**（库里的模型是落库时的产物）。
+     * 两者都给 / 都不给 → 400 `invalid_request`。未配置 `--graph-root` 时用 [graph] → 400 `unsupported_capability`。
+     */
+    val graph: String? = null,
     val engine: String? = null,
     val dialect: String? = null,
     val schema: String? = null,
@@ -179,7 +202,14 @@ public data class ImpactReportDto(
 /** `POST /api/path` 请求。 */
 @Serializable
 public data class PathQuery(
-    val sql: String,
+    /** 现建现查的 SQL（与 [graph] **二选一**，ADR-0015）；缺省 null 表示图来自 [graph]。 */
+    val sql: String? = null,
+    /**
+     * 已落库的图库名（与 [sql] 二选一，语义同 [ImpactQuery.graph]）：
+     * 只传库名，相对白名单根解析；非法引用 → 400 `invalid_graph_ref`，
+     * 库里没有 → 422 `graph_not_found`；该模式下 [engine] / [dialect] / [schema] 被忽略。
+     */
+    val graph: String? = null,
     val engine: String? = null,
     val dialect: String? = null,
     val schema: String? = null,
@@ -307,10 +337,31 @@ public data class FormatReportDto(
 /** 4xx / 422 的统一错误体。 */
 @Serializable
 public data class ErrorResponse(
-    /** 机器可判的短码：`invalid_request` / `unknown_engine` / `unknown_format` / `unsupported_capability` / `invalid_schema` / `invalid_direction` / `invalid_depth` / `no_modelable_statement` / `multi_statement_input` / `aggregate_with_format` / `column_not_found`。 */
+    /** 机器可判的短码：`invalid_request` / `unknown_engine` / `unknown_format` / `unsupported_capability` / `invalid_schema` / `invalid_direction` / `invalid_depth` / `no_modelable_statement` / `multi_statement_input` / `aggregate_with_format` / `column_not_found` / `invalid_graph_ref` / `graph_not_found`。 */
     val error: String,
     /** 人读原因。 */
     val reason: String? = null,
     /** `multi_statement_input` 时的语句数。 */
     val statementCount: Int? = null,
 )
+
+/**
+ * `POST /api/graphs` 响应（ADR-0015）——白名单根下可浏览的图库清单。
+ *
+ * 只有配置了 `ozml serve --graph-root <dir>` 才有内容；未配置时该端点整体
+ * 返回 400 `unsupported_capability`（能力表路由，与 `/api/validate` 同惯例）。
+ * [GraphEntryDto.modelCount] 走 `SqliteLineageStore.count()`——**只数不载图**，
+ * 避免列个清单就把全库模型反序列化一遍。
+ */
+@Serializable
+public data class GraphsReportDto(
+    val graphs: List<GraphEntryDto> = emptyList(),
+) {
+    @Serializable
+    public data class GraphEntryDto(
+        /** 库名（相对白名单根；直接回填到 `/api/impact` 的 `graph` 字段即可）。 */
+        val name: String,
+        /** 库里可建模语句数（`lineage_model` 行数）。 */
+        val modelCount: Int,
+    )
+}

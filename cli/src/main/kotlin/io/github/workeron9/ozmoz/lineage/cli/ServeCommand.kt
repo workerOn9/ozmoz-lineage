@@ -34,14 +34,22 @@ public class ServeCommand : CliktCommand(name = "serve") {
         help = "静态托管 web/ 构建产物目录（SPA：未知非 /api 路径回落 index.html）",
     )
 
+    private val graphRoot: String? by option(
+        "--graph-root",
+        help = "图库白名单根目录（ADR-0015）：开启 /api/graphs 与 /api/impact、/api/path 的 graph 字段，" +
+            "只允许浏览该目录下的 *.db；**不给则图库能力整体关闭**（公开部署有意不开）",
+    )
+
     override fun help(context: Context): String =
         "启动本地 HTTP 服务（/api/health、/api/parse、/api/lineage、/api/impact、/api/path）。"
 
     override fun run() {
         val root = webRoot?.let { java.nio.file.Path.of(it) }
-        echo("ozml serve  http://$host:$port  （Ctrl+C 停止）")
+        val graphs = graphRoot?.let { java.nio.file.Path.of(it) }
+        echo("ozml serve  http://${host}:${port}  （Ctrl+C 停止）")
+        if (graphs != null) echo("图库浏览已开启：${graphRoot}（/api/graphs）")
         // wait = true：阻塞到进程退出；Ctrl+C 由 JVM/调用方终止（Netty 注册了关闭钩子）。
-        OzmlLineageServer.start(port = port, host = host, webRoot = root, wait = true)
+        OzmlLineageServer.start(port = port, host = host, webRoot = root, graphRoot = graphs, wait = true)
     }
 }
 

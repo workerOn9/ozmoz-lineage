@@ -36,6 +36,11 @@ build:
 # —— 集成 ——
 
 # 构建前端 + 启动 ozml serve 托管 dist（单端口单进程：SPA 与 /api 同端口）
+#
+# --graph-root graphs：开启「本地图库」数据源（ADR-0015）——只允许浏览 graphs/ 下的 *.db。
+# 目录不存在 / 为空时 /api/graphs 回空清单，功能照常可用（只是没有库可选）。
+# 用 ozml lineage -f <sql目录> --graph graphs/<名>.db 落库后即可在 UI 里打开。
+# 公开部署（Dockerfile.vercel）有意**不带**这个参数：不给 = 图库能力整体关闭。
 serve: web-build
     ./gradlew :cli:installDist -q
-    ./cli/build/install/ozml/bin/ozml serve --web-root web/dist
+    ./cli/build/install/ozml/bin/ozml serve --web-root web/dist --graph-root graphs

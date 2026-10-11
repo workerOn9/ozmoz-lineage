@@ -1,7 +1,14 @@
 import { create } from 'zustand'
 import { ApiError } from '../api/client'
 import { endpoints } from '../api/endpoints'
-import type { EngineReport, GraphReport, LineageModel, ParseReport, ValidateReport } from '../types'
+import type {
+  EngineReport,
+  GraphEntry,
+  GraphReport,
+  LineageModel,
+  ParseReport,
+  ValidateReport,
+} from '../types'
 import { SAMPLE_SCHEMA, SAMPLE_SQL } from '../lib/sample'
 import { diffAstTrees } from '../lib/astDiff'
 import type { AstDiff } from '../lib/astDiff'
@@ -38,6 +45,26 @@ interface AppState {
    */
   aggregate: boolean
   graphReport: GraphReport | null
+  /**
+   * 当前 graphReport 的来源：null = 无图；'aggregate' = 本请求 SQL 的聚合合并图；
+   * 'store' = 已落库图库（ADR-0015 图库浏览）。中栏据此给不同说明文案。
+   */
+  graphSource: 'aggregate' | 'store' | null
+  /**
+   * 数据源（ADR-0015）：'sql' = 编辑器里的 SQL 现建现查；'graph' = 已落库的图库。
+   * 切到 'graph' 会拉一次图库清单（`/api/graphs`）。
+   */
+  dataSource: 'sql' | 'graph'
+  /** 图库清单（`/api/graphs`）；未开启 `--graph-root` 时为空。 */
+  graphs: GraphEntry[]
+  /** 当前选中的库名。 */
+  graphName: string | null
+  /** 图库清单拉取的人读错误（典型：后端未以 --graph-root 启动 → unsupported_capability）。 */
+  graphsError: string | null
+  /** 图库清单请求中。 */
+  graphsLoading: boolean
+  /** 打开图库（`/api/lineage` graph 模式）请求中。 */
+  graphOpening: boolean
   graphMode: GraphMode
   /** path 模式下已选起点。 */
   pathFromId: string | null
@@ -77,6 +104,13 @@ interface AppState {
   setEngineId: (id: string | null) => void
   setDialect: (d: string) => void
   setAggregate: (on: boolean) => void
+  /** 切数据源；切到 'graph' 时顺带拉图库清单。 */
+  setDataSource: (ds: 'sql' | 'graph') => Promise<void>
+  /** 拉图库清单（`/api/graphs`）；无可用库时 graphName 置 null。 */
+  loadGraphs: () => Promise<void>
+  setGraphName: (name: string | null) => void
+  /** 打开选中的图库：`/api/lineage {graph}` → graphReport（整库合并图）。 */
+  openGraph: () => Promise<void>
   setSchema: (ddl: string) => void
   setSchemaOpen: (open: boolean) => void
   init: () => Promise<void>
@@ -122,6 +156,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   lineage: null,
   aggregate: false,
   graphReport: null,
+  graphSource: null,
+  dataSource: 'sql',
+  graphs: [],
+  graphName: null,
+  graphsError: null,
+  graphsLoading: false,
+  graphOpening: false,
   graphMode: 'none',
   pathFromId: null,
   selectedNodeId: null,
@@ -145,6 +186,69 @@ export const useAppStore = create<AppState>((set, get) => ({
   setEngineId: (engineId) => set({ engineId }),
   setDialect: (dialect) => set({ dialect }),
   setAggregate: (aggregate) => set({ aggregate }),
+
+  setDataSource: async (dataSource) => {
+    set({ dataSource })
+    // 切到图库：拉一次清单（未开启 --graph-root 时后端回 400，落到 graphsError 提示）。
+    if (dataSource === 'graph') await get().loadGraphs()
+  },
+
+  loadGraphs: async () => {
+    set({ graphsLoading: true })
+    try {
+      const report = await endpoints.graphs()
+      const graphs = report.graphs
+      // 选中项保持（若已失效则回落第一个）；没有库时置 null。
+      const current = get().graphName
+      const graphName = current != null && graphs.some((g) => g.name === current)
+        ? current
+        : (graphs[0]?.name ?? null)
+      set({ graphs, graphName, graphsError: null })
+    } catch (e) {
+      const reason = e instanceof ApiError ? (e.body?.reason ?? e.message) : String(e)
+      // unsupported_capability 是「后端没开这个能力」，给一句能照做的提示。
+      const notEnabled = e instanceof ApiError && e.body?.error === 'unsupported_capability'
+      set({
+        graphs: [],
+        graphName: null,
+        graphsError: notEnabled
+          ? '后端未开启图库浏览：请用 ozml serve --graph-root <目录> 启动'
+          : reason,
+      })
+    } finally {
+      set({ graphsLoading: false })
+    }
+  },
+
+  setGraphName: (graphName) => set({ graphName }),
+
+  openGraph: async () => {
+    const { graphName, backend } = get()
+    if (backend !== 'ok' || graphName == null) return
+    set({ graphOpening: true, runError: null })
+    try {
+      // graph 模式：与 sql 二选一，回整库合并图（GraphReport，与 aggregate 同形）。
+      const raw = (await endpoints.lineage({ graph: graphName })) as unknown
+      const unknown = unknownReason(raw)
+      set({
+        parseReport: null,
+        lineage: null,
+        graphReport: unknown == null ? (raw as GraphReport) : null,
+        graphSource: unknown == null ? 'store' : null,
+        runError: unknown,
+        selectedNodeId: null,
+        selectedEdgeId: null,
+        highlight: null,
+        graphMode: 'none',
+        pathFromId: null,
+      })
+    } catch (e) {
+      const reason = e instanceof ApiError ? (e.body?.reason ?? e.message) : String(e)
+      set({ graphReport: null, graphSource: null, runError: `打开图库失败：${reason}` })
+    } finally {
+      set({ graphOpening: false })
+    }
+  },
   // 改 schema 后旧校验诊断就失效了（针对的是上一份元数据），清掉避免误导。
   setSchema: (schema) => set({ schema, validateReport: null, validateError: null }),
   setSchemaOpen: (schemaOpen) => set({ schemaOpen }),
@@ -186,6 +290,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           parseReport: null,
           lineage: null,
           graphReport: lineageUnknown == null ? (raw as GraphReport) : null,
+          graphSource: lineageUnknown == null ? 'aggregate' : null,
           runError: lineageUnknown,
           selectedNodeId: null,
           selectedEdgeId: null,
@@ -204,6 +309,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           parseReport: parseRaw as ParseReport,
           lineage: lineageUnknown == null ? (lineageRaw as LineageModel) : null,
           graphReport: null,
+          graphSource: null,
           runError: parseUnknown ?? lineageUnknown,
           selectedNodeId: null,
           selectedEdgeId: null,
@@ -232,6 +338,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       formatNotice: null,
       validateReport: null,
       validateError: null,
+      // 回到 SQL 数据源：否则编辑器换成示例 SQL、右栏还挂着上一个图库的图，状态对不上。
+      dataSource: 'sql',
+      graphReport: null,
+      graphSource: null,
+      runError: null,
     }),
 
   clearFormatNotice: () => set({ formatNotice: null }),
