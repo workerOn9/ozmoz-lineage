@@ -7,7 +7,6 @@ import net.sf.jsqlparser.expression.BinaryExpression
 import net.sf.jsqlparser.expression.CaseExpression
 import net.sf.jsqlparser.expression.Expression
 import net.sf.jsqlparser.expression.Function
-import net.sf.jsqlparser.expression.Parenthesis
 import net.sf.jsqlparser.expression.SignedExpression
 import net.sf.jsqlparser.expression.WhenClause
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList
@@ -81,7 +80,7 @@ internal class AstNormalizer(private val source: String) {
         ps.joins?.forEach { children += join(it) }
         ps.selectItems?.forEach { children += selectItem(it) }
         ps.where?.let { children += node("where", it, listOf(expression(it))) }
-        ps.groupBy?.groupByExpressionList?.expressions?.forEach {
+        ps.groupBy?.groupByExpressionList?.forEach {
             children += node("group_by", it, listOf(expression(it)))
         }
         ps.having?.let { children += node("having", it, listOf(expression(it))) }
@@ -101,7 +100,7 @@ internal class AstNormalizer(private val source: String) {
         val children = mutableListOf<AstNode>()
         insert.withItemsList?.forEach { children += withItem(it) }
         insert.table?.let { children += node("target_table", it, emptyList()) }
-        insert.columns?.expressions?.forEach {
+        insert.columns?.forEach {
             children += node("target_column", it, emptyList())
         }
         insert.select?.let { children += select(it) }
@@ -156,7 +155,7 @@ internal class AstNormalizer(private val source: String) {
 
     private fun join(join: Join): AstNode {
         val children = mutableListOf<AstNode>()
-        join.rightItem?.let { children += fromItem(it) }
+        join.fromItem?.let { children += fromItem(it) }
         join.onExpressions?.forEach { children += node("on", it, listOf(expression(it))) }
         join.usingColumns?.forEach { children += node("using_column", it, emptyList()) }
         return node("join", join, children)
@@ -188,18 +187,21 @@ internal class AstNormalizer(private val source: String) {
             expr,
             listOf(expression(expr.leftExpression), expression(expr.rightExpression)),
         )
-        is Parenthesis -> node("parenthesis", expr, listOf(expression(expr.expression)))
         is SignedExpression -> node("signed", expr, listOf(expression(expr.expression)))
         is CaseExpression -> caseExpression(expr)
         is WhenClause -> whenClause(expr)
-        is ExpressionList<*> -> node("expression_list", expr, expr.expressions.map { expression(it) })
+        // JSqlParser 5.4 实测：`(...)`（单表达式或括号包裹的 AND/OR）产
+        // `ParenthesedExpressionList`（`Parenthesis` 类 5.0 起弃用且解析器不再产，
+        // 探针实测 select-item 与 WHERE 左侧都是 PEL）——括号信息不单独成节点，
+        // 归一化树与其他 expression_list 一致。
+        is ExpressionList<*> -> node("expression_list", expr, expr.map { expression(it) })
         // 字面量（LongValue / StringValue / DateValue …）：叶子，text 即原文
         else -> node("literal", expr, emptyList())
     }
 
     private fun function(fn: Function): AstNode {
         val children = mutableListOf<AstNode>()
-        fn.parameters?.expressions?.forEach { children += expression(it) }
+        fn.parameters?.forEach { children += expression(it) }
         return node("function", fn, children)
     }
 
@@ -212,7 +214,7 @@ internal class AstNormalizer(private val source: String) {
     private fun analytic(ae: AnalyticExpression): AstNode {
         val children = mutableListOf<AstNode>()
         ae.expression?.let { children += expression(it) }
-        ae.partitionExpressionList?.expressions?.forEach {
+        ae.partitionExpressionList?.forEach {
             children += node("partition_by", it, listOf(expression(it)))
         }
         ae.orderByElements?.forEach {

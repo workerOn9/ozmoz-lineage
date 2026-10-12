@@ -22,6 +22,8 @@ import org.apache.calcite.sql.parser.SqlParseException
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.sql.parser.SqlParserPos
 import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl
+import org.apache.calcite.sql.validate.SqlConformanceEnum
+import org.apache.calcite.sql.validate.SqlDelegatingConformance
 
 /**
  * Apache Calcite 引擎适配器——**方言转换 + 语义校验主力**（ADR-0004）。
@@ -339,19 +341,25 @@ public class CalciteEngine : SqlEngine {
     /**
      * 解析器配置：按方言配 [Lex]（quoting），**统一带 DDL 扩展语法**
      *（[SqlDdlParserImpl.FACTORY]——CREATE TABLE / VIEW 等默认语法没有，本机 probe5/6 实测）
-     * 与 `!=`（`allowBangEqual`，语义与 `<>` 等价、SQL Server 系语料必需）。
-     * `allowBangEqual` 只有 builder 入口（Config 只有 getter，1.42.0 API 面）。
+     * 与 `!=`（`isBangEqualAllowed`，语义与 `<>` 等价、SQL Server 系语料必需）。
+     * `ConfigBuilder` / `setAllowBangEqual` 在 1.42.0 已弃用（2.0 移除），改走
+     * `SqlParser.config()` + `withXxx` 链；bang-equal 的官方路径是
+     * [SqlDelegatingConformance] 子类只覆写 `isBangEqualAllowed`（builder 内部
+     * 实现就是它，语义与旧版逐字等价——源码核对）。
      */
     private fun parserConfig(lex: Lex): SqlParser.Config =
-        SqlParser.configBuilder(
-            SqlParser.config()
-                .withLex(lex)
-                // Lossless：裸标识符不重写大小写（Lex.ORACLE 默认会把裸名转大写——
-                // 本机 probe 实测），canonical 折叠交给 ir 层统一做。
-                .withUnquotedCasing(Casing.UNCHANGED)
-                .withQuotedCasing(Casing.UNCHANGED)
-                .withParserFactory(SqlDdlParserImpl.FACTORY),
-        ).setAllowBangEqual(true).build()
+        SqlParser.config()
+            .withLex(lex)
+            // Lossless：裸标识符不重写大小写（Lex.ORACLE 默认会把裸名转大写——
+            // 本机 probe 实测），canonical 折叠交给 ir 层统一做。
+            .withUnquotedCasing(Casing.UNCHANGED)
+            .withQuotedCasing(Casing.UNCHANGED)
+            .withParserFactory(SqlDdlParserImpl.FACTORY)
+            .withConformance(
+                object : SqlDelegatingConformance(SqlConformanceEnum.DEFAULT) {
+                    override fun isBangEqualAllowed(): Boolean = true
+                },
+            )
 
     private fun parseFailure(sql: String, pos: SqlParserPos?, message: String?): ParseOutcome =
         ParseOutcome(diagnostics = listOf(parseDiagnostic(sql, pos, message)), root = AstNode.empty())

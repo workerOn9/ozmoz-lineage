@@ -20,8 +20,8 @@ jobs:
 
       - uses: actions/setup-java@v4
         with:
-          distribution: zulu
-          java-version: "21"
+          distribution: temurin
+          java-version: "25"
           cache: gradle
 
       - name: 构建 ozml 命令行

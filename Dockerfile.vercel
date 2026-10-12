@@ -4,8 +4,8 @@
 # 与一体化 Dockerfile 的区别：Vercel 构建机没有本地产物，一切从源码构建；
 # 无 --web-root（SPA 由 web 服务托管），监听地址/端口交给容器平台（--host 0.0.0.0 + PORT）。
 
-# ── stage 1：JVM 构建（JDK 21 + Gradle wrapper，官方源）─────────────────────
-FROM eclipse-temurin:21-jdk AS build
+# ── stage 1：JVM 构建（JDK 25 + Gradle wrapper，官方源）─────────────────────
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /workspace
 # 先复制构建脚本与 wrapper，让依赖解析层可缓存
 COPY gradlew gradlew.bat settings.gradle.kts build.gradle.kts gradle.properties ./
@@ -36,7 +36,8 @@ RUN ./gradlew :cli:installDist --no-daemon
 
 # jlink 裁剪运行时：模块清单为实测圈定（jdeps --print-module-deps 被 netty 的
 # OSGi manifest 炸掉，推不出来；与一体化 Dockerfile 的 stage 3 同源）。
-# 基础镜像必须与 JVM 构建同大版本（都是 temurin 21），jmods 才在场。
+# temurin 25 镜像不带 jmods（25 起 JEP 493 无 jmods 链接，jlink 直接可用——实测）。
+# 基座 26.04（glibc 2.43），运行时基座必须同为 26.04。
 RUN jlink \
       --add-modules java.base,java.logging,java.management,java.naming,java.sql,java.xml,jdk.unsupported \
       --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
@@ -46,7 +47,7 @@ RUN jlink \
 # 模块清单为实测圈定（jdeps --print-module-deps 被 netty 的 OSGi manifest 炸掉，
 # 推不出来；清单与一体化 Dockerfile 的 stage 3 同源）——全部子命令 + SQLite
 # 图库 + serve 冒烟跑通过。详见一体化 Dockerfile 同段注释。
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 ENV PORT=80 \
     JAVA_HOME=/javaruntime \
     PATH="/javaruntime/bin:${PATH}" \
