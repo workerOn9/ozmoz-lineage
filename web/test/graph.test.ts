@@ -4,6 +4,7 @@ import { mapGraphReport, mapLineageModel, tableNodeId } from '../src/graph/mappi
 import { reachableSet, subgraphHighlight } from '../src/graph/traverse'
 import { shortestPath } from '../src/graph/path'
 import { layoutGraph } from '../src/graph/layout'
+import { shouldVirtualize, VIRTUALIZE_MIN_NODES } from '../src/graph/perf'
 import { graphReportSchema, lineageModelSchema } from '../src/types'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -148,5 +149,34 @@ describe('layoutGraph（dagre LR）', () => {
       expect(Number.isFinite(n.x)).toBe(true)
       expect(Number.isFinite(n.y)).toBe(true)
     }
+  })
+
+  it('大图冒烟：200+ 节点链全部有位且无重叠坐标对撞', () => {
+    const count = VIRTUALIZE_MIN_NODES + 100
+    const nodes: MappedNode[] = Array.from({ length: count }, (_, i) => ({
+      id: `n${i}`,
+      data: {
+        label: `n${i}`,
+        isOutput: false,
+        isTableNode: false,
+        ref: { raw: `n${i}`, canonical: `n${i}`, name: `n${i}` },
+      },
+    }))
+    const e = edges(...(Array.from({ length: count - 1 }, (_, i) => [`n${i}`, `n${i + 1}`] as [string, string])))
+    const laid = layoutGraph(nodes, e)
+    expect(laid.size).toBe(count)
+    for (const n of laid.values()) {
+      expect(Number.isFinite(n.x)).toBe(true)
+      expect(Number.isFinite(n.y)).toBe(true)
+    }
+  })
+})
+
+describe('大图性能治理（R2）', () => {
+  it('阈值门控：小图不开虚拟化，达到阈值才开', () => {
+    expect(shouldVirtualize(0)).toBe(false)
+    expect(shouldVirtualize(VIRTUALIZE_MIN_NODES - 1)).toBe(false)
+    expect(shouldVirtualize(VIRTUALIZE_MIN_NODES)).toBe(true)
+    expect(shouldVirtualize(VIRTUALIZE_MIN_NODES + 1)).toBe(true)
   })
 })

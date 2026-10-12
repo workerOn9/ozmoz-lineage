@@ -16,6 +16,7 @@ import { useAppStore } from '../../state/store'
 import type { GraphNodeData, MappedGraph } from '../../graph/mapping'
 import { mapGraphReport, mapLineageModel } from '../../graph/mapping'
 import { layoutGraph } from '../../graph/layout'
+import { GRAPH_MIN_ZOOM, shouldVirtualize } from '../../graph/perf'
 import { reachableSet, subgraphHighlight } from '../../graph/traverse'
 import { shortestPath } from '../../graph/path'
 import { EDGE_KIND_COLORS } from './EdgeLegend'
@@ -136,6 +137,10 @@ export function LineageGraphView() {
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
         fitView
+        fitViewOptions={{ padding: 0.15 }}
+        // 大图性能治理（R2）：视口外不渲染。按规模门控，小图行为不变。
+        onlyRenderVisibleElements={shouldVirtualize(mapped.nodes.length)}
+        minZoom={GRAPH_MIN_ZOOM}
         // 图上不需要 Space 拖拽平移 / Backspace 删节点：这两个默认全局键绑定会
         // preventDefault，而它的输入框守卫只看 nodeName/contenteditable——
         // Monaco 换输入通道（如 EditContext div）时守卫会漏，把编辑器里的
