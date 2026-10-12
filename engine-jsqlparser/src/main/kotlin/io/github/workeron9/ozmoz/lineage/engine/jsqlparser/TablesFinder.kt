@@ -99,6 +99,6 @@ internal object TablesFinder {
     }
 
     private fun collectJoin(join: Join, source: String, out: MutableList<TableRef>) {
-        join.rightItem?.let { collectFromItem(it, source, out) }
+        join.fromItem?.let { collectFromItem(it, source, out) }
     }
 }

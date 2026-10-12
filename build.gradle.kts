@@ -22,6 +22,10 @@ subprojects {
         }
         tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
             useJUnitPlatform()
+            // 工具链守门测试（ir 模块 ToolchainTest）从构建注入期望的 JDK 大版本：
+            // 断言跟 version catalog 走，catalog 变了测试同步变——防的是「工具链
+            // 与 catalog 漂移」（比如 CI 镜像装错版本），不是钉死某个数字。
+            systemProperty("ozmoz.toolchain.jdk", jdkVersion)
         }
     }
 }

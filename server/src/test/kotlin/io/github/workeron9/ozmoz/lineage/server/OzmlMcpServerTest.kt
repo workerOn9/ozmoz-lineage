@@ -287,7 +287,7 @@ class OzmlMcpServerTest {
             val report = json.parseToJsonElement(text1).jsonObject
             val path = report["path"]?.jsonArray
             assertNotNull(path, "两级链应可达")
-            assertEquals(3, path!!.size)
+            assertEquals(3, path.size)
 
             // 两条互不相干的 SELECT：两列都在图里但不可达——path=null 是数据，不是失败。
             val (err2, text2) = callTool(

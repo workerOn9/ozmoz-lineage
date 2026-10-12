@@ -25,12 +25,12 @@ class JooqEngineTest {
         assertTrue(engine.capabilities.supports(Feature.PARSE))
         assertTrue(engine.capabilities.supports(Feature.DIALECT_RENDER))
         assertTrue(!engine.capabilities.supports(Feature.SEMANTIC_MODEL))
-        // OSS 可承诺清单（jOOQ support-matrix 口径）
-        for (id in listOf("mysql", "mariadb", "postgres", "postgresql", "h2", "hsqldb", "derby", "firebird", "sqlite", "duckdb", "trino", "clickhouse", "yugabytedb", "ansi")) {
+        // OSS 可承诺清单（jOOQ support-matrix 口径；derby 3.21 起弃用待移除，不承诺）
+        for (id in listOf("mysql", "mariadb", "postgres", "postgresql", "h2", "hsqldb", "firebird", "sqlite", "duckdb", "trino", "clickhouse", "yugabytedb", "ansi")) {
             assertContains(engine.capabilities.dialects, id)
         }
-        // 商业版方言 / 将移除的常量不承诺（jOOQ OSS 编译期不存在）
-        for (id in listOf("mssql", "tsql", "oracle", "snowflake", "bigquery", "hive", "spark", "cubrid", "ignite")) {
+        // 商业版方言 / 将移除的常量不承诺（jOOQ OSS 编译期不存在或弃用待移除）
+        for (id in listOf("mssql", "tsql", "oracle", "snowflake", "bigquery", "hive", "spark", "cubrid", "ignite", "derby")) {
             assertTrue(id !in engine.capabilities.dialects, "$id 不应被承诺")
         }
     }
@@ -98,7 +98,7 @@ class JooqEngineTest {
             ),
         )
         assertTrue(result is Resolved.Known, "预期过门禁：$result")
-        assertContains((result as Resolved.Known).value.lowercase(), "fetch next 10 rows only")
+        assertContains(result.value.lowercase(), "fetch next 10 rows only")
     }
 
     @Test
@@ -122,7 +122,7 @@ class JooqEngineTest {
             RenderRequest("SELECT 1", fromDialect = "mysql", toDialect = "mssql"),
         )
         assertTrue(result is Resolved.Unknown, "mssql 未注册必须被拒：$result")
-        assertContains((result as Resolved.Unknown).reason, JooqEngine.CODE_DIALECT_UNKNOWN)
+        assertContains(result.reason, JooqEngine.CODE_DIALECT_UNKNOWN)
     }
 
     @Test
@@ -138,7 +138,7 @@ class JooqEngineTest {
             RenderRequest("SELECT FROM WHERE", fromDialect = "mysql", toDialect = "postgresql"),
         )
         assertTrue(result is Resolved.Unknown)
-        assertContains((result as Resolved.Unknown).reason, "源 SQL 解析失败")
+        assertContains(result.reason, "源 SQL 解析失败")
     }
 
     @Test
@@ -151,13 +151,13 @@ class JooqEngineTest {
             ),
         )
         assertTrue(result is Resolved.Known, "预期过门禁：$result")
-        val sql = (result as Resolved.Known).value
+        val sql = result.value
         assertEquals(2, Regex("(?i)select").findAll(sql).count(), sql)
     }
 
     @Test
-    fun `render firebird 与 derby 等 OSS 关系库方言可用`() {
-        for (target in listOf("h2", "derby", "firebird", "clickhouse", "yugabytedb")) {
+    fun `render firebird 与 h2 等 OSS 关系库方言可用`() {
+        for (target in listOf("h2", "firebird", "clickhouse", "yugabytedb")) {
             val result = engine.render(
                 RenderRequest("SELECT id FROM customer WHERE id > 1", fromDialect = "mysql", toDialect = target),
             )

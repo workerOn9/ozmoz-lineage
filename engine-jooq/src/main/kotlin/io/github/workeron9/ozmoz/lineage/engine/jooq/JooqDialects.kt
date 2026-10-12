@@ -19,7 +19,7 @@ import org.jooq.impl.DSL
  * 与 Calcite 主力（`engine-calcite` 的方言注册表）的分工：数仓系（Hive / Spark /
  * Snowflake / BigQuery / Trino 数仓侧 / DuckDB / Oracle / MSSQL…）由 Calcite 承担；
  * jOOQ 定位是**可选第二实现**——重点覆盖 Calcite 未列的关系库
- * （mariadb / sqlite / h2 / hsqldb / derby / firebird / clickhouse / yugabytedb）。
+ * （mariadb / sqlite / h2 / hsqldb / firebird / clickhouse / yugabytedb）。
  *
  * **internal**：方言细节不进公共签名；外部一律走引擎能力表（`capabilities.dialects`）。
  */
@@ -32,7 +32,8 @@ internal object JooqDialects {
         "postgres" to SQLDialect.POSTGRES,
         "h2" to SQLDialect.H2,
         "hsqldb" to SQLDialect.HSQLDB,
-        "derby" to SQLDialect.DERBY,
+        // Derby 不注册：jOOQ 3.21 起 `SQLDialect.DERBY` 弃用待移除（厂商已停支持，
+        // #19224）；对外能力表不承诺上游将删除的方言（R2：只承诺实测可用的）。
         "firebird" to SQLDialect.FIREBIRD,
         "sqlite" to SQLDialect.SQLITE,
         "duckdb" to SQLDialect.DUCKDB,

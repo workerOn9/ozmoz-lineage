@@ -158,7 +158,7 @@ ozml impact  --graph ./lineage.db --on db.t.c
 `ozml convert` 有**两档实现**（ADR-0004）：
 
 - **Calcite 主力**（`--engine calcite`，缺省）：数仓系 + 常用库，方言 `mysql` / `postgresql` / `oracle` / `hive` / `spark` / `bigquery` / `snowflake` / `duckdb` / `trino` / `mssql`（别名 `tsql`）/ `calcite`。**只承诺注册表里实测过的方言**，`AnsiSqlDialect` 有已知 quoting 缺陷，有意未注册。
-- **jOOQ 第二实现**（`--engine jooq`）：OSS edition 的 12 个可承诺开源方言（`mysql` / `mariadb` / `postgres` / `h2` / `hsqldb` / `derby` / `firebird` / `sqlite` / `duckdb` / `trino` / `clickhouse` / `yugabytedb`）+ 无方言族 `ansi`；Oracle / Snowflake / 数仓系在 jOOQ OSS **编译期不存在**（不是受限，枚举里没有），不对外预支。jOOQ 无公开 SQL AST，`parse` 只产浅树——树对比主力仍是 jsqlparser / calcite。
+- **jOOQ 第二实现**（`--engine jooq`）：OSS edition 的 11 个可承诺开源方言（`mysql` / `mariadb` / `postgres` / `h2` / `hsqldb` / `firebird` / `sqlite` / `duckdb` / `trino` / `clickhouse` / `yugabytedb`）+ 无方言族 `ansi`；`derby` 在 jOOQ 3.21 弃用待移除（厂商停支持），不承诺；Oracle / Snowflake / 数仓系在 jOOQ OSS **编译期不存在**（不是受限，枚举里没有），不对外预支。jOOQ 无公开 SQL AST，`parse` 只产浅树——树对比主力仍是 jsqlparser / calcite。
 
 ```bash
 ozml convert --from mysql --to postgresql -f q.sql
