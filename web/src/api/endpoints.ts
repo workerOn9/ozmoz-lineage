@@ -57,8 +57,8 @@ export interface ValidateQuery {
 export const endpoints = {
   health: () => getJson<HealthReport>('/api/health'),
   engines: () => getJson<EngineReport[]>('/api/engines'),
-  /** 图库清单（ADR-0015）：未开启 `--graph-root` 时后端回 400 unsupported_capability。 */
-  graphs: () => getJson<GraphsReport>('/api/graphs'),
+  /** 图库清单（ADR-0015 契约：**POST** /api/graphs——GET 会 404）。未开启 `--graph-root` 时后端回 400 unsupported_capability。 */
+  graphs: () => postJson<GraphsReport>('/api/graphs', {}),
   parse: (q: ParseQuery) => postJson<ParseReport>('/api/parse', q),
   lineage: (q: LineageQuery) => postJson<LineageModel>('/api/lineage', q),
   format: (q: FormatQuery) => postJson<FormatReport>('/api/format', q),
