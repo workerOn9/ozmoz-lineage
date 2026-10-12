@@ -8,6 +8,65 @@ const MODES: Array<{ id: GraphMode; label: string; hint: string }> = [
   { id: 'path', label: '短路径', hint: '依次点击起点、终点两列节点，高亮最短路径' },
 ]
 
+/** 图折叠（T3.4）：折叠表节点开关 + 作用域收起 chips（仅 LineageModel 有作用域）。 */
+function FoldControls() {
+  const lineage = useAppStore((s) => s.lineage)
+  const foldTables = useAppStore((s) => s.foldTables)
+  const toggleFoldTables = useAppStore((s) => s.toggleFoldTables)
+  const collapsedScopeIds = useAppStore((s) => s.collapsedScopeIds)
+  const toggleScopeCollapse = useAppStore((s) => s.toggleScopeCollapse)
+
+  const collapsibleScopes = (lineage?.scopes ?? []).filter((sc) => {
+    // 没有内部列的作用域收起等于没收，不出 chip。
+    return lineage!.columns.some((c) => c.scopeId === sc.id && !c.isOutput)
+  })
+
+  if (collapsibleScopes.length === 0 && !foldTables) {
+    return (
+      <button
+        className="rounded border border-neutral-700 px-2 py-0.5 text-[12px] text-neutral-400 hover:bg-neutral-800"
+        onClick={toggleFoldTables}
+        title="隐藏 table: 哨兵节点与 SOURCE 边（T3.4 折叠）"
+      >
+        折叠表节点
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        className={`rounded border px-2 py-0.5 text-[12px] ${
+          foldTables
+            ? 'border-sky-600 bg-sky-900/60 text-sky-200'
+            : 'border-neutral-700 text-neutral-400 hover:bg-neutral-800'
+        }`}
+        onClick={toggleFoldTables}
+        title="隐藏 table: 哨兵节点与 SOURCE 边（T3.4 折叠）"
+      >
+        {foldTables ? '已折叠表节点' : '折叠表节点'}
+      </button>
+      {collapsibleScopes.map((sc) => {
+        const on = collapsedScopeIds.includes(sc.id)
+        return (
+          <button
+            key={sc.id}
+            className={`rounded border px-2 py-0.5 text-[12px] ${
+              on
+                ? 'border-fuchsia-600 bg-fuchsia-950/60 text-fuchsia-200'
+                : 'border-neutral-700 text-neutral-400 hover:bg-neutral-800'
+            }`}
+            onClick={() => toggleScopeCollapse(sc.id)}
+            title={on ? '展开该作用域内部列' : '收起该作用域的内部列（output 保留）'}
+          >
+            {sc.kind} {on ? '▼' : '▶'}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export function GraphToolbar() {
   const graphMode = useAppStore((s) => s.graphMode)
   const setGraphMode = useAppStore((s) => s.setGraphMode)
@@ -39,6 +98,7 @@ export function GraphToolbar() {
           ? `已选起点 ${pathFromId}，点击终点`
           : active.hint}
       </span>
+      <FoldControls />
       {highlight != null && (
         <button
           className="ml-auto rounded border border-neutral-700 px-2 py-0.5 text-[12px] text-neutral-300 hover:bg-neutral-800"
