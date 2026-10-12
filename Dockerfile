@@ -42,9 +42,28 @@ COPY --chown=gradle:gradle conformance/ ./conformance/
 # installDist 产出可执行发行版（bin/ozml + lib/），不打测试（测试由 CI 的 build 轴守）。
 RUN gradle --no-daemon :cli:installDist
 
-# ── stage 3：运行时（JRE + ozml + dist，单端口）───────────────────────────────
-FROM eclipse-temurin:21-jre-jammy
+# ── stage 3：jlink 裁剪运行时（temurin 全量 JRE ~250MB → jlink 44MB）──────────────
+# jlink 只在 JDK 里有（temurin 的 jre 镜像不带 jmods），且裁剪宿主要与构建用的
+# JDK 同大版本（21）。模块清单用 jdeps --print-module-deps 自动推不出来：netty 的
+# OSGi manifest（Bundle-SymbolicName + Import-Package）与 guava 的 package 前缀
+# 会让模块解析器直接炸（实测），所以这份清单是**实测圈定**——CLI 全部子命令
+# （parse / lineage / impact / matrix / convert / validate / format / serve / mcp，
+# path 无 CLI 子命令，走 /api/path 与 MCP 工具）+ SQLite 图库 + web 托管逐一跑通过。
+# 新增依赖若用到新的 JDK 模块，容器冒烟会 NoClassDefFoundError——按报错补模块。
+FROM eclipse-temurin:21-jdk-jammy AS jre
+COPY --from=jvm /src/cli/build/install/ozml /app/ozml
+RUN jlink \
+      --add-modules java.base,java.logging,java.management,java.naming,java.sql,java.xml,jdk.unsupported \
+      --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
+      --output /javaruntime
+
+# ── stage 4：运行时（jlink 定制 runtime + ozml + dist，单端口）───────────────
+FROM ubuntu:22.04
+ENV JAVA_HOME=/javaruntime \
+    PATH="/javaruntime/bin:${PATH}" \
+    LANG=C.UTF-8
 WORKDIR /app
+COPY --from=jre /javaruntime /javaruntime
 COPY --from=jvm /src/cli/build/install/ozml /app/ozml
 COPY --from=web /src/web/dist /app/web/dist
 EXPOSE 8765
