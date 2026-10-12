@@ -15,7 +15,8 @@ import {
   severitySchema,
   transformKindSchema,
   validateReportSchema,
-} from '../src/types'
+ } from '../src/types'
+import { endpoints } from '../src/api/endpoints'
 
 // 契约夹具校验（web 设计稿 §5.2）：类型漂移的第一道闸。
 
@@ -188,5 +189,41 @@ describe('契约夹具（真实后端输出）', () => {
     expect(report.edges.map((e) => e.id)).toContain('e0')
     // SOURCE 边的 from 是表级哨兵（无 table 限定的表名），前端据此成 table: 前缀节点。
     expect(report.edges.some((e) => e.kind === 'SOURCE')).toBe(true)
+  })
+})
+
+describe('端点方法契约（防 GET/POST 漂移）', () => {
+  const originalFetch = globalThis.fetch
+
+  function intercept(): Array<{ path: string; method: string }> {
+    const calls: Array<{ path: string; method: string }> = []
+    globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+      calls.push({ path: String(input), method: init?.method ?? 'GET' })
+      throw new Error('intercepted') // 只看出了什么请求，不等响应
+    }) as typeof fetch
+    return calls
+  }
+
+  it('graphs 用 POST（2026-10-11 真实浏览器取证：GET 会 404，下拉永远「无可用图库」）', async () => {
+    const calls = intercept()
+    try {
+      await endpoints.graphs().catch(() => undefined)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+    expect(calls).toHaveLength(1)
+    expect(calls[0].path).toBe('/api/graphs')
+    expect(calls[0].method).toBe('POST')
+  })
+
+  it('health / engines 仍是 GET', async () => {
+    const calls = intercept()
+    try {
+      await endpoints.health().catch(() => undefined)
+      await endpoints.engines().catch(() => undefined)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+    expect(calls.map((c) => c.method)).toEqual(['GET', 'GET'])
   })
 })
