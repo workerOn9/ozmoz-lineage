@@ -26,6 +26,10 @@ subprojects {
             // 断言跟 version catalog 走，catalog 变了测试同步变——防的是「工具链
             // 与 catalog 漂移」（比如 CI 镜像装错版本），不是钉死某个数字。
             systemProperty("ozmoz.toolchain.jdk", jdkVersion)
+            // JDK 24+（JEP 472）对原生库加载发「受限方法」告警：测试里 sqlite-jdbc
+            // 与 JNA（Mordant 终端探测）都会触发，往 stderr 吐 4 行 WARNING。显式放行，
+            // 让构建 / CI 日志真正零告警。与 CLI 入口同一处置（见 cli/build.gradle.kts）。
+            jvmArgs("--enable-native-access=ALL-UNNAMED")
         }
     }
 }
