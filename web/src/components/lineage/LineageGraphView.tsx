@@ -13,9 +13,9 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../../state/store'
-import type { GraphNodeData, MappedGraph } from '../../graph/mapping'
+import type { GraphNodeData, MappedEdge, MappedGraph, MappedNode } from '../../graph/mapping'
 import { mapGraphReport, mapLineageModel } from '../../graph/mapping'
-import { layoutGraph } from '../../graph/layout'
+import { useGraphLayout } from '../../graph/useGraphLayout'
 import { applyCollapse, internalColumnIdsByScope } from '../../graph/collapse'
 import { GRAPH_MIN_ZOOM, shouldVirtualize } from '../../graph/perf'
 import { reachableSet, subgraphHighlight } from '../../graph/traverse'
@@ -53,6 +53,10 @@ function OzmozNode({ data, selected }: NodeProps<OzmozNodeType>) {
 }
 
 const nodeTypes = { ozmoz: OzmozNode }
+
+/** 稳定的空数组常量：`visible == null` 时给 hook 的入参，避免每次渲染换身份。 */
+const EMPTY_NODES: MappedNode[] = []
+const EMPTY_EDGES: MappedEdge[] = []
 
 /** path 高亮：路径上的节点集 + 两端都在路径上的边集。 */
 function pathHighlight(mapped: MappedGraph, path: string[]) {
@@ -97,13 +101,18 @@ export function LineageGraphView() {
     })
   }, [mapped, foldTables, collapsedScopeIds, internalNodesByScope])
 
+  // 布局（R2）：小图主线程同步、大图转 Web Worker（阈值门控 + 竞态保护），见 useGraphLayout。
+  const { positions, computing } = useGraphLayout(
+    visible?.nodes ?? EMPTY_NODES,
+    visible?.edges ?? EMPTY_EDGES,
+  )
+
   const { nodes, edges } = useMemo(() => {
     if (visible == null) return { nodes: [] as OzmozNodeType[], edges: [] as Edge[] }
-    const laid = layoutGraph(visible.nodes, visible.edges)
     const nodes: OzmozNodeType[] = visible.nodes.map((n) => ({
       id: n.id,
       type: 'ozmoz' as const,
-      position: { x: laid.get(n.id)?.x ?? 0, y: laid.get(n.id)?.y ?? 0 },
+      position: { x: positions.get(n.id)?.x ?? 0, y: positions.get(n.id)?.y ?? 0 },
       data: n.data,
       className: highlight != null && !highlight.nodeIds.has(n.id) ? 'dimmed' : 'highlighted',
     }))
@@ -121,12 +130,21 @@ export function LineageGraphView() {
       className: highlight != null && !highlight.edgeIds.has(e.id) ? 'dimmed' : 'highlighted',
     }))
     return { nodes, edges }
-  }, [visible, highlight])
+  }, [visible, highlight, positions])
 
   if (visible == null) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-neutral-500">
         运行「解析」后在此展示列级血缘图
+      </div>
+    )
+  }
+
+  // 大图首帧：worker 还没回坐标，先显示占位，别把节点全挤到原点。
+  if (computing && positions.size === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-neutral-500">
+        布局中…
       </div>
     )
   }
@@ -149,7 +167,12 @@ export function LineageGraphView() {
   }
 
   return (
-    <div className="h-full w-full">
+    <div className="relative h-full w-full">
+      {computing && (
+        <div className="pointer-events-none absolute right-3 top-3 z-10 rounded bg-neutral-800/90 px-2 py-1 text-[11px] text-neutral-300 shadow">
+          布局中…
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}
