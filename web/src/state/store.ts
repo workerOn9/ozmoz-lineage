@@ -86,6 +86,11 @@ interface AppState {
    */
   formatNotice: string | null
 
+  /** 图折叠（T3.4）：折叠表节点——隐藏 table: 哨兵与 SOURCE 边。缺省 false。 */
+  foldTables: boolean
+  /** 图折叠（T3.4）：已收起内部列的作用域 id。新数据载入时重置（scopes 换了）。 */
+  collapsedScopeIds: string[]
+
   /**
    * 语义校验（`/api/validate`）用的内联 DDL 文本。空字符串 = 未提供——
    * 后端退化为从 `sql` 文本自动收 `CREATE TABLE`，收不到则回 `validate.skipped`。
@@ -128,6 +133,10 @@ interface AppState {
   selectNode: (id: string | null) => void
   selectEdge: (id: string | null) => void
   setHighlight: (h: HighlightResult | null) => void
+  /** 图折叠（T3.4）：切「折叠表节点」开关。 */
+  toggleFoldTables: () => void
+  /** 图折叠（T3.4）：切换某作用域的折叠状态。 */
+  toggleScopeCollapse: (scopeId: string) => void
   setView: (view: ViewMode) => void
   setDiffLeftEngine: (id: string | null) => void
   setDiffRightEngine: (id: string | null) => void
@@ -176,6 +185,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   diffRunning: false,
   formatting: false,
   formatNotice: null,
+  foldTables: false,
+  collapsedScopeIds: [],
   schema: SAMPLE_SCHEMA,
   schemaOpen: false,
   validating: false,
@@ -241,6 +252,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         highlight: null,
         graphMode: 'none',
         pathFromId: null,
+        collapsedScopeIds: [],
       })
     } catch (e) {
       const reason = e instanceof ApiError ? (e.body?.reason ?? e.message) : String(e)
@@ -297,6 +309,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           highlight: null,
           graphMode: 'none',
           pathFromId: null,
+          collapsedScopeIds: [],
         })
       } else {
         const [parseRaw, lineageRaw] = await Promise.all([
@@ -316,6 +329,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           highlight: null,
           graphMode: 'none',
           pathFromId: null,
+          collapsedScopeIds: [],
         })
       }
     } catch (e) {
@@ -343,6 +357,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       graphReport: null,
       graphSource: null,
       runError: null,
+      collapsedScopeIds: [],
     }),
 
   clearFormatNotice: () => set({ formatNotice: null }),
@@ -406,6 +421,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectEdge: (selectedEdgeId) => set({ selectedEdgeId, selectedNodeId: null }),
   setHighlight: (highlight) => set({ highlight }),
   setView: (view) => set({ view }),
+
+  toggleFoldTables: () => set((s) => ({ foldTables: !s.foldTables })),
+  toggleScopeCollapse: (scopeId) =>
+    set((s) => ({
+      collapsedScopeIds: s.collapsedScopeIds.includes(scopeId)
+        ? s.collapsedScopeIds.filter((id) => id !== scopeId)
+        : [...s.collapsedScopeIds, scopeId],
+    })),
 
   setDiffLeftEngine: (diffLeftEngine) => set({ diffLeftEngine }),
   setDiffRightEngine: (diffRightEngine) => set({ diffRightEngine }),

@@ -16,6 +16,7 @@ import { useAppStore } from '../../state/store'
 import type { GraphNodeData, MappedGraph } from '../../graph/mapping'
 import { mapGraphReport, mapLineageModel } from '../../graph/mapping'
 import { layoutGraph } from '../../graph/layout'
+import { applyCollapse, internalColumnIdsByScope } from '../../graph/collapse'
 import { GRAPH_MIN_ZOOM, shouldVirtualize } from '../../graph/perf'
 import { reachableSet, subgraphHighlight } from '../../graph/traverse'
 import { shortestPath } from '../../graph/path'
@@ -67,6 +68,8 @@ export function LineageGraphView() {
   const lineage = useAppStore((s) => s.lineage)
   const graphReport = useAppStore((s) => s.graphReport)
   const highlight = useAppStore((s) => s.highlight)
+  const foldTables = useAppStore((s) => s.foldTables)
+  const collapsedScopeIds = useAppStore((s) => s.collapsedScopeIds)
 
   const mapped = useMemo(
     () =>
@@ -78,17 +81,33 @@ export function LineageGraphView() {
     [lineage, graphReport],
   )
 
+  // 折叠（T3.4）：展示层裁剪，布局 / 渲染 / 虚拟化计数全部吃可见子图。
+  // 聚合图与图库模式（GraphReport）节点无 scopeId，作用域折叠天然不生效。
+  const internalNodesByScope = useMemo(
+    () => (lineage != null ? internalColumnIdsByScope(lineage) : new Map()),
+    [lineage],
+  )
+  const visible = useMemo(() => {
+    if (mapped == null) return null
+    if (!foldTables && collapsedScopeIds.length === 0) return mapped
+    return applyCollapse(mapped, {
+      foldTables,
+      collapsedScopes: new Set(collapsedScopeIds),
+      internalColumnIdsByScope: internalNodesByScope,
+    })
+  }, [mapped, foldTables, collapsedScopeIds, internalNodesByScope])
+
   const { nodes, edges } = useMemo(() => {
-    if (mapped == null) return { nodes: [] as OzmozNodeType[], edges: [] as Edge[] }
-    const laid = layoutGraph(mapped.nodes, mapped.edges)
-    const nodes: OzmozNodeType[] = mapped.nodes.map((n) => ({
+    if (visible == null) return { nodes: [] as OzmozNodeType[], edges: [] as Edge[] }
+    const laid = layoutGraph(visible.nodes, visible.edges)
+    const nodes: OzmozNodeType[] = visible.nodes.map((n) => ({
       id: n.id,
       type: 'ozmoz' as const,
       position: { x: laid.get(n.id)?.x ?? 0, y: laid.get(n.id)?.y ?? 0 },
       data: n.data,
       className: highlight != null && !highlight.nodeIds.has(n.id) ? 'dimmed' : 'highlighted',
     }))
-    const edges: Edge[] = mapped.edges.map((e) => ({
+    const edges: Edge[] = visible.edges.map((e) => ({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -102,9 +121,9 @@ export function LineageGraphView() {
       className: highlight != null && !highlight.edgeIds.has(e.id) ? 'dimmed' : 'highlighted',
     }))
     return { nodes, edges }
-  }, [mapped, highlight])
+  }, [visible, highlight])
 
-  if (mapped == null) {
+  if (visible == null) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-neutral-500">
         运行「解析」后在此展示列级血缘图
@@ -116,14 +135,14 @@ export function LineageGraphView() {
     const { graphMode, pathFromId, setPathFrom, selectNode, setHighlight } = useAppStore.getState()
     selectNode(node.id)
     if (graphMode === 'upstream' || graphMode === 'downstream') {
-      const set = reachableSet(mapped.edges, node.id, graphMode)
-      setHighlight(subgraphHighlight(mapped.edges, set))
+      const set = reachableSet(visible.edges, node.id, graphMode)
+      setHighlight(subgraphHighlight(visible.edges, set))
     } else if (graphMode === 'path') {
       if (pathFromId == null) {
         setPathFrom(node.id)
       } else {
-        const path = shortestPath(mapped.edges, pathFromId, node.id, 'downstream')
-        setHighlight(path != null ? pathHighlight(mapped, path) : null)
+        const path = shortestPath(visible.edges, pathFromId, node.id, 'downstream')
+        setHighlight(path != null ? pathHighlight(visible, path) : null)
         setPathFrom(null)
       }
     }
@@ -138,8 +157,9 @@ export function LineageGraphView() {
         onNodeClick={onNodeClick}
         fitView
         fitViewOptions={{ padding: 0.15 }}
-        // 大图性能治理（R2）：视口外不渲染。按规模门控，小图行为不变。
-        onlyRenderVisibleElements={shouldVirtualize(mapped.nodes.length)}
+        // 大图性能治理（R2）：视口外不渲染。按规模门控，小图行为不变；
+        // 折叠后按**可见**节点数计（T3.4 之后折叠本身就是第一道裁剪）。
+        onlyRenderVisibleElements={shouldVirtualize(visible.nodes.length)}
         minZoom={GRAPH_MIN_ZOOM}
         // 图上不需要 Space 拖拽平移 / Backspace 删节点：这两个默认全局键绑定会
         // preventDefault，而它的输入框守卫只看 nodeName/contenteditable——

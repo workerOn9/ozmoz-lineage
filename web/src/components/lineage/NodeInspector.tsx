@@ -22,6 +22,10 @@ export function NodeInspector() {
   const graphReport = useAppStore((s) => s.graphReport)
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
   const selectedEdgeId = useAppStore((s) => s.selectedEdgeId)
+  const foldTables = useAppStore((s) => s.foldTables)
+  const toggleFoldTables = useAppStore((s) => s.toggleFoldTables)
+  const collapsedScopeIds = useAppStore((s) => s.collapsedScopeIds)
+  const toggleScopeCollapse = useAppStore((s) => s.toggleScopeCollapse)
 
   const mapped = useMemo(
     () =>
@@ -44,6 +48,25 @@ export function NodeInspector() {
       lineage.columns.find((c) => columnRefId(c.column) === selectedNodeId) ?? null
     )
   }, [lineage, selectedNodeId])
+
+  // 折叠（T3.4）：表节点 ↔ SOURCE 边开、关；列节点 hover 到所属作用域的
+  // 收起开关（output 列收起后仍常驻）。
+  const collapseButton = useMemo(() => {
+    if (node == null) return null
+    if (node.data.isTableNode) {
+      return {
+        label: foldTables ? '展开该表的 SOURCE 边' : '收起该表（隐藏 SOURCE 边）',
+        action: toggleFoldTables,
+      }
+    }
+    const scopeId = columnMeta?.scopeId
+    if (scopeId == null) return null
+    const collapsed = collapsedScopeIds.includes(scopeId)
+    return {
+      label: collapsed ? '展开该作用域的内部列' : '收起该作用域的内部列',
+      action: () => toggleScopeCollapse(scopeId),
+    }
+  }, [node, columnMeta, foldTables, collapsedScopeIds, toggleFoldTables, toggleScopeCollapse])
 
   if (node == null && edge == null) {
     return (
@@ -89,6 +112,14 @@ export function NodeInspector() {
           ) : (
             // 聚合图（GraphReport）节点没有 ColumnRef：只能给稳定 id。
             <Row label="id" value={node.id} />
+          )}
+          {collapseButton != null && (
+            <button
+              className="rounded border border-neutral-700 px-2 py-1 text-[12px] text-neutral-300 hover:bg-neutral-800"
+              onClick={collapseButton.action}
+            >
+              {collapseButton.label}
+            </button>
           )}
         </>
       )}
