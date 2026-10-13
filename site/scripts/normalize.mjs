@@ -4,7 +4,8 @@
 // 设计口径（与仓库「Never-wrong / 失败格是产物」一致）：
 // - 原始 JSON **缺失** → 该数据源 `available: false`，页面降级为「先跑 just docs-data」占位；
 // - 原始 JSON **存在但结构不符** → **抛错**（CI 里宁可红，也不静默渲染空表）；
-// - 顺带把原始 JSON 拷进 `public/data/`，页面据此提供「全量 JSON（可溯源）」链接。
+// - 顺带把原始 JSON 拷进 `docs/public/data/`（Rspress 的静态目录），页面据此提供
+//   「全量 JSON（可溯源）」链接。
 //
 // 产物：`.data/dataset.json`（唯一被 Vue 组件消费的文件）。表格全部由它渲染，无手写表格。
 
@@ -195,7 +196,7 @@ function readJson(path) {
 
 export function main() {
   const dataDir = join(root, '.data')
-  const publicDataDir = join(root, 'public', 'data')
+  const publicDataDir = join(root, 'docs', 'public', 'data')
   const inputs = {
     engines: readJson(join(dataDir, 'engines.json')),
     matrix: readJson(join(dataDir, 'compat-matrix.json')),

@@ -3,11 +3,13 @@
 > 工具百科的第一页：**注册引擎的能力表**。数据来自 `ozml engines --format json`，
 > 与 `GET /api/engines` 同一形状、同一构造器——本页表格由它渲染，没有手写内容。
 
+import EngineCatalog from '../../components/EngineCatalog'
+
 <EngineCatalog />
 
 ## 为什么「能力表」是路由依据
 
-本项目**不统一 AST**，四个引擎的能力天然不齐（JSqlParser 无方言概念、Calcite 是方言转换主力、
+本项目**不统一 AST**，引擎的能力天然不齐（JSqlParser 无方言概念、Calcite 是方言转换主力、
 jOOQ 无公开 AST）。因此调用方**先查能力表再选引擎**，而不是撞墙后猜：
 
 ```bash

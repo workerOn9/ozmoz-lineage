@@ -77,16 +77,17 @@
 
 前端**构建期**依赖（Vite / TypeScript / Tailwind / Vitest 等，devDependencies）不进入产物，不逐条登记；如上游许可证扫描要求再补。
 
-## 文档站（`site/`，2026-10-13 随 M5 工具百科引入）
+## 文档站（`site/`，2026-10-13 随 M5 工具百科引入；同日由 VitePress 换为 Rspress）
 
-打进 `site/.vitepress/dist` 的浏览器端依赖（版本以 `site/package-lock.json` 为准）：
+打进 `site/doc_build` 的浏览器端依赖（版本以 `site/package-lock.json` 为准）：
 
 | 依赖 | 版本 | 许可证 | 用途 |
 |---|---|---|---|
-| [VitePress](https://github.com/vuejs/vitepress) | 1.6.4 | MIT | 文档站（工具百科）：静态站点生成 + 默认主题 + 本地搜索 |
-| [Vue](https://github.com/vuejs/core) | 3.5.43 | MIT | VitePress 的渲染运行时（站点产物内含 Vue 运行时） |
+| [Rspress](https://github.com/web-infra-dev/rspress)（`@rspress/core`） | 2.0.23 | MIT | 文档站（工具百科）：静态站点生成（SSG + SSG-MD）、默认主题、内置全文搜索 |
+| [React / React DOM](https://github.com/facebook/react) | 19.3.0 | MIT | 文档站的渲染框架（Rspress 以 React 渲染；产物内含 React 运行时，与 `web/` 同版本） |
+| [FlexSearch](https://github.com/nextapps-de/flexsearch)（Rspress 传递） | 0.8.212 | Apache-2.0 | 内置全文搜索的索引 / 查询引擎（浏览器端运行） |
 
-文档站的**构建/测试期**依赖（`vitest`，devDependency）不进入产物，不逐条登记。矩阵数据由 CI 现跑 `ozml` 生成、不入库（见 README「文档站」节）。
+Rspress 的其余传递依赖多为**构建期**（Rsbuild 2.2.12 / Rspack / Shiki 4.5.0 代码高亮 / MDX / remark 系，均 MIT 或 Apache-2.0），不进入产物运行面，不逐条登记；`vitest` 为测试期依赖。矩阵数据由 CI 现跑 `ozml` 生成、不入库（见 README「文档站」节）。
 
 ## 测试期依赖（不打包进产物）
 

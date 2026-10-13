@@ -1,5 +1,6 @@
 ---
-layout: home
+pageType: home
+
 hero:
   name: ozmoz-lineage
   text: 渗透血缘
@@ -9,18 +10,22 @@ hero:
       text: 工具百科
       link: /tools/
     - theme: alt
-      text: 兼容性矩阵
-      link: /tools/compat
+      text: 在线试用
+      link: https://lineage.workeron9.info
     - theme: alt
       text: GitHub
       link: https://github.com/workerOn9/ozmoz-lineage
+
 features:
   - title: 离线优先
     details: 解析与血缘全部本地完成，SQL 与元数据不出内网；不引入 Python 运行时，也不需要商业授权。
+    icon: 🔒
   - title: 图级血缘
     details: 多语句 / 全库 / DDL / CTAS / VIEW / MERGE，列级六类边 + 上溯下溯与影响面分析，导出 OpenLineage。
+    icon: 🕸️
   - title: 工具百科（数据驱动）
     details: 引擎能力、方言覆盖与两张实测矩阵全部由 CI 生成的 JSON 渲染，每格可溯源到 commit——没有手写表格。
+    icon: 📊
 ---
 
 ## 它要解决什么

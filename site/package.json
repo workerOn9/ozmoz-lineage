@@ -5,15 +5,19 @@
   "type": "module",
   "scripts": {
     "predev": "node scripts/normalize.mjs",
-    "dev": "vitepress dev",
+    "dev": "rspress dev",
     "prebuild": "node scripts/normalize.mjs",
-    "build": "vitepress build",
-    "preview": "vitepress preview",
+    "build": "rspress build",
+    "preview": "rspress preview",
     "test": "vitest run"
   },
   "devDependencies": {
-    "vitepress": "^1.6.4",
-    "vue": "^3.5.43",
+    "@rspress/core": "^2.0.23",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "vitest": "^5.0.3"
   }
 }
