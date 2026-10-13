@@ -1,0 +1,79 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 文档站轴（`site/`，VitePress，M5 工具百科）：CI **现跑 ozml** 生成矩阵与引擎能力表
+# （数据不入库，避免腐化）→ VitePress 构建 → GitHub Pages 发布。
+# 线上永远是最新实测快照，每页带当次 commit 溯源；PR 上只构建不部署。
+concurrency:
+  group: docs-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: docs build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: 构建 ozml 命令行
+        run: ./gradlew :cli:installDist
+
+      - name: 现生成文档站数据（引擎能力表 + 两张矩阵）
+        run: |
+          mkdir -p site/.data
+          ./cli/build/install/ozml/bin/ozml engines --format json > site/.data/engines.json
+          ./cli/build/install/ozml/bin/ozml matrix --corpus conformance/corpus --commit "${{ github.sha }}" --out site/.data/compat-matrix.json
+          ./cli/build/install/ozml/bin/ozml matrix --convert --corpus conformance/corpus --commit "${{ github.sha }}" --out site/.data/compat-convert.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: 按锁文件安装依赖
+        working-directory: site
+        run: npm ci
+
+      - name: 数据规整单测
+        working-directory: site
+        run: npm test
+
+      - name: VitePress 构建（GitHub Pages 项目站点 base）
+        working-directory: site
+        env:
+          DOCS_BASE: /ozmoz-lineage/
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/.vitepress/dist
+
+  deploy:
+    name: docs deploy
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,7 +1,7 @@
 # ozmoz-lineage 任务编排。
 #
 # just 是薄编排层：按需调用 npm 与 ./gradlew，自身不含构建逻辑。
-# Gradle 只管 JVM 侧（默认构建不要求 Node）；前端命令经本文件收口。
+# Gradle 只管 JVM 侧（默认构建不要求 Node）；前端与文档站命令经本文件收口。
 # 安装 just：brew install just（或 cargo install just）。列出全部目标：just
 
 # 列出全部目标
@@ -26,6 +26,32 @@ web-check:
 # 产出 web/dist
 web-build:
     npm --prefix web run build
+
+# —— 文档站（site/，VitePress，独立子项目，不进 Gradle）——
+
+# 安装文档站依赖（按锁文件）
+docs-install:
+    npm --prefix site ci
+
+# 生成文档站数据：引擎能力表 + 两张矩阵（**现生成、不入库**，避免腐化）
+docs-data:
+    ./gradlew :cli:installDist -q
+    mkdir -p site/.data
+    ./cli/build/install/ozml/bin/ozml engines --format json > site/.data/engines.json
+    ./cli/build/install/ozml/bin/ozml matrix --corpus conformance/corpus --commit "$(git rev-parse --short HEAD)" --out site/.data/compat-matrix.json
+    ./cli/build/install/ozml/bin/ozml matrix --convert --corpus conformance/corpus --commit "$(git rev-parse --short HEAD)" --out site/.data/compat-convert.json
+
+# 文档站 dev server（数据缺失时页面自动降级为「先跑 just docs-data」占位）
+docs-dev:
+    npm --prefix site run dev
+
+# 文档站构建（先现生成数据，再 VitePress 构建）
+docs-build: docs-data
+    npm --prefix site run build
+
+# 文档站闸：数据规整单测
+docs-check:
+    npm --prefix site run test
 
 # —— JVM ——
 

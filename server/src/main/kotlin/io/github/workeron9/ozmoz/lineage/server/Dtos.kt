@@ -37,7 +37,21 @@ public data class EngineReport(
     val dialects: List<String>,
     /** 能力名 → 不支持原因（[Feature] 名）。 */
     val reasons: Map<String, String>,
-)
+) {
+    public companion object {
+        /**
+         * 从一个引擎的能力声明构造报告——**形状与 `/api/engines` 单一来源**：
+         * HTTP 路由与 `ozml engines` 都调这里，避免两处各写一遍导致漂移。
+         */
+        @JvmStatic
+        public fun from(engine: io.github.workeron9.ozmoz.lineage.engine.SqlEngine): EngineReport = EngineReport(
+            id = engine.id,
+            features = Feature.entries.filter { engine.capabilities.supports(it) }.map { it.name },
+            dialects = engine.capabilities.dialects.toList(),
+            reasons = engine.capabilities.reasons.mapKeys { (feature, _) -> feature.name },
+        )
+    }
+}
 
 /** `POST /api/parse` 请求。 */
 @Serializable

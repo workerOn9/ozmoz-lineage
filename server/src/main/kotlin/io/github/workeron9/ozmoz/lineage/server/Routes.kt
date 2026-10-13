@@ -59,16 +59,7 @@ public fun Application.serverModule(
         }
 
         get("/api/engines") {
-            call.respond(
-                ServerPipeline.allEngines().map { engine ->
-                    EngineReport(
-                        id = engine.id,
-                        features = Feature.entries.filter { engine.capabilities.supports(it) }.map { it.name },
-                        dialects = engine.capabilities.dialects.toList(),
-                        reasons = engine.capabilities.reasons.mapKeys { (feature, _) -> feature.name },
-                    )
-                },
-            )
+            call.respond(ServerPipeline.allEngines().map { EngineReport.from(it) })
         }
 
         post("/api/graphs") {

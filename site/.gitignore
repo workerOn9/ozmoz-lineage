@@ -1,0 +1,8 @@
+# 依赖与构建产物（与 web/ 同惯例：不进版本库）
+node_modules/
+.vitepress/dist/
+.vitepress/cache/
+
+# 数据由 ozml 现生成（避免腐化）：raw 三份 + 规整后的 dataset.json + 供下载的副本
+.data/
+public/data/

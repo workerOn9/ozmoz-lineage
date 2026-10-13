@@ -1,0 +1,19 @@
+{
+  "name": "ozmoz-lineage-site",
+  "private": true,
+  "version": "0.1.0-SNAPSHOT",
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/normalize.mjs",
+    "dev": "vitepress dev",
+    "prebuild": "node scripts/normalize.mjs",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4",
+    "vue": "^3.5.43",
+    "vitest": "^5.0.3"
+  }
+}

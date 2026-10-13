@@ -9,7 +9,9 @@ import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.TableRef
+import io.github.workeron9.ozmoz.lineage.server.EngineReport
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 /**
@@ -46,6 +48,10 @@ internal object JsonSupport {
 
     fun encodeFormatReport(report: FormatReport): String =
         json.encodeToString(FormatReport.serializer(), report)
+
+    /** `ozml engines --format json`：与 `POST /api/engines` 同形（同一 [EngineReport]）。 */
+    fun encodeEngineReports(reports: List<EngineReport>): String =
+        json.encodeToString(ListSerializer(EngineReport.serializer()), reports)
 }
 
 /** `ozml parse --format json` 的稳定输出形状。 */

@@ -12,7 +12,8 @@ import com.github.ajalt.clikt.core.main
  * `serve`（Ktor `/api` 骨架）随后落地 [ServeCommand]；M3 起步落地 [MatrixCommand]（兼容性矩阵）；
  * M3 落地 [ConvertCommand]（Calcite 方言转换主力，ADR-0004）；ADR-0013 落地
  * [ValidateCommand]（schema 语义校验）；ADR-0014 落地 [FormatCommand]（SQL 排版）；
- * MCP 落地 [McpCommand]（stdio 工具面，镜像 `/api` 能力）。
+ * MCP 落地 [McpCommand]（stdio 工具面，镜像 `/api` 能力）；M5 文档站落地
+ * [EnginesCommand]（引擎能力表，文档站「工具百科」数据源）。
  */
 public class OzmlCommand : CliktCommand(name = "ozml") {
     override fun run() {
@@ -22,6 +23,17 @@ public class OzmlCommand : CliktCommand(name = "ozml") {
 
 public fun main(args: Array<String>) {
     OzmlCommand()
-        .subcommands(ParseCommand(), LineageCommand(), ImpactCommand(), ServeCommand(), MatrixCommand(), ConvertCommand(), ValidateCommand(), FormatCommand(), McpCommand())
+        .subcommands(
+            ParseCommand(),
+            LineageCommand(),
+            ImpactCommand(),
+            ServeCommand(),
+            MatrixCommand(),
+            ConvertCommand(),
+            ValidateCommand(),
+            FormatCommand(),
+            EnginesCommand(),
+            McpCommand(),
+        )
         .main(args)
 }
