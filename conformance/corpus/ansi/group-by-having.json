@@ -6,5 +6,44 @@
     "having"
   ],
   "comment": "分组聚合 + HAVING 过滤",
-  "sql": "SELECT city, COUNT(*) AS cnt FROM users GROUP BY city HAVING COUNT(*) > 10 ORDER BY cnt DESC"
+  "sql": "SELECT city, COUNT(*) AS cnt FROM users GROUP BY city HAVING COUNT(*) > 10 ORDER BY cnt DESC",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.city",
+        "to": "city",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.city",
+        "to": "city",
+        "kind": "GROUP_BY"
+      },
+      {
+        "from": "users.city",
+        "to": "cnt",
+        "kind": "GROUP_BY"
+      },
+      {
+        "from": "users.cnt",
+        "to": "city",
+        "kind": "ORDER_BY"
+      },
+      {
+        "from": "users.cnt",
+        "to": "cnt",
+        "kind": "ORDER_BY"
+      },
+      {
+        "from": "users",
+        "to": "city",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "cnt",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

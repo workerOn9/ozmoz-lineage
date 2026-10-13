@@ -6,5 +6,29 @@
     "basic"
   ],
   "comment": "INSERT 目标列对齐（值血缘跨 INSERT 边界）",
-  "sql": "INSERT INTO dst (x, y) SELECT a, b FROM src"
+  "sql": "INSERT INTO dst (x, y) SELECT a, b FROM src",
+  "lineage": {
+    "edges": [
+      {
+        "from": "src.a",
+        "to": "dst.x",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "src.b",
+        "to": "dst.y",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "src",
+        "to": "dst.x",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "src",
+        "to": "dst.y",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

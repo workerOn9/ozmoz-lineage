@@ -13,7 +13,8 @@ import com.github.ajalt.clikt.core.main
  * M3 落地 [ConvertCommand]（Calcite 方言转换主力，ADR-0004）；ADR-0013 落地
  * [ValidateCommand]（schema 语义校验）；ADR-0014 落地 [FormatCommand]（SQL 排版）；
  * MCP 落地 [McpCommand]（stdio 工具面，镜像 `/api` 能力）；M5 文档站落地
- * [EnginesCommand]（引擎能力表，文档站「工具百科」数据源）。
+ * [EnginesCommand]（引擎能力表，文档站「工具百科」数据源）；M1 收尾落地
+ * [QualityCommand]（血缘质量报表，计划 §8）。
  */
 public class OzmlCommand : CliktCommand(name = "ozml") {
     override fun run() {
@@ -33,6 +34,7 @@ public fun main(args: Array<String>) {
             ValidateCommand(),
             FormatCommand(),
             EnginesCommand(),
+            QualityCommand(),
             McpCommand(),
         )
         .main(args)

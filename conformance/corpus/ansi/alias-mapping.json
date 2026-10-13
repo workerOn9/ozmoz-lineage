@@ -5,5 +5,39 @@
     "alias"
   ],
   "comment": "表别名 + 列别名映射",
-  "sql": "SELECT u.id AS user_id, u.name AS user_name FROM users u WHERE u.age > 18"
+  "sql": "SELECT u.id AS user_id, u.name AS user_name FROM users u WHERE u.age > 18",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.id",
+        "to": "user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.name",
+        "to": "user_name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.age",
+        "to": "user_id",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "users.age",
+        "to": "user_name",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "users",
+        "to": "user_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "user_name",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

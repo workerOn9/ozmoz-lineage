@@ -6,5 +6,8 @@
     "delete"
   ],
   "comment": "DELETE FROM + WHERE",
-  "sql": "DELETE FROM sessions WHERE expires_at < '2026-01-01'"
+  "sql": "DELETE FROM sessions WHERE expires_at < '2026-01-01'",
+  "lineage": {
+    "edges": []
+  }
 }

@@ -6,5 +6,59 @@
     "outer-join"
   ],
   "comment": "左外连接——右侧无匹配时输出 NULL 行",
-  "sql": "SELECT u.id, u.name, o.id AS order_id FROM users u LEFT OUTER JOIN orders o ON o.user_id = u.id"
+  "sql": "SELECT u.id, u.name, o.id AS order_id FROM users u LEFT OUTER JOIN orders o ON o.user_id = u.id",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.id",
+        "to": "id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.id",
+        "to": "order_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "users.id",
+        "kind": "JOIN_KEY"
+      },
+      {
+        "from": "users",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "order_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "order_id",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

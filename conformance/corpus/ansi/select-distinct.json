@@ -6,5 +6,29 @@
     "distinct"
   ],
   "comment": "DISTINCT 去重选择",
-  "sql": "SELECT DISTINCT city, country FROM users"
+  "sql": "SELECT DISTINCT city, country FROM users",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.city",
+        "to": "city",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.country",
+        "to": "country",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users",
+        "to": "city",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "country",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

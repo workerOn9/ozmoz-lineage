@@ -6,5 +6,59 @@
     "quoted-identifier"
   ],
   "comment": "反引号标识符 + CTE",
-  "sql": "WITH top_users AS (SELECT `id`, `name` FROM `users` WHERE `age` > 18) SELECT `id`, `name` FROM `top_users`"
+  "sql": "WITH top_users AS (SELECT `id`, `name` FROM `users` WHERE `age` > 18) SELECT `id`, `name` FROM `top_users`",
+  "lineage": {
+    "edges": [
+      {
+        "from": "top_users.id",
+        "to": "id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "top_users.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "top_users",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "top_users",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users.id",
+        "to": "top_users.id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.name",
+        "to": "top_users.name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.age",
+        "to": "top_users.id",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "users.age",
+        "to": "top_users.name",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "users",
+        "to": "top_users.id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "top_users.name",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

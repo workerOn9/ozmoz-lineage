@@ -6,5 +6,29 @@
     "update"
   ],
   "comment": "UPDATE SET + WHERE",
-  "sql": "UPDATE users SET status = 'active', updated_at = '2026-10-10' WHERE last_login < '2025-01-01'"
+  "sql": "UPDATE users SET status = 'active', updated_at = '2026-10-10' WHERE last_login < '2025-01-01'",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.last_login",
+        "to": "users.status",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "users.last_login",
+        "to": "users.updated_at",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "users",
+        "to": "users.status",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "users.updated_at",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

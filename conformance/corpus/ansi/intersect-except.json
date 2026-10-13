@@ -7,5 +7,39 @@
     "except"
   ],
   "comment": "INTERSECT 与 EXCEPT 组合",
-  "sql": "SELECT user_id FROM orders INTERSECT SELECT user_id FROM payments EXCEPT SELECT user_id FROM refunds"
+  "sql": "SELECT user_id FROM orders INTERSECT SELECT user_id FROM payments EXCEPT SELECT user_id FROM refunds",
+  "lineage": {
+    "edges": [
+      {
+        "from": "orders.user_id",
+        "to": "user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders",
+        "to": "user_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "payments.user_id",
+        "to": "user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "payments",
+        "to": "user_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "refunds.user_id",
+        "to": "user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "refunds",
+        "to": "user_id",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

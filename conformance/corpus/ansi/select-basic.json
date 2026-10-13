@@ -6,5 +6,49 @@
     "basic"
   ],
   "comment": "基础列选择、过滤、排序与行数限制（所有引擎的底线）",
-  "sql": "SELECT id, name FROM users WHERE age > 30 ORDER BY name LIMIT 10"
+  "sql": "SELECT id, name FROM users WHERE age > 30 ORDER BY name LIMIT 10",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.id",
+        "to": "id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.age",
+        "to": "id",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "users.age",
+        "to": "name",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "users.name",
+        "to": "id",
+        "kind": "ORDER_BY"
+      },
+      {
+        "from": "users.name",
+        "to": "name",
+        "kind": "ORDER_BY"
+      },
+      {
+        "from": "users",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "name",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

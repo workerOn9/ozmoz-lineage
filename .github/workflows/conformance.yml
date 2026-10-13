@@ -39,6 +39,18 @@ jobs:
       - name: 渲染方言转换摘要（每方言对一条成品 diff 样本）
         run: python3 .github/scripts/convert_summary.py compat-convert.json >> "${GITHUB_STEP_SUMMARY}"
 
+      - name: 生成血缘质量报表（M1 收尾：解析率 / precision / recall / unknown 率 / 静默漏）
+        run: ./cli/build/install/ozml/bin/ozml quality --corpus conformance/corpus --commit "${{ github.sha }}" --out quality-report.json
+
+      - name: 渲染质量报表摘要
+        run: python3 .github/scripts/quality_summary.py quality-report.json >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: 上传质量报表产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-report
+          path: quality-report.json
+
       - name: 上传矩阵产物
         uses: actions/upload-artifact@v4
         with:
