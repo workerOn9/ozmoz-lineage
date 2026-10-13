@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="design/logo/src/icon.svg" width="96" height="96" alt="ozmoz-lineage 图标：靛蓝圆角方块上的白色啄木鸟">
+</p>
+
 # ozmoz-lineage
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
