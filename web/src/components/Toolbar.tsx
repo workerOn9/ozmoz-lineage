@@ -1,4 +1,5 @@
 import { useAppStore } from '../state/store'
+import { DOCS_URL } from '../lib/links'
 
 export function Toolbar() {
   const backend = useAppStore((s) => s.backend)
@@ -185,6 +186,15 @@ export function Toolbar() {
       >
         {formatting ? '排版中…' : '格式化'}
       </button>
+      <a
+        className="rounded border border-neutral-700 px-2 py-1 text-[12px] text-neutral-300 hover:bg-neutral-800"
+        href={DOCS_URL}
+        target="_blank"
+        rel="noreferrer"
+        title="工具百科：引擎能力 / 方言目录与两张实测矩阵（数据由 CI 生成，每格可溯源到 commit）"
+      >
+        文档 ↗
+      </a>
     </div>
   )
 }

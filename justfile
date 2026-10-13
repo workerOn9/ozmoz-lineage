@@ -27,7 +27,7 @@ web-check:
 web-build:
     npm --prefix web run build
 
-# —— 文档站（site/，VitePress，独立子项目，不进 Gradle）——
+# —— 文档站（site/，Rspress，独立子项目，不进 Gradle）——
 
 # 安装文档站依赖（按锁文件）
 docs-install:
@@ -42,10 +42,15 @@ docs-data:
     ./cli/build/install/ozml/bin/ozml matrix --convert --corpus conformance/corpus --commit "$(git rev-parse --short HEAD)" --out site/.data/compat-convert.json
 
 # 文档站 dev server（数据缺失时页面自动降级为「先跑 just docs-data」占位）
+# 注意：base 写死在 rspress.config.ts（/ozmoz-lineage/），所以本地 URL 也带前缀。
 docs-dev:
     npm --prefix site run dev
 
-# 文档站构建（先现生成数据，再 VitePress 构建）
+# 文档站本地预览（先 docs-build 产出 doc_build，再起预览；URL 同样带 base 前缀）
+docs-preview: docs-build
+    npm --prefix site run preview
+
+# 文档站构建（先现生成数据，再 Rspress 构建 → site/doc_build）
 docs-build: docs-data
     npm --prefix site run build
 

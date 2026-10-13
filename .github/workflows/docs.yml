@@ -9,8 +9,8 @@ on:
 permissions:
   contents: read
 
-# 文档站轴（`site/`，VitePress，M5 工具百科）：CI **现跑 ozml** 生成矩阵与引擎能力表
-# （数据不入库，避免腐化）→ VitePress 构建 → GitHub Pages 发布。
+# 文档站轴（`site/`，Rspress，M5 工具百科）：CI **现跑 ozml** 生成矩阵与引擎能力表
+# （数据不入库，避免腐化）→ Rspress 构建 → GitHub Pages 发布。
 # 线上永远是最新实测快照，每页带当次 commit 溯源；PR 上只构建不部署。
 concurrency:
   group: docs-pages
@@ -53,15 +53,13 @@ jobs:
         working-directory: site
         run: npm test
 
-      - name: VitePress 构建（GitHub Pages 项目站点 base）
+      - name: Rspress 构建（Pages 项目站点 base 已写死在 rspress.config.ts）
         working-directory: site
-        env:
-          DOCS_BASE: /ozmoz-lineage/
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: site/.vitepress/dist
+          path: site/doc_build
 
   deploy:
     name: docs deploy
