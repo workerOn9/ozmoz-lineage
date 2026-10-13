@@ -64,6 +64,13 @@ docs-check:
 build:
     ./gradlew build
 
+# 自包含发行产物（自带 jlink 运行时；tar.gz + zip）→ cli/build/distributions/
+# 版本经 OZML_VERSION 指定（进 ozml --version 与产物文件名），缺省 0.1.0-SNAPSHOT：
+#   OZML_VERSION=0.2.0 just dist
+# 平台标签按宿主推断，CI 交叉命名用 -PozmlPlatform=<os-arch> 覆盖（见 release.yml）。
+dist:
+    ./gradlew :cli:ozmlDistArchives
+
 # —— 集成 ——
 
 # 构建前端 + 启动 ozml serve 托管 dist（单端口单进程：SPA 与 /api 同端口）

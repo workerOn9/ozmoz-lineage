@@ -4,9 +4,15 @@ plugins {
 
 val jdkVersion = libs.versions.jdk.get().toInt()
 
+// 版本身份：发布 CI 从 tag 注入（OZML_VERSION / -PozmlVersion），本机缺省为快照版。
+// 该值同时进 `ozml --version`、产物文件名与 `ozml upgrade` 的版本比较，故只有一个来源。
+val ozmlVersion: String = providers.environmentVariable("OZML_VERSION")
+    .orElse(providers.gradleProperty("ozmlVersion"))
+    .getOrElse("0.1.0-SNAPSHOT")
+
 subprojects {
     group = "io.github.workeron9"
-    version = "0.1.0-SNAPSHOT"
+    version = ozmlVersion
 
     plugins.withId("org.jetbrains.kotlin.jvm") {
         extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension>("kotlin") {

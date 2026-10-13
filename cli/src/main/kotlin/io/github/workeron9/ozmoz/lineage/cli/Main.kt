@@ -1,8 +1,9 @@
 package io.github.workeron9.ozmoz.lineage.cli
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.core.main
+import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.parameters.options.versionOption
 
 /**
  * `ozml` = **ozmoz** + **lineage**。
@@ -14,9 +15,16 @@ import com.github.ajalt.clikt.core.main
  * [ValidateCommand]（schema 语义校验）；ADR-0014 落地 [FormatCommand]（SQL 排版）；
  * MCP 落地 [McpCommand]（stdio 工具面，镜像 `/api` 能力）；M5 文档站落地
  * [EnginesCommand]（引擎能力表，文档站「工具百科」数据源）；M1 收尾落地
- * [QualityCommand]（血缘质量报表，计划 §8）。
+ * [QualityCommand]（血缘质量报表，计划 §8）；ADR-0021 落地
+ * [UpgradeCommand]（自更新，唯一联网子命令）。
+ *
+ * 顶层带 `--version`（版本身份来自 [BuildInfo]，与产物 / `upgrade` 同一来源）。
  */
 public class OzmlCommand : CliktCommand(name = "ozml") {
+    init {
+        versionOption(BuildInfo.version)
+    }
+
     override fun run() {
         // 顶层只承载子命令；`--help` 由 Clikt 输出用法。
     }
@@ -36,6 +44,7 @@ public fun main(args: Array<String>) {
             EnginesCommand(),
             QualityCommand(),
             McpCommand(),
+            UpgradeCommand(),
         )
         .main(args)
 }
