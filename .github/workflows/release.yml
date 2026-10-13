@@ -22,9 +22,12 @@ jobs:
             platform: linux-x64
           - runner: ubuntu-24.04-arm
             platform: linux-arm64
-          - runner: macos-14
+          # macOS 矩阵：arm64 用 macos-15，x64 用 macos-15-intel。
+          # 注意 macos-13（原 x64）已于 2025-12-04 退休、macos-14 已废弃——标签以
+          # actions/runner-images README 为准（2026-10 核对：macos-15 / macos-15-intel）。
+          - runner: macos-15
             platform: macos-arm64
-          - runner: macos-13
+          - runner: macos-15-intel
             platform: macos-x64
           - runner: windows-latest
             platform: windows-x64

@@ -80,34 +80,6 @@ val jlinkModules = listOf(
 
 val jlinkRuntimeDir = layout.buildDirectory.dir("jlink/runtime")
 
-val jlinkRuntime = tasks.register<Exec>("jlinkRuntime") {
-    group = "distribution"
-    description = "用 jlink 裁剪出自包含运行时（build/jlink/runtime）"
-    val outDir = jlinkRuntimeDir.get().asFile
-    inputs.property("modules", jlinkModules.joinToString(","))
-    outputs.dir(outDir)
-    // jlink 的 `legal/` 等文件是只读的（0444），会让后续 Sync 覆盖失败——先改可写再删。
-    doFirst {
-        if (outDir.exists()) {
-            outDir.walkBottomUp().forEach { it.setWritable(true, false) }
-            outDir.deleteRecursively()
-        }
-    }
-    // 必须用**工具链** JDK 的 jlink：Gradle 守护进程可能跑在别的 JDK 上。
-    // 配置期解析（Exec 不认 Provider 形式的 executable）。
-    val jlinkExecutable = javaToolchains.launcherFor {
-        languageVersion.set(JavaLanguageVersion.of(libs.versions.jdk.get().toInt()))
-    }.get().metadata.installationPath.file("bin/jlink").asFile.absolutePath
-    executable(jlinkExecutable)
-    args(
-        "--add-modules", jlinkModules.joinToString(","),
-        "--strip-debug", "--no-man-pages", "--no-header-files", "--compress=zip-6",
-        "--output", outDir.absolutePath,
-    )
-    // 产出改可写：下游 Sync 要能覆盖（jlink 的 legal 文件默认只读）。
-    doLast { outDir.walkTopDown().forEach { it.setWritable(true, false) } }
-}
-
 // 目标平台标签：本机构建按宿主推断；CI 交叉命名可 `-PozmlPlatform=linux-arm64` 覆盖。
 val hostOs: String = System.getProperty("os.name").lowercase().let {
     when {
@@ -122,6 +94,34 @@ val hostArch: String = System.getProperty("os.arch").lowercase().let {
 val releasePlatform: String = providers.gradleProperty("ozmlPlatform").getOrElse("$hostOs-$hostArch")
 val releaseBaseName = "ozml-${project.version}-$releasePlatform"
 val isWindowsHost = hostOs == "windows"
+
+val jlinkRuntime = tasks.register<Exec>("jlinkRuntime") {
+    group = "distribution"
+    description = "用 jlink 裁剪出自包含运行时（build/jlink/runtime）"
+    val outDir = jlinkRuntimeDir.get().asFile
+    inputs.property("modules", jlinkModules.joinToString(","))
+    outputs.dir(outDir)
+    // jlink 的 `legal/` 等文件是只读的（0444），会让后续 Sync 覆盖失败——先改可写再删。
+    doFirst {
+        if (outDir.exists()) {
+            outDir.walkBottomUp().forEach { it.setWritable(true, false) }
+            outDir.deleteRecursively()
+        }
+    }
+    // 必须用**工具链** JDK 的 jlink：Gradle 守护进程可能跑在别的 JDK 上。
+    // 配置期解析（Exec 不认 Provider 形式的 executable）；Windows 上是 `jlink.exe`。
+    val jlinkExecutable = javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(libs.versions.jdk.get().toInt()))
+    }.get().metadata.installationPath.file(if (isWindowsHost) "bin/jlink.exe" else "bin/jlink").asFile.absolutePath
+    executable(jlinkExecutable)
+    args(
+        "--add-modules", jlinkModules.joinToString(","),
+        "--strip-debug", "--no-man-pages", "--no-header-files", "--compress=zip-6",
+        "--output", outDir.absolutePath,
+    )
+    // 产出改可写：下游 Sync 要能覆盖（jlink 的 legal 文件默认只读）。
+    doLast { outDir.walkTopDown().forEach { it.setWritable(true, false) } }
+}
 
 val ozmlDistDir = layout.buildDirectory.dir("ozmlDist")
 val ozmlDist = tasks.register<Sync>("ozmlDist") {
