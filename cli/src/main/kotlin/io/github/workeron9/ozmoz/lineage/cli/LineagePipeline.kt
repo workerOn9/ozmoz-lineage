@@ -1,10 +1,12 @@
 package io.github.workeron9.ozmoz.lineage.cli
 
+import io.github.workeron9.ozmoz.lineage.engine.Feature
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.engine.calcite.CalciteEngine
 import io.github.workeron9.ozmoz.lineage.engine.jooq.JooqEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
+import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.EdgeKind
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
@@ -16,6 +18,17 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.Path
 import kotlin.io.path.readText
+
+/**
+ * [LineagePipeline.models] 的产出：模型 + **逐语句容错**产生的诊断。
+ *
+ * [diagnostics] 只在 `tolerant = true` 且脚本里确有坏语句时非空（见
+ * [Feature.ERROR_TOLERANT]）；严格路径（缺省）恒为空，形状恒定便于调用方统一处理。
+ */
+internal data class BuiltModels(
+    val models: List<LineageModel>,
+    val diagnostics: List<Diagnostic> = emptyList(),
+)
 
 /**
  * `lineage` / `impact` 共用的**组合根**逻辑：把「一个路径（文件 / 目录 / stdin）」
@@ -87,20 +100,42 @@ internal object LineagePipeline {
         }
 
     /**
-     * 一段 SQL（可含多条语句）→ 一组血缘模型。
+     * 一段 SQL（可含多条语句）→ 一组血缘模型 + 逐语句诊断。
      *
-     * 走引擎的 [SqlEngine.analyzeAll]：整段语法错误返回 [Resolved.Unknown]；
+     * 走引擎的 [SqlEngine.analyzeAll]（严格）：整段语法错误返回 [Resolved.Unknown]；
      * 脚本里不可建模的语句被跳过（不硬塞）。每提取到的一条语句交给
      * [LineageBuilder.build] 建列级血缘。
+     *
+     * [tolerant] 为真时改走 [SqlEngine.analyzeScript]（[Feature.ERROR_TOLERANT]）：
+     * 坏语句降级为 [BuiltModels.diagnostics]（带位置），好语句照常建模型——调用方
+     * 负责把诊断报出去（CLI 口径：WARN）+ 在一条都没建出来时按 `Unknown` / 空结果收尾。
      */
     fun models(
         sql: String,
         engine: SqlEngine,
         dialect: String?,
         schema: SchemaProvider?,
-    ): Resolved<List<LineageModel>> =
-        engine.analyzeAll(sql, ParseRequest(dialect = dialect))
-            .map { statements -> statements.map { LineageBuilder.build(it, schema) } }
+        tolerant: Boolean = false,
+    ): Resolved<BuiltModels> =
+        if (tolerant) {
+            engine.analyzeScript(sql, ParseRequest(dialect = dialect)).map { outcome ->
+                BuiltModels(
+                    models = outcome.statements.map { LineageBuilder.build(it, schema) },
+                    diagnostics = outcome.diagnostics,
+                )
+            }
+        } else {
+            engine.analyzeAll(sql, ParseRequest(dialect = dialect)).map { statements ->
+                BuiltModels(models = statements.map { LineageBuilder.build(it, schema) })
+            }
+        }
+
+    /** 逐语句诊断的人读行（`--tolerant`）：`WARN <来源>:<行>:<列> <code>: <message>`。 */
+    fun diagnosticLine(source: String?, diagnostic: Diagnostic): String = buildString {
+        append("WARN ").append(source ?: "<stdin>")
+        diagnostic.span?.let { append(':').append(it.start.line).append(':').append(it.start.column) }
+        append(' ').append(diagnostic.code).append(": ").append(diagnostic.message)
+    }
 
     /**
      * 展开 `--schema` 参数：既接**单个 DDL 文件**，也接**目录**（目录时取其下全部
@@ -149,7 +184,8 @@ internal object LineagePipeline {
 
     /**
      * **上下文摘要**：会影响「同一段 SQL 解析出什么模型」的输入快照：
-     * 引擎 id、方言、schema 快照、[noSourceEdges] 开关。schema 按 [schemaPath] 来路取摘要——
+     * 引擎 id、方言、schema 快照、[noSourceEdges] 开关、[tolerant] 开关。schema 按
+     * [schemaPath] 来路取摘要——
      * - 显式 `--schema`：DDL 文件路径 + 全部内容（权威元数据，改一个字就全失效）；
      * - auto：只把**含 `create table` 子串（大小写不敏感）**的输入文本入摘要。
      *   该子串是「能贡献 DDL」的必要条件（文件里没 `create table` 就一定抽不出
@@ -161,6 +197,7 @@ internal object LineagePipeline {
         dialect: String?,
         schemaPath: String?,
         noSourceEdges: Boolean,
+        tolerant: Boolean,
         inputs: List<Pair<String?, String>>,
     ): String {
         val schemaPart = if (schemaPath != null) {
@@ -176,7 +213,12 @@ internal object LineagePipeline {
                 .joinToString(SEPARATOR) { it.second }
                 .let { "auto$SEPARATOR$it" }
         }
-        return sha256(engineId + SEPARATOR + (dialect ?: "") + SEPARATOR + "noSourceEdges=$noSourceEdges" + SEPARATOR + schemaPart)
+        return sha256(
+            engineId + SEPARATOR + (dialect ?: "") +
+                SEPARATOR + "noSourceEdges=$noSourceEdges" +
+                SEPARATOR + "tolerant=$tolerant" +
+                SEPARATOR + schemaPart,
+        )
     }
 
     /**

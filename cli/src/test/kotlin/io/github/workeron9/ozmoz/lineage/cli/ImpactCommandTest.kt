@@ -82,4 +82,15 @@ class ImpactCommandTest {
         assertTrue(result.statusCode != 0)
         assertContains(result.stderr, "column_not_found")
     }
+
+    @Test
+    fun `tolerant 坏语句 WARN 且好语句仍可查`() {
+        val f = tempSql("SELECT a FROM t;\nSELECT * FROM WHERE x = 1")
+
+        val result = command.test("--file ${f.absolutePath} --on t.a --direction downstream --tolerant")
+
+        assertEquals(0, result.statusCode)
+        assertContains(result.stdout, "t.a")
+        assertContains(result.stderr, "jsqlparser.parse_error")
+    }
 }

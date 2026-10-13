@@ -1,5 +1,6 @@
 package io.github.workeron9.ozmoz.lineage.engine.jsqlparser
 
+import io.github.workeron9.ozmoz.lineage.engine.AnalyzeOutcome
 import io.github.workeron9.ozmoz.lineage.engine.EngineCapabilities
 import io.github.workeron9.ozmoz.lineage.engine.Feature
 import io.github.workeron9.ozmoz.lineage.engine.FormatOutcome
@@ -11,6 +12,8 @@ import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
+import io.github.workeron9.ozmoz.lineage.ir.Severity
+import io.github.workeron9.ozmoz.lineage.ir.Span
 import io.github.workeron9.ozmoz.lineage.ir.TableRef
 import net.sf.jsqlparser.JSQLParserException
 import net.sf.jsqlparser.parser.CCJSqlParserUtil
@@ -40,6 +43,7 @@ public class JSqlParserEngine : SqlEngine {
             Feature.EXTRACT_TABLES,
             Feature.SEMANTIC_MODEL,
             Feature.MULTI_STATEMENT,
+            Feature.ERROR_TOLERANT,
             Feature.PRETTY_PRINT,
             Feature.AST_EXPORT,
         ),
@@ -50,7 +54,6 @@ public class JSqlParserEngine : SqlEngine {
             Feature.DIALECT_RENDER to "DeParser 是原样回写，不做方言转换",
             Feature.VALIDATE_SCHEMA to "不做 schema 语义校验",
             Feature.FIELD_LINEAGE to "字段级血缘由 lineage 模块承担",
-            Feature.ERROR_TOLERANT to "v1 不支持编辑中不完整 SQL",
         ),
     )
 
@@ -108,8 +111,8 @@ public class JSqlParserEngine : SqlEngine {
      * 提取；无法建模的语句（纯 DDL / `MERGE` / `VALUES` 等）**跳过**，不让整脚本失败。
      * 只有整段脚本**语法解析失败**才返回 [Resolved.Unknown]（带原因与位置）。
      *
-     * 说明：JSqlParser 的 `parseStatements` 遇到任意一条坏语句会整段抛异常，
-     * 因此本轮不做「逐语句容错」——那属于 `ERROR_TOLERANT`，v1 明确不支持。
+     * **整段失败不是终点**：想「坏语句不拖垮整段」用 [analyzeScript]
+     * （[Feature.ERROR_TOLERANT]）——它先走本方法的快路径，失败再逐语句重试。
      */
     override fun analyzeAll(sql: String, request: ParseRequest): Resolved<List<SemanticStatement>> {
         if (sql.isBlank()) return Resolved.Unknown("SQL 为空，无可提取内容")
@@ -122,16 +125,105 @@ public class JSqlParserEngine : SqlEngine {
             return Resolved.Unknown("解析失败: ${firstLine(e.message) ?: e.javaClass.simpleName}")
         }
 
+        return Resolved.Known(extractEach(sql, statements))
+    }
+
+    /**
+     * **逐语句容错**提取多语句脚本的语义模型（[Feature.ERROR_TOLERANT]）。
+     *
+     * 走两段：
+     * 1. **快路径**：整段可解析时与 [analyzeAll] **逐字一致**（零行为漂移）；
+     * 2. **慢路径**：整段失败时按顶层 `;` 切分（[StatementSplitter]），逐条独立解析——
+     *    坏语句降级为带位置的 [Diagnostic]，好语句照常产出（**丢就说**，不静默丢）。
+     *
+     * 结论口径与 [analyzeAll] 一致（Never-wrong）：**一条都救不回来**（含单语句坏输入）
+     * 仍返回 [Resolved.Unknown]——容错只在「有得有失」时才有意义，全坏就不是容错是掩饰。
+     */
+    override fun analyzeScript(sql: String, request: ParseRequest): Resolved<AnalyzeOutcome> {
+        // 快路径：整段可解析 → 复用 analyzeAll（含 DDL / MERGE 跳过口径）。
+        when (val strict = analyzeAll(sql, request)) {
+            is Resolved.Known -> return Resolved.Known(AnalyzeOutcome(strict.value))
+            // 空白输入：与非容错路径同结论，逐语句重试没有意义。
+            is Resolved.Unknown -> if (sql.isBlank()) return strict
+        }
+
+        val statements = ArrayList<SemanticStatement>()
+        val diagnostics = ArrayList<Diagnostic>()
+        for (chunk in StatementSplitter.split(sql)) {
+            when (val parsed = parseChunk(sql, chunk)) {
+                is ChunkParse.Ok -> when (val extracted = SemanticExtractor(parsed.masked).extract(parsed.statement)) {
+                    is Resolved.Known -> statements += extracted.value
+                    is Resolved.Unknown -> Unit // 建模不了（DDL / MERGE…）与非容错路径同口径：跳过。
+                }
+
+                is ChunkParse.Bad -> diagnostics += Diagnostic(
+                    severity = Severity.ERROR,
+                    code = CODE_PARSE_ERROR,
+                    message = parsed.message,
+                    span = parsed.span,
+                    engineId = id,
+                )
+            }
+        }
+
+        if (statements.isEmpty()) {
+            val first = diagnostics.firstOrNull()
+            return Resolved.Unknown(
+                reason = first?.let { "解析失败: ${it.message}" } ?: "解析失败",
+                span = first?.span,
+            )
+        }
+        return Resolved.Known(AnalyzeOutcome(statements = statements, diagnostics = diagnostics))
+    }
+
+    /** 逐条提取（每条用**独立的** extractor：其 diagnostics 是累积的，复用会串味）。 */
+    private fun extractEach(sql: String, statements: List<Statement>): List<SemanticStatement> {
         val extracted = ArrayList<SemanticStatement>(statements.size)
         for (statement in statements) {
-            // 每条语句用**独立的** extractor：SemanticExtractor 内的 diagnostics 是累积的，
-            // 复用会把上一条的诊断带进下一条。
             when (val result = SemanticExtractor(sql).extract(statement)) {
                 is Resolved.Known -> extracted += result.value
                 is Resolved.Unknown -> Unit // 跳过无法建模的语句（DDL / MERGE…），Never-wrong 不硬塞。
             }
         }
-        return Resolved.Known(extracted)
+        return extracted
+    }
+
+    /** 单个片段的解析结果：成功时**连它的 masked 文本一起带出**（[SemanticExtractor] 要用它取位置）。 */
+    private sealed interface ChunkParse {
+        data class Ok(val masked: String, val statement: Statement) : ChunkParse
+        data class Bad(val message: String, val span: Span?) : ChunkParse
+    }
+
+    /**
+     * 解析一个片段：**把片段之前的字符全部遮成空格（保留换行）**再解析，于是片段的
+     * token 绝对偏移与整段源文本对齐——[SemanticExtractor] / [JsSqlSpan] 一个字符都不用改
+     * 就能给出正确的行列位置（Lossless）。
+     *
+     * 代价是 O(片段起点) 的字符拷贝；只在「整段解析已失败」的脚本上发生，且每片段一次，
+     * 对现实脚本（数百条语句）可忽略。真要放大到极端规模，可换成 char 数组就地擦写 + Reader。
+     */
+    private fun parseChunk(source: String, chunk: StatementSplitter.Chunk): ChunkParse {
+        val masked = maskBefore(source, chunk.start) + source.substring(chunk.start, chunk.endExclusive)
+        return try {
+            ChunkParse.Ok(masked = masked, statement = CCJSqlParserUtil.parse(masked))
+        } catch (e: JSQLParserException) {
+            val parseException = e.findParseException()
+            ChunkParse.Bad(
+                message = parseException?.let { firstLine(it.message) } ?: firstLine(e.message) ?: "解析失败",
+                span = parseException?.let { JsSqlSpan.ofParseException(source, it) },
+            )
+        } catch (e: RuntimeException) {
+            ChunkParse.Bad("解析失败: ${firstLine(e.message) ?: e.javaClass.simpleName}", null)
+        }
+    }
+
+    private fun maskBefore(source: String, endExclusive: Int): String {
+        val chars = CharArray(endExclusive)
+        for (i in 0 until endExclusive) {
+            val c = source[i]
+            chars[i] = if (c == '\n' || c == '\r') c else ' '
+        }
+        return String(chars)
     }
 
     /**
@@ -193,7 +285,7 @@ public class JSqlParserEngine : SqlEngine {
         return ParseOutcome(
             diagnostics = listOf(
                 Diagnostic(
-                    severity = io.github.workeron9.ozmoz.lineage.ir.Severity.ERROR,
+                    severity = Severity.ERROR,
                     code = CODE_PARSE_ERROR,
                     message = message,
                     span = span,

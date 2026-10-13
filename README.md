@@ -22,6 +22,7 @@ ozml lineage -f q.sql --format json|edges|summary     # 列级血缘模型（当
 ozml lineage -f q.sql --format openlineage|mermaid|dot|cypher  # 导出（当前可用）
 ozml lineage -f q.sql --schema schema.sql             # 喂 DDL 元数据：物理表 * 展开、列消歧、INSERT 对齐（当前可用）
 ozml lineage -f sql/ --graph ./lineage.db             # 吃下一个 SQL 目录（含多语句脚本）→ 落库全库血缘图（当前可用）
+ozml lineage -f sql/ --tolerant                       # 逐语句容错：坏语句 WARN（带行列）不拖垮整段，好语句照常出模型（需引擎支持 ERROR_TOLERANT）
 ozml impact  --graph ./lineage.db --on db.t.c --depth 3  # 从库查询上溯 / 下溯 / 影响面（当前可用）
 ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查（当前可用）
 ozml matrix   --corpus ./conformance/corpus --out ./docs/compat-matrix.json
@@ -148,6 +149,7 @@ ozml impact  --graph ./lineage.db --on db.t.c
 ```
 
 - 多语句：引擎用 `parseStatements` 逐条提取；纯 DDL / `MERGE` 等不可建模的语句**跳过**，只有整段语法错误才失败。输入里没有任何可建模语句时非零退出（不假装成功）。
+- 逐语句容错（`--tolerant`，`ERROR_TOLERANT` 能力）：多语句脚本里一条语句语法错误时，**好语句照常建模**，坏语句落一条带行列位置的 `WARN`（`jsqlparser.parse_error`）到 stderr——两条路径的差别只在「坏语句怎么办」，整段可解析时两者逐字一致。口径与目录模式一致：**退出码仍为 0**（坏文件跳过 + WARN 的老惯例），只有一条可建模语句都没有时才非零退出（容错不是掩饰）。未申报该能力的引擎（calcite / jooq）用 `--tolerant` 会得到可解释的非零退出。
 - 落库：`graph` 模块的 `LineageStore` SPI（当前实现 `SqliteLineageStore`）把**每条语句的 `LineageModel`** 存进 `lineage.db`（Lossless：`unknown` / 诊断 / span 全保留）；`ozml impact --graph` 载入后由 `LineageGraph.of(models)` 现建图。跨文件的链（`INSERT … SELECT` → 后续 `INSERT`/`VIEW` 读该表）在库里自然缝合。
 - 不带 `--graph` 时，多文件 / 多语句可用 `--format summary` 或 `--format graph-json` 直接看合并后的图。
 

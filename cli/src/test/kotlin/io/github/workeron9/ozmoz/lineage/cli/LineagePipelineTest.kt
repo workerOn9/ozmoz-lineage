@@ -105,4 +105,22 @@ class LineagePipelineTest {
         assertNull(LineagePipeline.autoSchema(listOf("query.sql" to "SELECT 1")))
         assertNull(LineagePipeline.autoSchema(emptyList()))
     }
+
+    @Test
+    fun `models tolerant 返回模型与逐语句诊断`() {
+        val sql = "SELECT a FROM t;\nSELECT * FROM WHERE x = 1"
+
+        val tolerant = assertIs<Resolved.Known<BuiltModels>>(
+            LineagePipeline.models(sql, engine, dialect = null, schema = null, tolerant = true),
+        )
+        assertEquals(1, tolerant.value.models.size)
+        assertEquals(1, tolerant.value.diagnostics.size)
+
+        // 严格路径（缺省）形状恒定：诊断为空，整段失败走 Unknown。
+        val strict = assertIs<Resolved.Known<BuiltModels>>(
+            LineagePipeline.models("SELECT a FROM t", engine, dialect = null, schema = null),
+        )
+        assertTrue(strict.value.diagnostics.isEmpty())
+        assertIs<Resolved.Unknown>(LineagePipeline.models(sql, engine, dialect = null, schema = null))
+    }
 }

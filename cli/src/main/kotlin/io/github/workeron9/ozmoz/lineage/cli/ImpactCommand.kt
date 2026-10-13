@@ -4,10 +4,12 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.choice
 import com.github.ajalt.clikt.parameters.types.int
+import io.github.workeron9.ozmoz.lineage.engine.Feature
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
 import io.github.workeron9.ozmoz.lineage.graph.Direction
@@ -70,6 +72,16 @@ public class ImpactCommand : CliktCommand(name = "impact") {
         help = "DDL 文件或目录（含 CREATE TABLE），仅 -f 现建现查时用；未给出时自动从输入文本收集 CREATE TABLE",
     )
 
+    /**
+     * 逐语句容错（[Feature.ERROR_TOLERANT]，仅 `-f` 现建现查时用）：坏语句 WARN 不拖垮整段。
+     * 与 `ozml lineage --tolerant` 同一口径（退出码仍为 0，除非一条都没建出来）。
+     */
+    private val tolerant: Boolean by option(
+        "--tolerant",
+        help = "逐语句容错（仅 -f）：坏语句 WARN（带位置）不拖垮整段，好语句照常建图",
+    )
+        .flag()
+
     override fun help(context: Context): String =
         "在血缘图上查询一列的上溯 / 下溯 / 影响面（图算法由 graph 模块提供）；图来自 --graph 库或 -f 现建。"
 
@@ -117,14 +129,25 @@ public class ImpactCommand : CliktCommand(name = "impact") {
     /** 从文件 / 目录现建图（不落库）。 */
     private fun buildGraph(path: String): LineageGraph {
         val engine = LineagePipeline.engine(engineId)
+        // 能力表路由（只在 -f 现建时用得上 --tolerant）：引擎没申报就直接给可解释的错误。
+        if (tolerant) {
+            engine.capabilities.reason(Feature.ERROR_TOLERANT)?.let { reason ->
+                echo("ERROR unsupported_capability: 引擎 $engineId 不支持逐语句容错：$reason", err = true)
+                throw ProgramResult(1)
+            }
+        }
         val inputs = LineagePipeline.readInputs(path)
         // 显式 --schema 永远优先；未给出时从输入文本顺手收集 CREATE TABLE（可能为 null）。
         val schema: SchemaProvider? = schemaPath?.let { LineagePipeline.schema(it) } ?: LineagePipeline.autoSchema(inputs)
         val single = inputs.size == 1
         val models = ArrayList<LineageModel>()
         for ((source, text) in inputs) {
-            when (val built = LineagePipeline.models(text, engine, dialect, schema)) {
-                is Resolved.Known -> models += built.value
+            when (val built = LineagePipeline.models(text, engine, dialect, schema, tolerant)) {
+                is Resolved.Known -> {
+                    for (diagnostic in built.value.diagnostics) echo(LineagePipeline.diagnosticLine(source, diagnostic), err = true)
+                    models += built.value.models
+                }
+
                 is Resolved.Unknown -> {
                     if (single) {
                         echo("ERROR semantic_unavailable: ${built.reason}", err = true)

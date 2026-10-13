@@ -271,6 +271,50 @@ class LineageCommandTest {
         assertTrue(result.statusCode != 0)
     }
 
+    // ——— 逐语句容错（--tolerant，ERROR_TOLERANT） ———
+
+    @Test
+    fun `tolerant 坏语句 WARN 好语句照常出模型且退出 0`() {
+        val f = tempSql("SELECT a FROM t;\nSELECT * FROM WHERE x = 1")
+
+        val result = command.test("--file ${f.absolutePath} --format summary --tolerant")
+
+        assertEquals(0, result.statusCode)
+        assertContains(result.stdout, "edges: 2") // 好语句 1 OUTPUT + 1 SOURCE
+        assertContains(result.stderr, "WARN")
+        assertContains(result.stderr, "jsqlparser.parse_error")
+        assertContains(result.stderr, ":2:") // 带坏语句的行号
+    }
+
+    @Test
+    fun `不加 tolerant 时同一文件整段失败`() {
+        val f = tempSql("SELECT a FROM t;\nSELECT * FROM WHERE x = 1")
+
+        val result = command.test("--file ${f.absolutePath} --format summary")
+
+        assertEquals(1, result.statusCode)
+        assertContains(result.stderr, "semantic_unavailable")
+    }
+
+    @Test
+    fun `tolerant 一条都没建出来仍非零退出`() {
+        val f = tempSql("SELECT * FROM WHERE x = 1")
+
+        val result = command.test("--file ${f.absolutePath} --tolerant")
+
+        assertEquals(1, result.statusCode)
+    }
+
+    @Test
+    fun `tolerant 需引擎支持 否则可解释报错`() {
+        val f = tempSql("SELECT a FROM t")
+
+        val result = command.test("--file ${f.absolutePath} --tolerant --engine calcite")
+
+        assertEquals(1, result.statusCode)
+        assertContains(result.stderr, "unsupported_capability")
+    }
+
     /** 真实引擎分析 → 列级血缘模型（与 LineagePipelineTest 同一组合根模式）。 */
     private fun analyze(sql: String, schemaDdl: File? = null): LineageModel {
         val semantic = JSqlParserEngine().analyze(sql)
