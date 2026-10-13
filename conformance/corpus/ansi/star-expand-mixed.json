@@ -6,5 +6,75 @@
     "join"
   ],
   "comment": "SELECT o.* 与具名列混排（星号展开关键 case）",
-  "sql": "SELECT o.*, u.name AS user_name FROM orders o JOIN users u ON o.user_id = u.id"
+  "sql": "SELECT o.*, u.name AS user_name FROM orders o JOIN users u ON o.user_id = u.id",
+  "schema": "CREATE TABLE orders (id INT, user_id INT, amount DECIMAL(10,2))",
+  "lineage": {
+    "edges": [
+      {
+        "from": "orders.id",
+        "to": "id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.amount",
+        "to": "amount",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.name",
+        "to": "user_name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "users.id",
+        "kind": "JOIN_KEY"
+      },
+      {
+        "from": "orders",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "user_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "amount",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "user_name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "user_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "amount",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "user_name",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

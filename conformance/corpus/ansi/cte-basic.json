@@ -6,5 +6,49 @@
     "cte"
   ],
   "comment": "带名字的 CTE 引用（作用域树的关键 case）",
-  "sql": "WITH c AS (SELECT id, name FROM t) SELECT id, name FROM c"
+  "sql": "WITH c AS (SELECT id, name FROM t) SELECT id, name FROM c",
+  "lineage": {
+    "edges": [
+      {
+        "from": "c.id",
+        "to": "id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "c.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "c",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "c",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "t.id",
+        "to": "c.id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "t.name",
+        "to": "c.name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "t",
+        "to": "c.id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "t",
+        "to": "c.name",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

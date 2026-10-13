@@ -6,5 +6,29 @@
     "exists"
   ],
   "comment": "EXISTS 相关子查询",
-  "sql": "SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)"
+  "sql": "SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "name",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "users.id",
+        "to": "name",
+        "kind": "PREDICATE"
+      }
+    ]
+  }
 }

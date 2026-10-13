@@ -6,5 +6,34 @@
     "window"
   ],
   "comment": "窗口函数（TransformKind.WINDOW）",
-  "sql": "SELECT id, ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary) AS rn FROM emp"
+  "sql": "SELECT id, ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary) AS rn FROM emp",
+  "lineage": {
+    "edges": [
+      {
+        "from": "emp.id",
+        "to": "id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "emp.department",
+        "to": "rn",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "emp.salary",
+        "to": "rn",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "emp",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "emp",
+        "to": "rn",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

@@ -6,5 +6,29 @@
     "case"
   ],
   "comment": "CASE WHEN 多分支派生列",
-  "sql": "SELECT id, CASE WHEN age < 18 THEN 'minor' WHEN age < 60 THEN 'adult' ELSE 'senior' END AS age_group FROM users"
+  "sql": "SELECT id, CASE WHEN age < 18 THEN 'minor' WHEN age < 60 THEN 'adult' ELSE 'senior' END AS age_group FROM users",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.id",
+        "to": "id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.age",
+        "to": "age_group",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "age_group",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

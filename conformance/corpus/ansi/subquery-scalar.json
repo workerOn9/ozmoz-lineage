@@ -6,5 +6,34 @@
     "aggregate"
   ],
   "comment": "标量子查询（逐行聚合）",
-  "sql": "SELECT u.name, (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count FROM users u"
+  "sql": "SELECT u.name, (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count FROM users u",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "order_count",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users.id",
+        "to": "order_count",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "order_count",
+        "kind": "OUTPUT"
+      }
+    ]
+  }
 }

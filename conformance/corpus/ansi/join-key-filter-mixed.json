@@ -6,5 +6,54 @@
     "filter"
   ],
   "comment": "JOIN_KEY 与 PREDICATE 过滤引用并存",
-  "sql": "SELECT o.id, u.name FROM orders o JOIN users u ON o.user_id = u.id WHERE o.amount > 100"
+  "sql": "SELECT o.id, u.name FROM orders o JOIN users u ON o.user_id = u.id WHERE o.amount > 100",
+  "lineage": {
+    "edges": [
+      {
+        "from": "orders.id",
+        "to": "id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "users.id",
+        "kind": "JOIN_KEY"
+      },
+      {
+        "from": "orders.amount",
+        "to": "id",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "orders.amount",
+        "to": "name",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "orders",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "name",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

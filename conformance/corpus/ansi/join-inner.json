@@ -5,5 +5,44 @@
     "join"
   ],
   "comment": "内连接与 JOIN_KEY 等价传递",
-  "sql": "SELECT o.id, u.name FROM orders o INNER JOIN users u ON o.user_id = u.id"
+  "sql": "SELECT o.id, u.name FROM orders o INNER JOIN users u ON o.user_id = u.id",
+  "lineage": {
+    "edges": [
+      {
+        "from": "orders.id",
+        "to": "id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "users.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "users.id",
+        "kind": "JOIN_KEY"
+      },
+      {
+        "from": "orders",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "name",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

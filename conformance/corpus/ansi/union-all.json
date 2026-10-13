@@ -6,5 +6,49 @@
     "union"
   ],
   "comment": "UNION ALL 位对齐（两支各建模一个作用域）",
-  "sql": "SELECT a, b FROM t1 UNION ALL SELECT x, y FROM t2"
+  "sql": "SELECT a, b FROM t1 UNION ALL SELECT x, y FROM t2",
+  "lineage": {
+    "edges": [
+      {
+        "from": "t1.a",
+        "to": "a",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "t1.b",
+        "to": "b",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "t1",
+        "to": "a",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "t1",
+        "to": "b",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "t2.x",
+        "to": "a",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "t2.y",
+        "to": "b",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "t2",
+        "to": "a",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "t2",
+        "to": "b",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

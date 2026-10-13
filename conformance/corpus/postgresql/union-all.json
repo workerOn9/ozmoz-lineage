@@ -5,5 +5,29 @@
     "union"
   ],
   "comment": "UNION ALL 不去重合并",
-  "sql": "SELECT user_id FROM orders UNION ALL SELECT user_id FROM payments"
+  "sql": "SELECT user_id FROM orders UNION ALL SELECT user_id FROM payments",
+  "lineage": {
+    "edges": [
+      {
+        "from": "orders.user_id",
+        "to": "user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders",
+        "to": "user_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "payments.user_id",
+        "to": "user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "payments",
+        "to": "user_id",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

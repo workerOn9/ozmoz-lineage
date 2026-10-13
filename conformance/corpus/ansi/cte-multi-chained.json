@@ -6,5 +6,99 @@
     "multi-cte"
   ],
   "comment": "多 CTE 且后者引用前者（链式定义）",
-  "sql": "WITH recent AS (SELECT id, user_id FROM orders WHERE created_at > '2026-01-01'), totals AS (SELECT user_id, COUNT(*) AS n FROM recent GROUP BY user_id) SELECT u.name, t.n FROM users u JOIN totals t ON t.user_id = u.id"
+  "sql": "WITH recent AS (SELECT id, user_id FROM orders WHERE created_at > '2026-01-01'), totals AS (SELECT user_id, COUNT(*) AS n FROM recent GROUP BY user_id) SELECT u.name, t.n FROM users u JOIN totals t ON t.user_id = u.id",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "totals.n",
+        "to": "n",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "totals.user_id",
+        "to": "users.id",
+        "kind": "JOIN_KEY"
+      },
+      {
+        "from": "users",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "users",
+        "to": "n",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "totals",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "totals",
+        "to": "n",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders.id",
+        "to": "recent.id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "recent.user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.created_at",
+        "to": "recent.id",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "orders.created_at",
+        "to": "recent.user_id",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "orders",
+        "to": "recent.id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "recent.user_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "recent.user_id",
+        "to": "totals.user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "recent.user_id",
+        "to": "totals.user_id",
+        "kind": "GROUP_BY"
+      },
+      {
+        "from": "recent.user_id",
+        "to": "totals.n",
+        "kind": "GROUP_BY"
+      },
+      {
+        "from": "recent",
+        "to": "totals.user_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "recent",
+        "to": "totals.n",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

@@ -6,5 +6,84 @@
     "multi-cte"
   ],
   "comment": "多 CTE 分层定义（聚合 + 排名截断）",
-  "sql": "WITH big_orders AS (SELECT user_id, SUM(amount) AS total FROM orders GROUP BY user_id HAVING SUM(amount) > 1000), vip AS (SELECT user_id FROM big_orders ORDER BY total DESC LIMIT 10) SELECT u.name FROM users u JOIN vip ON vip.user_id = u.id"
+  "sql": "WITH big_orders AS (SELECT user_id, SUM(amount) AS total FROM orders GROUP BY user_id HAVING SUM(amount) > 1000), vip AS (SELECT user_id FROM big_orders ORDER BY total DESC LIMIT 10) SELECT u.name FROM users u JOIN vip ON vip.user_id = u.id",
+  "lineage": {
+    "edges": [
+      {
+        "from": "users.name",
+        "to": "name",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "vip.user_id",
+        "to": "users.id",
+        "kind": "JOIN_KEY"
+      },
+      {
+        "from": "users",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "vip",
+        "to": "name",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "big_orders.user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.amount",
+        "to": "big_orders.total",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "orders.amount",
+        "to": "big_orders.user_id",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "orders.amount",
+        "to": "big_orders.total",
+        "kind": "PREDICATE"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "big_orders.user_id",
+        "kind": "GROUP_BY"
+      },
+      {
+        "from": "orders.user_id",
+        "to": "big_orders.total",
+        "kind": "GROUP_BY"
+      },
+      {
+        "from": "orders",
+        "to": "big_orders.user_id",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "orders",
+        "to": "big_orders.total",
+        "kind": "SOURCE"
+      },
+      {
+        "from": "big_orders.user_id",
+        "to": "vip.user_id",
+        "kind": "OUTPUT"
+      },
+      {
+        "from": "big_orders.total",
+        "to": "vip.user_id",
+        "kind": "ORDER_BY"
+      },
+      {
+        "from": "big_orders",
+        "to": "vip.user_id",
+        "kind": "SOURCE"
+      }
+    ]
+  }
 }

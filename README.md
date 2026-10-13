@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版 + MCP server + 逐语句容错 + 文档站（工具百科）已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml engines` / `ozml serve`（Ktor `/api` + `web/` 静态托管）/ `ozml mcp`（stdio 工具面）可运行；Web UI 已交付三栏起步版与 AST 并排 diff，`site/` 文档站（Rspress）数据驱动渲染引擎能力与两张实测矩阵；Tauri 壳未做）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版 + MCP server + 逐语句容错 + 文档站（工具百科）+ 血缘质量报表已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml engines` / `ozml quality` / `ozml serve`（Ktor `/api` + `web/` 静态托管）/ `ozml mcp`（stdio 工具面）可运行；Web UI 已交付三栏起步版与 AST 并排 diff，`site/` 文档站（Rspress）数据驱动渲染引擎能力与两张实测矩阵；Tauri 壳未做）。
 
 ## 它要解决什么
 
@@ -28,6 +28,7 @@ ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查
 ozml matrix   --corpus ./conformance/corpus --out ./docs/compat-matrix.json
 ozml matrix   --convert --corpus ./conformance/corpus  # 方言转换矩阵：20 组方言对 × 渲染引擎（diff 视图数据）
 ozml engines  --format json                            # 引擎能力表（与 GET /api/engines 同形；文档站「工具百科」数据源）
+ozml quality  --corpus ./conformance/corpus            # 血缘质量报表：解析率 / precision / recall / unknown 率 / 静默漏（计划 §8）
 ozml serve    --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|validate|format|impact|path
 ozml serve    --port 8765 --graph-root graphs           # 另开「图库浏览」：/api/graphs + lineage/impact/path 的 graph 字段（ADR-0015）
 ozml parse   --engine calcite -f q.sql                # Calcite 按方言配解析器（反引号 / 方括号 / 双引号按方言路由）（当前可用）
@@ -211,6 +212,30 @@ ozml format -f q.sql --json             # output json: {engine, dialect, sql, di
 换行**上下文感知**：只在子查询里按 `SELECT` / `FROM` / `WHERE` / `GROUP BY` / `ORDER BY` / `HAVING` / `LIMIT` / `OFFSET` / 集合运算 / `JOIN` 家族换行；函数参数里的 `FROM`（如 `EXTRACT(YEAR FROM d)`）所在括号**不透明**，整段原样保留（这是纯文本切分会误伤、而结构化换行能避开的关键点）；字符串 / 带引号标识符 / `[方括号]` 内的关键字不触发换行。
 
 **有损如实报**：JSqlParser 的词法器把注释当 `SPECIAL_TOKEN` 跳过，渲染器因此**必然丢注释**——检测到源文本含注释时落一条 `jsqlparser.comment_dropped` WARNING（带第一条注释位置，stdout 是 SQL 文本时诊断走 stderr），不静默丢。默认引擎 `jsqlparser`（唯一申报排版的引擎）；calcite / jooq 明说不支持排版 → 可解释的错。
+
+### 质量报表（`ozml quality`，计划 §8 / M1 收尾）
+
+`ozml quality` 把「血缘好不好」变成**可溯源的数字**（与 `ozml matrix` 同形：`--corpus` / `--out` / `--commit`）：
+
+| 指标 | 口径 |
+|---|---|
+| 解析成功率 | **按方言分别公布**，不合并平均 |
+| precision / recall | 只在语料里标了 `lineage` 期望的 case 上算——**覆盖多少条如实公布**（`meta.annotatedCount`），不拿小样本冒充全量 |
+| unknown 率 | `unknown 诊断数 / 列引用总数`（分母由 `SemanticRefCounter` 走公开语义模型计数，含 `*`） |
+| **静默漏** | 期望边缺失、且没声明为 unknown 的条数——计划 §8「缺口全部落在 unknown」的直接红线，>0 即说明有**静默放弃** |
+
+期望写在语料里（`conformance/corpus/**/*.json` 的 `lineage` 块，格式与写法见 `conformance/corpus/README.md`），
+对拍单位是 `(from, to, kind)` 三元组，名字折叠后比较。**只报不卡**：阈值（precision ≥0.98 / recall ≥0.85）
+先作为目标展示，CI 里 `conformance` workflow 跑出 `quality-report.json` 并渲染进任务摘要 + 上传 artifact。
+
+当前实测（200 条语料，已标注 24 条）：
+
+| 引擎 | 解析成功率 | precision | recall | unknown 率 | 静默漏 |
+|---|---|---|---|---|---|
+| `jsqlparser` | 189/200 | 100.00% | 97.66% | 18.04% | 4 |
+| `calcite` | 126/200 | 99.40% | 96.49% | 16.92% | 6 |
+
+缺口是**产品**：报表列出全部期望边缺口（如 `EXISTS` 子查询、选择列表里的标量子查询当前未建模），而不是把它们藏起来。
 
 ### 方言转换矩阵（`ozml matrix --convert`）
 
