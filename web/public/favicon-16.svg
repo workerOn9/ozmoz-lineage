@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="ozml-i16-t ozml-i16-d">
+  <title id="ozml-i16-t">ozmoz-lineage 16px 图标</title>
+  <desc id="ozml-i16-d">16px 专用简化标记：只保留树干、鸟头、冠羽与喙。</desc>
+  <style>
+    /* 与 icon.svg 共用同一套 token 名，但这份是**单独画的**，不是 icon.svg 的缩放：
+       全尺寸标记缩到 16px 会糊成一团浅色（树干、尾羽、虫洞全部糊掉），
+       这里只留 4 个形状，坐标都落在整数网格上，并单独把树干压得更实
+       —— 小尺寸下要多一点对比度才分得出树干和底色。 */
+    .oz-tile{fill:var(--oz-tile,#3451b2)}
+    .oz-ink{fill:var(--oz-ink,#ffffff)}
+    .oz-dim{fill:var(--oz-ink,#ffffff);opacity:.32}
+    .oz-acc{fill:var(--oz-accent,#f59e0b)}
+  </style>
+
+  <rect class="oz-tile" width="64" height="64" rx="14"/>
+  <rect class="oz-dim" x="7" y="4" width="12" height="56" rx="6"/>
+  <circle class="oz-ink" cx="43" cy="31" r="14.5"/>
+  <path class="oz-acc" d="M37 19 C43.5 11.5 53 13.5 52.5 22 L44 25 Z"/>
+  <path class="oz-acc" d="M30 26.5 L9.5 31 L30 35.5 Z"/>
+</svg>
