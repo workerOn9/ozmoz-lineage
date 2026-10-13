@@ -2,7 +2,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版 + MCP server 已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml serve`（Ktor `/api` + `web/` 静态托管）/ `ozml mcp`（stdio 工具面）可运行；Web UI 已交付三栏起步版，AST 并排 diff 与 Tauri 壳未做）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版 + MCP server + 逐语句容错 + 文档站（工具百科）已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml engines` / `ozml serve`（Ktor `/api` + `web/` 静态托管）/ `ozml mcp`（stdio 工具面）可运行；Web UI 已交付三栏起步版与 AST 并排 diff，`site/` 文档站数据驱动渲染引擎能力与两张实测矩阵；Tauri 壳未做）。
 
 ## 它要解决什么
 
@@ -27,6 +27,7 @@ ozml impact  --graph ./lineage.db --on db.t.c --depth 3  # 从库查询上溯 / 
 ozml impact  -f q.sql --on db.t.c --depth 3           # 或单文件现建现查（当前可用）
 ozml matrix   --corpus ./conformance/corpus --out ./docs/compat-matrix.json
 ozml matrix   --convert --corpus ./conformance/corpus  # 方言转换矩阵：20 组方言对 × 渲染引擎（diff 视图数据）
+ozml engines  --format json                            # 引擎能力表（与 GET /api/engines 同形；文档站「工具百科」数据源）
 ozml serve    --port 8765                              # 本地 HTTP：/api/health|engines|parse|lineage|validate|format|impact|path
 ozml serve    --port 8765 --graph-root graphs           # 另开「图库浏览」：/api/graphs + lineage/impact/path 的 graph 字段（ADR-0015）
 ozml parse   --engine calcite -f q.sql                # Calcite 按方言配解析器（反引号 / 方括号 / 双引号按方言路由）（当前可用）
@@ -128,6 +129,20 @@ docker run --rm -p 8765:8765 ozmoz-lineage
 ```
 
 前端类型与 Kotlin `@Serializable` 契约的同步靠「手写 TS 镜像 + golden 夹具」双保险（`web/src/types/` + `web/test/fixtures/`，`npm run test` 校验）。
+
+### 文档站（`site/`，M5 工具百科）
+
+`site/` 是独立的 **VitePress** 站点（不进 Gradle 多模块），承载**工具百科**：引擎能力 / 方言目录与两张**实测矩阵**（兼容性、方言转换）。**表格全部数据驱动**——数据由 CI 现跑 `ozml` 生成（**不手写、不入库**，避免腐化），`site/scripts/normalize.mjs` 规整成页面数据集后由 Vue 组件渲染；每页带当次 commit 溯源，原始 JSON 也可下载。
+
+```bash
+just docs-install   # = npm --prefix site ci（按锁文件装依赖）
+just docs-data      # 现生成：ozml engines + ozml matrix ×2 → site/.data/
+just docs-dev       # VitePress dev（数据缺失时页面自动降级为「先跑 just docs-data」占位）
+just docs-build     # 先现生成数据，再 vitepress build → site/.vitepress/dist
+just docs-check     # 数据规整单测（site/scripts/normalize.test.mjs）
+```
+
+站点由 `docs` workflow 部署到 **GitHub Pages**（`https://workeron9.github.io/ozmoz-lineage/`）：CI 先构建 `ozml` 跑出三份 JSON（`engines` / `matrix` / `matrix --convert`），再 `vitepress build` 并发布——**线上永远是最新实测快照**，不存在手写表格腐化的问题。
 
 ### 部署到 Vercel（双服务：`web` 静态 + `server` 容器）
 

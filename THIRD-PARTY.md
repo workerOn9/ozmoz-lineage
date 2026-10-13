@@ -77,6 +77,17 @@
 
 前端**构建期**依赖（Vite / TypeScript / Tailwind / Vitest 等，devDependencies）不进入产物，不逐条登记；如上游许可证扫描要求再补。
 
+## 文档站（`site/`，2026-10-13 随 M5 工具百科引入）
+
+打进 `site/.vitepress/dist` 的浏览器端依赖（版本以 `site/package-lock.json` 为准）：
+
+| 依赖 | 版本 | 许可证 | 用途 |
+|---|---|---|---|
+| [VitePress](https://github.com/vuejs/vitepress) | 1.6.4 | MIT | 文档站（工具百科）：静态站点生成 + 默认主题 + 本地搜索 |
+| [Vue](https://github.com/vuejs/core) | 3.5.43 | MIT | VitePress 的渲染运行时（站点产物内含 Vue 运行时） |
+
+文档站的**构建/测试期**依赖（`vitest`，devDependency）不进入产物，不逐条登记。矩阵数据由 CI 现跑 `ozml` 生成、不入库（见 README「文档站」节）。
+
 ## 测试期依赖（不打包进产物）
 
 
