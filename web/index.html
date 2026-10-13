@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ozmoz-lineage</title>
+    <!-- 品牌图标。绝对根路径：生产形态下 web/dist 挂在站点根（Vercel rewrites），dev 下 vite 也从根提供 public/。
+         16px 用单独画的简化标记 —— 全尺寸标记缩到 16px 会糊成一团浅色。 -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" sizes="16x16" href="/favicon-16.svg" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#3451b2" />
   </head>
   <body>
     <div id="root"></div>

@@ -23,7 +23,9 @@ describe('文档站链接', () => {
     const base = matched![1]
     expect(DOCS_URL.endsWith(base)).toBe(true)
     // Pages 项目站点的 base 形如 /<repo>/；origin 由 siteOrigin 给出。
-    const origin = /siteOrigin: '([^']+)'/.exec(siteConfig)?.[1]
+    // 接受 `siteOrigin: '…'`（对象属性）与 `siteOrigin = '…'`（顶层 const）两种写法 ——
+    // 后者是为了在 defineConfig 之外拼绝对 URL（head 里的图标与 og:image）。
+    const origin = /siteOrigin\s*[:=]\s*'([^']+)'/.exec(siteConfig)?.[1]
     expect(origin).toBe('https://workeron9.github.io')
     expect(DOCS_URL).toBe(`${origin}${base}`)
   })

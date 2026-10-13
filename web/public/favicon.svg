@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="ozp2 ozq2">
+  <title id="ozp2">ozmoz-lineage 草稿 C-v6 · 啄木鸟</title>
+  <desc id="ozq2">靛蓝圆角方块上，一只白色啄木鸟沿树干竖立攀附、尾羽撑住躯干，低头啄击，琥珀色喙与脑后羽束</desc>
+  <style>
+    .oz-tile{fill:var(--oz-tile,#3451b2)}
+    .oz-ink{fill:var(--oz-ink,#ffffff)}
+    .oz-tone{fill:var(--oz-tone,#cdd9f7)}
+    .oz-acc{fill:var(--oz-accent,#f59e0b)}
+    .oz-dim{fill:var(--oz-ink,#ffffff);opacity:.26}
+    .oz-acc-s{fill:none;stroke:var(--oz-accent,#f59e0b);stroke-width:2.4;stroke-linecap:round}
+  </style>
+  <defs>
+    <mask id="ozp2m">
+      <rect width="64" height="64" fill="#fff"/>
+      <circle cx="35.5" cy="22" r="3" fill="#000"/>
+      <circle cx="14.5" cy="16" r="2.4" fill="#000"/>
+      <circle cx="14.5" cy="30" r="2.4" fill="#000"/>
+      <circle cx="14.5" cy="44" r="2.4" fill="#000"/>
+    </mask>
+  </defs>
+
+  <rect class="oz-tile" width="64" height="64" rx="14"/>
+
+  <g mask="url(#ozp2m)">
+    <rect class="oz-dim" x="8" y="2" width="13" height="60" rx="6"/>
+    <path class="oz-tone" d="M40 48 C42 54 38 59 31 61 L22 59 L30 45 Z"/>
+    <ellipse class="oz-tone" cx="38" cy="41" rx="12.5" ry="14"/>
+    <circle class="oz-ink" cx="39" cy="23" r="13"/>
+    <!-- 冠羽：单个向后倒的羽束，末端收尖，避免读成王冠 -->
+    <path class="oz-acc" d="M34.5 12 C39 4.5 49 3.5 53.5 9.5 L56 7.5 L52.5 16.5 C49.5 21.5 40 20 34.5 12 Z"/>
+    <!-- 喙 -->
+    <path class="oz-acc" d="M27 20.5 L9.5 25.5 L27 29.5 Z"/>
+    <path class="oz-acc-s" d="M31 51 L21 52"/>
+    <path class="oz-acc-s" d="M32 56 L21 58"/>
+  </g>
+</svg>

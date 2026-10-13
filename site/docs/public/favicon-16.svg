@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="i16e-t i16e-d">
+  <title id="i16e-t">16px 专用标记 · 变体 5（定稿候选）</title>
+  <desc id="i16e-d">靛蓝方块上，左侧暗色树干，右侧白色鸟头、琥珀色冠羽与喙</desc>
+  <rect width="64" height="64" rx="14" fill="#3451b2"/>
+  <rect x="7" y="4" width="12" height="56" rx="6" fill="#ffffff" opacity=".32"/>
+  <circle cx="43" cy="31" r="14.5" fill="#ffffff"/>
+  <path d="M37 19 C43.5 11.5 53 13.5 52.5 22 L44 25 Z" fill="#f59e0b"/>
+  <path d="M30 26.5 L9.5 31 L30 35.5 Z" fill="#f59e0b"/>
+</svg>
