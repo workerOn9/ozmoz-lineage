@@ -6,7 +6,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版 + MCP server + 逐语句容错 + 文档站（工具百科）+ 血缘质量报表已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml engines` / `ozml quality` / `ozml serve`（Ktor `/api` + `web/` 静态托管）/ `ozml mcp`（stdio 工具面）可运行；Web UI 已交付三栏起步版与 AST 并排 diff，`site/` 文档站（Rspress）数据驱动渲染引擎能力与两张实测矩阵；Tauri 壳未做）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版 + MCP server + 逐语句容错 + 文档站（工具百科）+ 血缘质量报表 + 自包含分发（jlink 自带运行时）与 `ozml upgrade` 自更新已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml engines` / `ozml quality` / `ozml serve`（Ktor `/api` + `web/` 静态托管）/ `ozml mcp`（stdio 工具面）可运行；Web UI 已交付三栏起步版与 AST 并排 diff，`site/` 文档站（Rspress）数据驱动渲染引擎能力与两张实测矩阵；Tauri 壳未做）。
 
 ## 它要解决什么
 
@@ -42,6 +42,8 @@ ozml validate --schema ddl.sql -f q.sql               # schema 语义校验：�
 ozml format   -f q.sql                                 # SQL 排版：子句换行 + 规范化（不换方言；注释丢失如实告警）（当前可用）
 ozml format   -f q.sql --single-line                   # 规范化单行（关键字大写、空白归一）
 ozml mcp                                               # MCP server（stdio）：把能力作为工具暴露给 AI 助手
+ozml --version                                         # 版本身份（与产物文件名 / upgrade 同源）
+ozml upgrade [--check] [--version <v>]                 # 自更新：从 GitHub Releases 拉最新版并原子切换（唯一联网子命令，见「安装与升级」）
 ```
 
 `ozml` = **ozmoz** + **lineage**。
@@ -55,6 +57,38 @@ ozml mcp                                               # MCP server（stdio）�
 ./cli/build/install/ozml/bin/ozml lineage -f sql/ --graph ./lineage.db
 ./cli/build/install/ozml/bin/ozml impact  --graph ./lineage.db --on db.t.c --direction upstream
 ```
+
+## 安装与升级（自包含发行版）
+
+发行产物**自带精简运行时**（`jlink` 裁出来的 JRE），解压即用，**不需要本机装 JDK**——正是「本机默认 JDK 与构建工具链版本不一致就报 `UnsupportedClassVersionError`」的根治办法。产物优先用随包的 `runtime/`，可用 `OZML_USE_SYSTEM_JAVA=1` 强制改回系统 JDK。
+
+### 安装（macOS / Linux）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/workerOn9/ozmoz-lineage/main/install.sh | sh
+ozml --version
+```
+
+`install.sh` 会探测平台 → 从 GitHub Releases 下载对应产物 → 校验 sha256 → 解压到 `~/.local/share/ozml/versions/<版本>` → 原子切换 `current` → 在 `~/.local/bin` 放一个 `ozml` 启动器。安装根与启动器目录可用 `--root` / `--bin-dir`（或 `OZML_ROOT` / `OZML_BIN_DIR`）覆盖。
+
+### 升级
+
+```bash
+ozml upgrade --check           # 只查最新版本并比较，不改动任何文件
+ozml upgrade                   # 下最新版 → sha256 校验 → 原子切换 current
+ozml upgrade --version 0.2.0   # 指定版本（也可用于回滚到旧版）
+```
+
+`ozml upgrade` 是**唯一**会联网的子命令，且只在显式调用时发生；正常解析 / 血缘 / serve 一律离线。旧版本目录保留，可回滚。离线 / 内网镜像：设 `OZML_RELEASE_BASE` / `OZML_API_BASE`（`install.sh` 同样识别）。
+
+### 从源码构建发行产物
+
+```bash
+just dist                      # → cli/build/distributions/ozml-<版本>-<平台>.tar.gz|.zip
+OZML_VERSION=0.2.0 just dist   # 指定版本（进 ozml --version 与产物文件名）
+```
+
+打 tag `v*` 时 `.github/workflows/release.yml` 会矩阵构建各平台产物、合并 `checksums.txt` 并发布到 GitHub Releases。（日常开发用的 `./gradlew :cli:installDist` 仍是「脚本 + jar」，跑它需要本机 JDK ≥ 25。）
 
 `ozml lineage` 输出列级血缘模型（每格可溯源）并由**两个引擎**共同提供语义模型：`jsqlparser`（解析主力）与 `calcite`（方言转换主力，`ozml matrix` 各占一列，方言不认的地方看另一列能不能认——两引擎合并实测覆盖 190/200 条语料，双失败只剩方言专属语法盲区）。共**六类边**：`OUTPUT`（输出列的值从哪来）、`PREDICATE`（WHERE / HAVING 引用，只影响结果集）、`JOIN_KEY`（`a.id = b.id` 连接键传递）、`GROUP_BY`（分组引用）、`ORDER_BY`（排序引用）、`SOURCE`（表级血缘：表 / CTE 作为整体被引用）。每条边带 `TransformKind`（`DIRECT` / `EXPRESSION` / `AGGREGATE` / `WINDOW` / `CASE_BRANCH` / `CONSTANT` / `JOIN_KEY` / `FILTER_PREDICATE` / `GROUPING` / `ORDERING` / `SOURCE`）：
 
