@@ -53,6 +53,9 @@ target/
 /conformance/out/
 /local/
 *.log
+
+# —— 品牌资产的中间产物（site/ 与 web/ 里被服务的文件是入库的，这里的不入库）——
+/design/logo/dist/
 # 本地血缘图库（SQLite）及日志文件
 *.db
 *.db-journal
