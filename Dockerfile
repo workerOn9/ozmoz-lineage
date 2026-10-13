@@ -58,13 +58,15 @@ RUN ./gradlew --no-daemon :cli:installDist
 # 模块清单用 jdeps --print-module-deps 自动推不出来：netty 的
 # OSGi manifest（Bundle-SymbolicName + Import-Package）与 guava 的 package 前缀
 # 会让模块解析器直接炸（实测），所以这份清单是**实测圈定**——CLI 全部子命令
-# （parse / lineage / impact / matrix / convert / validate / format / serve / mcp，
-# path 无 CLI 子命令，走 /api/path 与 MCP 工具）+ SQLite 图库 + web 托管逐一跑通过。
+# （parse / lineage / impact / matrix / convert / validate / format / serve / mcp、
+# upgrade）+ SQLite 图库 + web 托管逐一跑通过。`java.net.http` 与 `jdk.crypto.ec`
+# 是 `ozml upgrade`（HttpClient / HTTPS EC）所需，容器内不用但清单与
+# cli/build.gradle.kts 的 jlinkRuntime **有意保持一致**。
 # 新增依赖若用到新的 JDK 模块，容器冒烟会 NoClassDefFoundError——按报错补模块。
 FROM eclipse-temurin:25-jdk AS jre
 COPY --from=jvm /src/cli/build/install/ozml /app/ozml
 RUN jlink \
-      --add-modules java.base,java.logging,java.management,java.naming,java.sql,java.xml,jdk.unsupported \
+      --add-modules java.base,java.logging,java.management,java.naming,java.sql,java.xml,jdk.unsupported,java.net.http,jdk.crypto.ec \
       --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
       --output /javaruntime
 

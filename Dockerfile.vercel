@@ -39,7 +39,7 @@ RUN ./gradlew :cli:installDist --no-daemon
 # temurin 25 镜像不带 jmods（25 起 JEP 493 无 jmods 链接，jlink 直接可用——实测）。
 # 基座 26.04（glibc 2.43），运行时基座必须同为 26.04。
 RUN jlink \
-      --add-modules java.base,java.logging,java.management,java.naming,java.sql,java.xml,jdk.unsupported \
+      --add-modules java.base,java.logging,java.management,java.naming,java.sql,java.xml,jdk.unsupported,java.net.http,jdk.crypto.ec \
       --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
       --output /javaruntime
 
