@@ -8,12 +8,14 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.choice
+import io.github.workeron9.ozmoz.lineage.engine.Feature
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
 import io.github.workeron9.ozmoz.lineage.format.LineageExporters
 import io.github.workeron9.ozmoz.lineage.graph.LineageGraph
 import io.github.workeron9.ozmoz.lineage.graph.SqliteLineageStore
 import io.github.workeron9.ozmoz.lineage.graph.StoredModel
+import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.EdgeKind
 import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
@@ -88,12 +90,32 @@ public class LineageCommand : CliktCommand(name = "lineage") {
     )
         .flag()
 
+    /**
+     * 逐语句容错（[Feature.ERROR_TOLERANT]）：多语句脚本里一条语句语法错误时，不拖垮整段——
+     * 坏语句降级为 stderr 的 WARN（带行列位置），好语句照常建模。**退出码仍为 0**（与目录模式
+     * 「坏文件跳过 + WARN」同惯例）；只有一条都没建出来时才非零退出（Never-wrong：不假装成功）。
+     * 需引擎申报 [Feature.ERROR_TOLERANT]（当前仅 jsqlparser）。
+     */
+    private val tolerant: Boolean by option(
+        "--tolerant",
+        help = "逐语句容错：坏语句 WARN（带位置）不拖垮整段，好语句照常出模型（需引擎支持 ERROR_TOLERANT）",
+    )
+        .flag()
+
     override fun help(context: Context): String =
         "解析一条或多条 SQL 并输出列级血缘（OUTPUT / PREDICATE / JOIN_KEY / GROUP_BY / ORDER_BY / SOURCE 六类边，" +
             "可用 --no-source-edges 关掉 SOURCE）；支持目录聚合与 --graph 落库。"
 
     override fun run() {
         val engine = LineagePipeline.engine(engineId)
+
+        // 能力表路由：引擎没申报逐语句容错就直接给可解释的错误（不靠异常碰运气）。
+        if (tolerant) {
+            engine.capabilities.reason(Feature.ERROR_TOLERANT)?.let { reason ->
+                echo("ERROR unsupported_capability: 引擎 $engineId 不支持逐语句容错：$reason", err = true)
+                throw ProgramResult(1)
+            }
+        }
 
         if (incremental) {
             // 前置校验放在 stdin 读取**之前**：`-f -` 传进来不要先吞 stdin。
@@ -159,21 +181,30 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         val single = inputs.size == 1
         val result = ArrayList<StoredModel>()
         for ((source, text) in inputs) {
-            when (val models = LineagePipeline.models(text, engine, dialect, schema)) {
-                is Resolved.Known -> models.value.forEachIndexed { index, model ->
-                    result += StoredModel(model = shape(model), sourceFile = source, statementIndex = index)
+            when (val built = LineagePipeline.models(text, engine, dialect, schema, tolerant)) {
+                is Resolved.Known -> {
+                    reportDiagnostics(source, built.value.diagnostics)
+                    built.value.models.forEachIndexed { index, model ->
+                        result += StoredModel(model = shape(model), sourceFile = source, statementIndex = index)
+                    }
                 }
+
                 is Resolved.Unknown -> {
                     // 单文件：整段语法错误直接失败（保持旧行为）；目录：跳过坏文件并提醒。
                     if (single) {
-                        echo("ERROR semantic_unavailable: ${models.reason}", err = true)
+                        echo("ERROR semantic_unavailable: ${built.reason}", err = true)
                         throw ProgramResult(1)
                     }
-                    echo("WARN ${source ?: "<stdin>"}: ${models.reason}", err = true)
+                    echo("WARN ${source ?: "<stdin>"}: ${built.reason}", err = true)
                 }
             }
         }
         return result
+    }
+
+    /** 把逐语句容错（`--tolerant`）产生的诊断逐条报到 stderr（口径：WARN，不改变退出码）。 */
+    private fun reportDiagnostics(source: String?, diagnostics: List<Diagnostic>) {
+        for (diagnostic in diagnostics) echo(LineagePipeline.diagnosticLine(source, diagnostic), err = true)
     }
 
     /** 出口定形：`--no-source-edges` 时把表级哨兵边裁掉（见 [LineagePipeline.dropSourceEdges]）。 */
@@ -222,7 +253,7 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         val files: List<Pair<String, String>> = inputs.map { (source, text) ->
             requireNotNull(source) { "增量模式收到无来源输入（stdin 未被拦截）" } to text
         }
-        val context = LineagePipeline.contextDigest(engineId, dialect, schemaPath, noSourceEdges, inputs)
+        val context = LineagePipeline.contextDigest(engineId, dialect, schemaPath, noSourceEdges, tolerant, inputs)
         val inputSources = files.map { it.first }.toSet()
         var reused = 0
         var parsed = 0
@@ -236,13 +267,14 @@ public class LineageCommand : CliktCommand(name = "lineage") {
                     reused++
                     continue
                 }
-                when (val built = LineagePipeline.models(text, engine, dialect, schema)) {
+                when (val built = LineagePipeline.models(text, engine, dialect, schema, tolerant)) {
                     is Resolved.Known -> {
+                        reportDiagnostics(source, built.value.diagnostics)
                         // 整个文件变成只含 DDL / 不可建模语句 → 旧血缘清掉（来源已无产出）。
-                        if (built.value.isEmpty()) {
+                        if (built.value.models.isEmpty()) {
                             store.removeSource(source)
                         } else {
-                            store.replaceSource(built.value.mapIndexed { index, model ->
+                            store.replaceSource(built.value.models.mapIndexed { index, model ->
                                 StoredModel(model = shape(model), sourceFile = source, statementIndex = index, fingerprint = fp)
                             })
                         }

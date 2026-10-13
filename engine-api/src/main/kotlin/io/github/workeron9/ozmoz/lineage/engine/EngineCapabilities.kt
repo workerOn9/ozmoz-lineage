@@ -33,7 +33,13 @@ public enum class Feature {
     /** 美化输出。 */
     PRETTY_PRINT,
 
-    /** 容错解析：不完整的 SQL 也能给出部分树。 */
+    /**
+     * **逐语句容错**：多语句脚本里一条语句语法错误时，不拖垮整段——坏语句降级为
+     * 诊断（带位置），好语句照常产出（见 [SqlEngine.analyzeScript]）。
+     *
+     * 口径**只到脚本级**：**不**承诺「编辑中不完整 SQL 也能给出部分树」的那种单语句
+     * 部分恢复（JSqlParser 无误差恢复文法）；单语句坏输入仍是不折不扣的失败。
+     */
     ERROR_TOLERANT,
 
     /** 可导出归一化 AST。 */
@@ -43,6 +49,9 @@ public enum class Feature {
      * 可产出**多语句脚本**的语义模型——把一段 SQL 里的多条语句分别提取为
      * `SemanticStatement` 列表（无法建模的语句跳过，整脚本语法错误才失败）。
      * 未声明时 [SqlEngine.analyzeAll] 退化为单语句 [SqlEngine.analyze]。
+     *
+     * 与 [ERROR_TOLERANT] 正交：声明本项只要求「能逐条提取」，**不**要求坏语句不拖垮
+     * 整段（那是 [ERROR_TOLERANT] 的事，出口是 [SqlEngine.analyzeScript]）。
      */
     MULTI_STATEMENT,
 }

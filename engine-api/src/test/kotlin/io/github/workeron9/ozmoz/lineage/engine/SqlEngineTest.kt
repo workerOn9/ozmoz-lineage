@@ -102,4 +102,33 @@ class SqlEngineTest {
 
         assertEquals(Resolved.Known(listOf(statement)), engine.analyzeAll("SELECT 1"))
     }
+
+    @Test
+    fun `默认 analyzeScript 把 analyzeAll 的结果包成 AnalyzeOutcome`() {
+        val statement = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SelectQuery(scope = ScopeSpec(kind = ScopeKind.SELECT), raw = "SELECT 1"),
+        )
+        val engine = object : SqlEngine {
+            override val id: String = "stub-single"
+            override val capabilities: EngineCapabilities = EngineCapabilities.of(Feature.SEMANTIC_MODEL)
+            override fun parse(sql: String, request: ParseRequest): ParseOutcome =
+                ParseOutcome(root = AstNode(type = "statement", text = sql))
+            override fun analyze(sql: String, request: ParseRequest): Resolved<SemanticStatement> =
+                Resolved.Known(statement)
+        }
+
+        // 未申报 ERROR_TOLERANT 的引擎：默认实现退化为 analyzeAll，诊断恒为空（严格语义不变）。
+        val result = assertIs<Resolved.Known<AnalyzeOutcome>>(engine.analyzeScript("SELECT 1"))
+        assertEquals(listOf(statement), result.value.statements)
+        assertTrue(result.value.diagnostics.isEmpty())
+    }
+
+    @Test
+    fun `默认 analyzeScript 在不支持语义模型时透传 analyzeAll 的 Unknown`() {
+        val engine = StubEngine()
+        val result = engine.analyzeScript("SELECT 1")
+        assertIs<Resolved.Unknown>(result)
+        assertEquals((engine.analyzeAll("SELECT 1") as Resolved.Unknown).reason, result.reason)
+    }
 }

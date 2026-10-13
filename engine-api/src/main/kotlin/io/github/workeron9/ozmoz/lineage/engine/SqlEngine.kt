@@ -3,6 +3,7 @@ package io.github.workeron9.ozmoz.lineage.engine
 import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
+import io.github.workeron9.ozmoz.lineage.ir.map
 
 /**
  * SQL 引擎 SPI。
@@ -71,6 +72,24 @@ public interface SqlEngine {
             is Resolved.Known -> Resolved.Known(listOf(single.value))
             is Resolved.Unknown -> single
         }
+
+    /**
+     * **逐语句容错**提取多语句脚本的语义模型（[Feature.ERROR_TOLERANT]）。**可选**能力。
+     *
+     * 与 [analyzeAll] 的唯一差别是「坏语句怎么办」：
+     * - [analyzeAll]（严格）：任意一条语句语法错误 → 整脚本 `Resolved.Unknown`；
+     * - [analyzeScript]（容错）：坏语句降级为 [AnalyzeOutcome.diagnostics]（带位置），
+     *   好语句照常进 [AnalyzeOutcome.statements]——**丢就说**，不静默丢。
+     *
+     * 结论口径与 [analyzeAll] 保持一致（容错只在「有得有失」时才有意义）：
+     * - **一条都建不出来**（含单语句坏输入 / 空白输入）→ `Resolved.Unknown`（原因 + 位置）；
+     * - 至少建出一条 → `Resolved.Known`，坏语句的诊断随 [AnalyzeOutcome] 一起返回。
+     *
+     * 默认实现退化为 [analyzeAll]（诊断为空，严格语义不变）——未申报
+     * [Feature.ERROR_TOLERANT] 的引擎因此不需要任何改动。
+     */
+    public fun analyzeScript(sql: String, request: ParseRequest = ParseRequest.DEFAULT): Resolved<AnalyzeOutcome> =
+        analyzeAll(sql, request).map { AnalyzeOutcome(it) }
 
     /**
      * 结合 schema 做语义校验（[Feature.VALIDATE_SCHEMA]）。**可选**能力。
