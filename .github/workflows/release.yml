@@ -1,0 +1,97 @@
+name: release
+
+# tag `v*` 触发：矩阵构建各平台**自包含**发行产物（自带 jlink 运行时），
+# 合并 sha256 校验和后发布到 GitHub Releases。
+# 不发布也不影响构建轴——release 只在打 tag 时跑。
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x64
+          - runner: ubuntu-24.04-arm
+            platform: linux-arm64
+          - runner: macos-14
+            platform: macos-arm64
+          - runner: macos-13
+            platform: macos-x64
+          - runner: windows-latest
+            platform: windows-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: 解析版本（去掉 tag 的 v 前缀）
+        id: ver
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: 构建自包含发行产物（jlink 运行时 + tar.gz + zip）
+        shell: bash
+        run: ./gradlew --no-daemon :cli:ozmlDistArchives -PozmlVersion=${{ steps.ver.outputs.version }} -PozmlPlatform=${{ matrix.platform }}
+
+      # 冒烟：清空 JAVA_HOME 且 PATH 里不放 java，验证产物**自带运行时**可跑。
+      - name: 冒烟（Unix，脱 JDK）
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          D="cli/build/ozmlDist/ozml"
+          printf 'SELECT a.id FROM t a WHERE a.id > 1;\n' > /tmp/q.sql
+          env -u JAVA_HOME PATH=/usr/bin:/bin "$D/bin/ozml" --version
+          env -u JAVA_HOME PATH=/usr/bin:/bin "$D/bin/ozml" lineage -f /tmp/q.sql --format edges
+
+      - name: 冒烟（Windows，脱 JDK）
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Remove-Item Env:\JAVA_HOME -ErrorAction SilentlyContinue
+          $env:PATH = "C:\Windows\system32;C:\Windows"
+          & "cli/build/ozmlDist/ozml/bin/ozml.bat" --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ozml-${{ matrix.platform }}
+          path: cli/build/distributions/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 合并校验和（install.sh / ozml upgrade 按文件名取用）
+        working-directory: dist
+        run: sha256sum * > checksums.txt
+
+      - name: 发布到 GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/*
