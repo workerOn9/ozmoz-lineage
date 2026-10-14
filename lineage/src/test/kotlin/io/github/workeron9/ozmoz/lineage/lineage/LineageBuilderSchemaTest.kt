@@ -289,6 +289,30 @@ class LineageBuilderSchemaTest {
         assertEquals(1, unknownTable.edges.count { it.kind == EdgeKind.OUTPUT })
     }
 
+    @Test
+    fun `ORDER BY 引用 select 别名 有 schema 时不再落假阳性 unknown`() {
+        // `SELECT a AS s FROM t ORDER BY s`：schema 收录 t 但没有 s 列 ⇒ 裸名零候选 ⇒
+        // 旧实现落「来源没有列: s」假阳性（s 是别名，不是来源的缺失列）。识别为输出别名：
+        // 不发边（别名不引入新上游列），也不记 unknown。
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = SelectQuery(
+                scope = ScopeSpec(
+                    kind = io.github.workeron9.ozmoz.lineage.ir.ScopeKind.SELECT,
+                    sources = listOf(TableSource(table("t"))),
+                    orderBy = listOf(SqlExpr.Column(col("s"))),
+                    outputs = listOf(OutputItem(SqlExpr.Column(col("a")), alias = "s")),
+                ),
+                raw = "SELECT a AS s FROM t ORDER BY s",
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt, schemaOf("t" to listOf("a")))
+        assertTrue(model.edges.none { it.kind == EdgeKind.ORDER_BY })
+        assertTrue(model.unknowns.none { it.reason == "来源没有列: s" })
+        assertEquals(1, model.edges.count { it.kind == EdgeKind.OUTPUT })
+    }
+
     // ——— 规则 A：INSERT 未声明目标列按表列定义序对齐 ———
 
     @Test
