@@ -17,6 +17,11 @@ subprojects {
     plugins.withId("org.jetbrains.kotlin.jvm") {
         extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension>("kotlin") {
             jvmToolchain(jdkVersion)
+            // 显式 API 模式（strict）：公开 API 必须写明可见性与返回类型。代码库本就
+            // 按此风格写（到处显式 `public`），打开后 IDE 的「Redundant 'public'
+            // modifier」不再出现（编译器知道它是必需的），且以后**漏写**可见性会直接
+            // 编译失败——正是那堆 `public` 想表达的东西。
+            explicitApi()
         }
         extensions.configure<BasePluginExtension>("base") {
             archivesName.set("ozmoz-lineage-${project.name}")

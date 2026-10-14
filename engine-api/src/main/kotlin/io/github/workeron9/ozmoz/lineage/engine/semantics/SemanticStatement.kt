@@ -67,9 +67,9 @@ public data class Assignment(
  * [ctes] 是查询级 `WITH` 定义（SQL 语法里 `WITH` 挂在查询上，不挂在单个 SELECT 上）。
  */
 public sealed interface QuerySpec {
-    val ctes: List<CteSpec>
-    val raw: String
-    val span: Span?
+    public val ctes: List<CteSpec>
+    public val raw: String
+    public val span: Span?
 }
 
 /** 单个 SELECT。 */
@@ -127,9 +127,9 @@ public data class ScopeSpec(
 
 /** FROM 子句里的一个来源。 */
 public sealed interface SourceSpec {
-    val alias: String?
-    val raw: String
-    val span: Span?
+    public val alias: String?
+    public val raw: String
+    public val span: Span?
 }
 
 /** 物理表或 CTE 引用（CTE 引用也是一张「表名」，由 `lineage` 做名字解析时区分）。 */

@@ -22,7 +22,7 @@ import kotlin.io.path.name
 public class GraphRoot private constructor(private val root: Path) {
 
     /** 列出根目录下的 `.db` 文件（按文件名排序，确定性）。目录不存在 → 空列表。 */
-    fun list(): List<Path> {
+    public fun list(): List<Path> {
         if (!Files.isDirectory(root)) return emptyList()
         return Files.list(root).use { stream ->
             stream
@@ -39,7 +39,7 @@ public class GraphRoot private constructor(private val root: Path) {
      * 绝对路径 / 含目录分隔符逃逸（`..`、子路径）/ 非 `.db` 后缀 / 解析后不在根内。
      * 「名字合法但文件不存在」不在此拒绝——那是 422 `graph_not_found`（由调用方判）。
      */
-    fun resolve(name: String): Path? {
+    public fun resolve(name: String): Path? {
         // 只收「纯文件名」：不含路径分隔符（`/` 与平台分隔符），且非绝对路径。
         if (name.isEmpty()) return null
         if (name.contains('/') || name.contains('\\')) return null
@@ -60,7 +60,7 @@ public class GraphRoot private constructor(private val root: Path) {
          * 根路径在此**规范化一次**，后续 [resolve] 的 `startsWith` 才可靠。
          */
         @JvmStatic
-        fun ofOrNull(dir: Path?): GraphRoot? =
+        public fun ofOrNull(dir: Path?): GraphRoot? =
             dir?.let { GraphRoot(it.toAbsolutePath().normalize()) }
     }
 }
