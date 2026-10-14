@@ -1,5 +1,7 @@
 import { useAppStore } from '../../state/store'
 import type { GraphMode } from '../../state/store'
+import type { EdgeKind } from '../../types'
+import { EDGE_KIND_COLORS, EDGE_KIND_LABELS } from './EdgeLegend'
 
 const MODES: Array<{ id: GraphMode; label: string; hint: string }> = [
   { id: 'none', label: '浏览', hint: '点击节点查看详情' },
@@ -94,6 +96,50 @@ function UnknownsBadge() {
   )
 }
 
+/**
+ * 边类型过滤：缺省只画**列级血缘**（OUTPUT / JOIN_KEY）。PREDICATE / GROUP_BY /
+ * ORDER_BY / SOURCE 是**作用域级**边（规则 E：对本作用域每个输出列各发一条），
+ * 全画会让一个输出列的「上游」看起来有十几个入口；关掉它们后上溯只剩真血缘。
+ * 被隐藏的 kind 也不参与上溯 / 下溯 / 短路径（三者都吃过滤后的边）。
+ */
+function EdgeKindFilter() {
+  const hiddenEdgeKinds = useAppStore((s) => s.hiddenEdgeKinds)
+  const toggleEdgeKind = useAppStore((s) => s.toggleEdgeKind)
+  const kinds = Object.keys(EDGE_KIND_LABELS) as EdgeKind[]
+  const shown = kinds.length - hiddenEdgeKinds.length
+
+  return (
+    <details className="relative shrink-0">
+      <summary
+        className="cursor-pointer list-none rounded border border-neutral-300 px-2 py-0.5 text-[12px] text-neutral-500 hover:bg-neutral-200"
+        title="选择图上显示哪几类边；隐藏的边也不参与上溯 / 下溯 / 短路径"
+      >
+        边类型 {shown}/{kinds.length}
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-60 rounded border border-neutral-300 bg-white py-1 shadow-lg">
+        {kinds.map((kind) => (
+          <label
+            key={kind}
+            className="flex cursor-pointer items-center gap-2 px-2 py-1 text-[12px] text-neutral-700 hover:bg-neutral-100"
+          >
+            <input
+              type="checkbox"
+              className="accent-sky-600"
+              checked={!hiddenEdgeKinds.includes(kind)}
+              onChange={() => toggleEdgeKind(kind)}
+            />
+            <span
+              className="inline-block h-[3px] w-4 shrink-0 rounded"
+              style={{ backgroundColor: EDGE_KIND_COLORS[kind] }}
+            />
+            {EDGE_KIND_LABELS[kind]}
+          </label>
+        ))}
+      </div>
+    </details>
+  )
+}
+
 export function GraphToolbar({ search, onSearch }: { search: string; onSearch: (v: string) => void }) {
   const graphMode = useAppStore((s) => s.graphMode)
   const setGraphMode = useAppStore((s) => s.setGraphMode)
@@ -133,6 +179,7 @@ export function GraphToolbar({ search, onSearch }: { search: string; onSearch: (
           : active.hint}
       </span>
       <UnknownsBadge />
+      <EdgeKindFilter />
       <FoldControls />
       {highlight != null && (
         <button

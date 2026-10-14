@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { ApiError } from '../api/client'
 import { endpoints } from '../api/endpoints'
 import type {
+  EdgeKind,
   EngineReport,
   GraphEntry,
   GraphReport,
@@ -22,6 +23,18 @@ import type { HighlightResult } from '../graph/traverse'
  */
 
 export type BackendState = 'checking' | 'ok' | 'down'
+
+/**
+ * 边类型过滤缺省值：**只留列级血缘**（OUTPUT 值血缘 / JOIN_KEY 连接键）。
+ * PREDICATE / GROUP_BY / ORDER_BY / SOURCE 是**作用域级**边（规则 E：对本作用域每个
+ * 输出列各发一条），一起画会让「这一列的上游」看起来有十几个入口——见 `graph/edgeFilter.ts`。
+ */
+export const DEFAULT_HIDDEN_EDGE_KINDS: readonly EdgeKind[] = [
+  'PREDICATE',
+  'GROUP_BY',
+  'ORDER_BY',
+  'SOURCE',
+]
 
 export type GraphMode = 'none' | 'upstream' | 'downstream' | 'path'
 
@@ -104,6 +117,12 @@ interface AppState {
   collapsedScopeIds: string[]
 
   /**
+   * 图边类型过滤：这些 kind 在图上不画、也不参与上溯 / 下溯 / 短路径。缺省见
+   * [DEFAULT_HIDDEN_EDGE_KINDS]；用户改过就保留（边类型与数据无关，不随解析重置）。
+   */
+  hiddenEdgeKinds: EdgeKind[]
+
+  /**
    * 语义校验（`/api/validate`）用的内联 DDL 文本。空字符串 = 未提供——
    * 后端退化为从 `sql` 文本自动收 `CREATE TABLE`，收不到则回 `validate.skipped`。
    */
@@ -150,6 +169,8 @@ interface AppState {
   toggleFoldTables: () => void
   /** 图折叠（T3.4）：切换某作用域的折叠状态。 */
   toggleScopeCollapse: (scopeId: string) => void
+  /** 图边类型过滤：切换某类边在图上是否显示。 */
+  toggleEdgeKind: (kind: EdgeKind) => void
   setView: (view: ViewMode) => void
   /** 切右侧工具面板的工具；顺带展开面板（点了图标就是要看它）。 */
   setPanelTool: (tool: PanelTool) => void
@@ -209,6 +230,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   formatNotice: null,
   foldTables: false,
   collapsedScopeIds: [],
+  hiddenEdgeKinds: [...DEFAULT_HIDDEN_EDGE_KINDS],
   schema: EXAMPLES[0].schema ?? '',
   schemaOpen: false,
   validating: false,
@@ -469,6 +491,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       collapsedScopeIds: s.collapsedScopeIds.includes(scopeId)
         ? s.collapsedScopeIds.filter((id) => id !== scopeId)
         : [...s.collapsedScopeIds, scopeId],
+    })),
+
+  toggleEdgeKind: (kind) =>
+    set((s) => ({
+      hiddenEdgeKinds: s.hiddenEdgeKinds.includes(kind)
+        ? s.hiddenEdgeKinds.filter((k) => k !== kind)
+        : [...s.hiddenEdgeKinds, kind],
     })),
 
   setDiffLeftEngine: (diffLeftEngine) => set({ diffLeftEngine }),
