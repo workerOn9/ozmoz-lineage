@@ -7,9 +7,11 @@ import { layoutGraph } from '../src/graph/layout'
 import { shouldVirtualize, VIRTUALIZE_MIN_NODES } from '../src/graph/perf'
 import { visibleEdges } from '../src/graph/edgeFilter'
 import { OWNERSHIP_EDGE_PREFIX, ownershipEdges } from '../src/graph/ownership'
+import { mergePositionChanges } from '../src/graph/dragPositions'
 import { DEFAULT_HIDDEN_EDGE_KINDS } from '../src/state/store'
 import { graphReportSchema, lineageModelSchema } from '../src/types'
 import type { EdgeKind } from '../src/types'
+import type { NodeChange, XYPosition } from '@xyflow/react'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -213,6 +215,32 @@ describe('边类型过滤（visibleEdges）', () => {
       'b',
       't',
     ])
+  })
+})
+
+describe('拖动位置覆盖（mergePositionChanges）', () => {
+  const xy = (x: number, y: number): XYPosition => ({ x, y })
+
+  it('只挑 position 改动合进覆盖表；select / dimensions 忽略；不改原表', () => {
+    const prev = new Map<string, XYPosition>([['a', xy(1, 1)]])
+    const next = mergePositionChanges(prev, [
+      { id: 'a', type: 'position', position: xy(10, 20), dragging: true },
+      { id: 'b', type: 'select', selected: true },
+    ] as NodeChange[])
+    expect(next).not.toBeNull()
+    expect(next!.get('a')).toEqual(xy(10, 20))
+    expect(next!.has('b')).toBe(false)
+    expect(prev.get('a')).toEqual(xy(1, 1))
+  })
+
+  it('没有 position 改动 → null（调用方据此跳过 setState）', () => {
+    const changes = [{ id: 'a', type: 'select', selected: true }] as NodeChange[]
+    expect(mergePositionChanges(new Map(), changes)).toBeNull()
+  })
+
+  it('position 缺省的 position 改动不算（拖动结束那次只有 dragging 标记）', () => {
+    const changes = [{ id: 'a', type: 'position', dragging: false }] as NodeChange[]
+    expect(mergePositionChanges(new Map(), changes)).toBeNull()
   })
 })
 
