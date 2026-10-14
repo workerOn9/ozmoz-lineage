@@ -17,6 +17,8 @@ import type { GraphEdgeData, GraphNodeData, MappedEdge, MappedGraph, MappedNode 
 import { mapGraphReport, mapLineageModel } from '../../graph/mapping'
 import { useGraphLayout } from '../../graph/useGraphLayout'
 import { applyCollapse, internalColumnIdsByScope } from '../../graph/collapse'
+import { visibleEdges } from '../../graph/edgeFilter'
+import { ownershipEdges } from '../../graph/ownership'
 import { GRAPH_MIN_ZOOM, shouldVirtualize } from '../../graph/perf'
 import { reachableSet, subgraphHighlight } from '../../graph/traverse'
 import { shortestPath } from '../../graph/path'
@@ -78,6 +80,7 @@ export function LineageGraphView({ search = '' }: { search?: string }) {
   const focusedSpan = useAppStore((s) => s.focusedSpan)
   const foldTables = useAppStore((s) => s.foldTables)
   const collapsedScopeIds = useAppStore((s) => s.collapsedScopeIds)
+  const hiddenEdgeKinds = useAppStore((s) => s.hiddenEdgeKinds)
 
   const mapped = useMemo(
     () =>
@@ -105,11 +108,24 @@ export function LineageGraphView({ search = '' }: { search?: string }) {
     })
   }, [mapped, foldTables, collapsedScopeIds, internalNodesByScope])
 
-  // 布局（R2）：小图主线程同步、大图转 Web Worker（阈值门控 + 竞态保护），见 useGraphLayout。
-  const { positions, computing } = useGraphLayout(
-    visible?.nodes ?? EMPTY_NODES,
-    visible?.edges ?? EMPTY_EDGES,
+  // 边类型过滤（缺省只留列级血缘）：被隐藏的 kind 既不画、也不进遍历——
+  // 作用域级边（规则 E）会让一个输出列看起来有十几个上游入口。
+  const lineageEdges = useMemo(
+    () => (visible == null ? EMPTY_EDGES : visibleEdges(visible.edges, hiddenEdgeKinds)),
+    [visible, hiddenEdgeKinds],
   )
+
+  // 「所属」虚线（纯展示）：给没入边的物理列补一条到所属表节点的线，让最左端的列
+  // 不再悬空。**不进遍历 / 高亮**，只进布局与渲染。
+  const ownership = useMemo(
+    () => (visible == null ? EMPTY_EDGES : ownershipEdges(visible)),
+    [visible],
+  )
+
+  // 布局（R2）：小图主线程同步、大图转 Web Worker（阈值门控 + 竞态保护），见 useGraphLayout。
+  // 吃真血缘 + 归属虚线——归属线参与布局，表节点才会被摆到它列的左侧。
+  const layoutEdges = useMemo(() => [...lineageEdges, ...ownership], [lineageEdges, ownership])
+  const { positions, computing } = useGraphLayout(visible?.nodes ?? EMPTY_NODES, layoutEdges)
 
   // 搜索：命中标签的节点高亮，其余变淡（搜索优先于模式高亮 / 焦点高亮）。
   const searchIds = useMemo(() => {
@@ -125,9 +141,9 @@ export function LineageGraphView({ search = '' }: { search?: string }) {
       nodeIds: new Set(
         visible.nodes.filter((n) => spansOverlap(n.data.ref?.span, focusedSpan)).map((n) => n.id),
       ),
-      edgeIds: new Set(visible.edges.filter((e) => spansOverlap(e.data.span, focusedSpan)).map((e) => e.id)),
+      edgeIds: new Set(lineageEdges.filter((e) => spansOverlap(e.data.span, focusedSpan)).map((e) => e.id)),
     }
-  }, [focusedSpan, visible])
+  }, [focusedSpan, visible, lineageEdges])
 
   const active = searchIds != null
     ? { nodeIds: searchIds, edgeIds: EMPTY_IDS }
@@ -142,7 +158,7 @@ export function LineageGraphView({ search = '' }: { search?: string }) {
       data: n.data,
       className: active != null && !active.nodeIds.has(n.id) ? 'dimmed' : 'highlighted',
     }))
-    const edges: Edge[] = visible.edges.map((e) => ({
+    const lineage: Edge[] = lineageEdges.map((e) => ({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -155,8 +171,17 @@ export function LineageGraphView({ search = '' }: { search?: string }) {
       },
       className: active != null && !active.edgeIds.has(e.id) ? 'dimmed' : 'highlighted',
     }))
-    return { nodes, edges }
-  }, [visible, active, positions])
+    // 归属虚线：不参与高亮（固定淡色虚线），不可选中，避免被当成血缘。
+    const owns: Edge[] = ownership.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      selectable: false,
+      focusable: false,
+      style: { stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '3 3' },
+    }))
+    return { nodes, edges: [...lineage, ...owns] }
+  }, [visible, lineageEdges, ownership, active, positions])
 
   if (visible == null) {
     return (
@@ -184,14 +209,14 @@ export function LineageGraphView({ search = '' }: { search?: string }) {
     setFocusedSpan(span ?? null)
     if (span != null) revealSpan(span)
     if (graphMode === 'upstream' || graphMode === 'downstream') {
-      const set = reachableSet(visible.edges, node.id, graphMode)
-      setHighlight(subgraphHighlight(visible.edges, set))
+      const set = reachableSet(lineageEdges, node.id, graphMode)
+      setHighlight(subgraphHighlight(lineageEdges, set))
     } else if (graphMode === 'path') {
       if (pathFromId == null) {
         setPathFrom(node.id)
       } else {
-        const path = shortestPath(visible.edges, pathFromId, node.id, 'downstream')
-        setHighlight(path != null ? pathHighlight(visible, path) : null)
+        const path = shortestPath(lineageEdges, pathFromId, node.id, 'downstream')
+        setHighlight(path != null ? pathHighlight({ nodes: visible.nodes, edges: lineageEdges }, path) : null)
         setPathFrom(null)
       }
     }

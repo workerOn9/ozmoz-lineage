@@ -5,7 +5,11 @@ import { reachableSet, subgraphHighlight } from '../src/graph/traverse'
 import { shortestPath } from '../src/graph/path'
 import { layoutGraph } from '../src/graph/layout'
 import { shouldVirtualize, VIRTUALIZE_MIN_NODES } from '../src/graph/perf'
+import { visibleEdges } from '../src/graph/edgeFilter'
+import { OWNERSHIP_EDGE_PREFIX, ownershipEdges } from '../src/graph/ownership'
+import { DEFAULT_HIDDEN_EDGE_KINDS } from '../src/state/store'
 import { graphReportSchema, lineageModelSchema } from '../src/types'
+import type { EdgeKind } from '../src/types'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -178,5 +182,85 @@ describe('大图性能治理（R2）', () => {
     expect(shouldVirtualize(VIRTUALIZE_MIN_NODES - 1)).toBe(false)
     expect(shouldVirtualize(VIRTUALIZE_MIN_NODES)).toBe(true)
     expect(shouldVirtualize(VIRTUALIZE_MIN_NODES + 1)).toBe(true)
+  })
+})
+
+describe('边类型过滤（visibleEdges）', () => {
+  const kinds: EdgeKind[] = ['OUTPUT', 'PREDICATE', 'JOIN_KEY', 'GROUP_BY', 'ORDER_BY', 'SOURCE']
+  const all: MappedEdge[] = kinds.map((kind, i) => ({
+    id: `e${i}`,
+    source: 's',
+    target: 't',
+    data: { kind, transform: 'DIRECT' },
+  }))
+
+  it('缺省只留列级血缘：OUTPUT / JOIN_KEY 可见，其余四类关', () => {
+    const kept = visibleEdges(all, DEFAULT_HIDDEN_EDGE_KINDS)
+    expect(kept.map((e) => e.data.kind)).toEqual(['OUTPUT', 'JOIN_KEY'])
+  })
+
+  it('一个都没隐藏 → 原引用直返（零开销）', () => {
+    expect(visibleEdges(all, [])).toBe(all)
+  })
+
+  it('过滤后的边就是遍历口径：被隐藏的边不贡献上游', () => {
+    // a -(PREDICATE)→ t，b -(OUTPUT)→ t；隐藏 PREDICATE 后 t 的上游只剩 b。
+    const edges: MappedEdge[] = [
+      { id: 'p', source: 'a', target: 't', data: { kind: 'PREDICATE', transform: 'FILTER_PREDICATE' } },
+      { id: 'o', source: 'b', target: 't', data: { kind: 'OUTPUT', transform: 'DIRECT' } },
+    ]
+    expect([...reachableSet(visibleEdges(edges, DEFAULT_HIDDEN_EDGE_KINDS), 't', 'upstream')].sort()).toEqual([
+      'b',
+      't',
+    ])
+  })
+})
+
+describe('所属虚线（ownershipEdges）', () => {
+  function column(id: string, table: string | undefined, isOutput = false): MappedNode {
+    return {
+      id,
+      data: {
+        label: id,
+        isOutput,
+        isTableNode: false,
+        ...(table != null ? { ref: { raw: id, canonical: id, name: id, table } } : {}),
+      },
+    }
+  }
+  function tableNode(name: string): MappedNode {
+    return { id: tableNodeId(name), data: { label: name, isOutput: false, isTableNode: true } }
+  }
+
+  it('零入边的物理列 → 补一条连到所属表的虚线', () => {
+    const graph = {
+      nodes: [tableNode('db.t'), column('db.t.a', 'db.t')],
+      edges: [] as MappedEdge[],
+    }
+    const own = ownershipEdges(graph)
+    expect(own).toHaveLength(1)
+    expect(own[0].id.startsWith(OWNERSHIP_EDGE_PREFIX)).toBe(true)
+    expect(own[0].source).toBe(tableNodeId('db.t'))
+    expect(own[0].target).toBe('db.t.a')
+  })
+
+  it('已有入边的列不补（不悬空）；表节点自身不补', () => {
+    const graph = {
+      nodes: [tableNode('db.t'), column('db.t.a', 'db.t'), column('u.b', 'db.t')],
+      edges: [
+        { id: 'e0', source: 'db.t.a', target: 'u.b', data: { kind: 'OUTPUT', transform: 'DIRECT' } },
+      ] as MappedEdge[],
+    }
+    const own = ownershipEdges(graph)
+    // u.b 有入边不补；db.t.a 零入边补一条；表哨兵不补。
+    expect(own.map((e) => e.target)).toEqual(['db.t.a'])
+  })
+
+  it('派生表名（没有对应表节点）不补 —— 不凭空造节点', () => {
+    const graph = {
+      nodes: [column('subquery_0.a', 'subquery_0')],
+      edges: [] as MappedEdge[],
+    }
+    expect(ownershipEdges(graph)).toEqual([])
   })
 })
