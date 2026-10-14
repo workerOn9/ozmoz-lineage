@@ -16,7 +16,7 @@ import com.github.ajalt.clikt.parameters.options.versionOption
  * MCP 落地 [McpCommand]（stdio 工具面，镜像 `/api` 能力）；M5 文档站落地
  * [EnginesCommand]（引擎能力表，文档站「工具百科」数据源）；M1 收尾落地
  * [QualityCommand]（血缘质量报表，计划 §8）；ADR-0021 落地
- * [UpgradeCommand]（自更新，唯一联网子命令）。
+ * [UpgradeCommand]（自更新，唯一联网子命令）与 [UninstallCommand]（卸载）。
  *
  * 顶层带 `--version`（版本身份来自 [BuildInfo]，与产物 / `upgrade` 同一来源）。
  */
@@ -45,6 +45,7 @@ public fun main(args: Array<String>) {
             QualityCommand(),
             McpCommand(),
             UpgradeCommand(),
+            UninstallCommand(),
         )
         .main(args)
 }
