@@ -67,6 +67,33 @@ function FoldControls() {
   )
 }
 
+/**
+ * 未归属列引用提示（2026-10-14 真实 SQL 反馈）：`unknowns` 此前只在契约里、界面上
+ * 一个字都不给——图上「凭空少了几条线」没有任何解释。裸列歧义（未收录的表 / 视图）
+ * 是最常见的一类，点开 Schema 面板补 DDL 即可消歧。
+ */
+function UnknownsBadge() {
+  const lineage = useAppStore((s) => s.lineage)
+  const schema = useAppStore((s) => s.schema)
+  const setSchemaOpen = useAppStore((s) => s.setSchemaOpen)
+  const n = lineage?.unknowns.length ?? 0
+  if (n === 0) return null
+  return (
+    <button
+      className="shrink-0 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[12px] text-amber-800 hover:bg-amber-100"
+      title={
+        `有 ${n} 处列引用无法唯一归属，这些列在图上不会有连线。` +
+        (schema.trim() === ''
+          ? '把表 / 视图 DDL 粘到 Schema 面板（裸列归属 + 星号展开的元数据来源）。'
+          : '在 Schema 面板补全缺失的表 / 视图定义。')
+      }
+      onClick={() => setSchemaOpen(true)}
+    >
+      未归属 {n}
+    </button>
+  )
+}
+
 export function GraphToolbar({ search, onSearch }: { search: string; onSearch: (v: string) => void }) {
   const graphMode = useAppStore((s) => s.graphMode)
   const setGraphMode = useAppStore((s) => s.setGraphMode)
@@ -105,6 +132,7 @@ export function GraphToolbar({ search, onSearch }: { search: string; onSearch: (
           ? `已选起点 ${pathFromId}，点击终点`
           : active.hint}
       </span>
+      <UnknownsBadge />
       <FoldControls />
       {highlight != null && (
         <button
