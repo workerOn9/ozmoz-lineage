@@ -30,6 +30,14 @@ export function Toolbar() {
     () => engines.find((e) => e.id === engineId)?.dialects ?? [],
     [engines, engineId],
   )
+  // jsqlparser 等引擎注册表只有 'ansi' 占位（实际无方言概念），不把它当可选方言展示。
+  const dialectOptions = useMemo(() => {
+    if (engineDialects.length === 0) return []
+    if (engineDialects.length === 1 && engineDialects[0] === 'ansi') {
+      return [{ value: '', label: '通用 SQL' }]
+    }
+    return [{ value: '', label: '默认' }, ...engineDialects.map((d) => ({ value: d, label: d }))]
+  }, [engineDialects])
 
   const backendBadge =
     backend === 'ok' ? (
@@ -87,18 +95,20 @@ export function Toolbar() {
           ))}
         </select>
       </label>
-      <label className="flex items-center gap-1.5 text-[12px] text-neutral-500">
+      <label
+        className="flex items-center gap-1.5 text-[12px] text-neutral-500"
+        title="方言选项取决于当前引擎；jsqlparser 无方言概念"
+      >
         方言
         <select
           className="w-28 rounded border border-neutral-300 bg-white px-1.5 py-1 font-mono text-[12px] text-neutral-800"
           value={dialect}
-          disabled={engineDialects.length === 0}
+          disabled={dialectOptions.length === 0}
           onChange={(e) => setDialect(e.target.value)}
         >
-          <option value="">默认</option>
-          {engineDialects.map((d) => (
-            <option key={d} value={d}>
-              {d}
+          {dialectOptions.map((d) => (
+            <option key={d.value} value={d.value}>
+              {d.label}
             </option>
           ))}
         </select>
