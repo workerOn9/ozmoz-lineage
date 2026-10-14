@@ -30,7 +30,7 @@ export function SqlEditor({ value, onChange }: SqlEditorProps) {
     const editor = monaco.editor.create(container, {
       value,
       language: 'sql',
-      theme: 'vs-dark',
+      theme: 'vs',
       automaticLayout: true,
       minimap: { enabled: false },
       fontSize: 13,

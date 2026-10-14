@@ -30,10 +30,10 @@ function OzmozNode({ data, selected }: NodeProps<OzmozNodeType>) {
       className={[
         'rounded-md border px-3 py-1.5 text-[12px] font-mono shadow-sm',
         data.isTableNode
-          ? 'border-dashed border-neutral-500 bg-neutral-800/60 text-neutral-300'
+          ? 'border-dashed border-neutral-400 bg-neutral-100 text-neutral-700'
           : data.isOutput
-            ? 'border-sky-500 bg-sky-950/80 text-sky-200'
-            : 'border-neutral-600 bg-neutral-800/80 text-neutral-200',
+            ? 'border-sky-500 bg-sky-50 text-sky-800'
+            : 'border-neutral-300 bg-white text-neutral-800',
         selected ? 'ring-2 ring-sky-400' : '',
       ].join(' ')}
     >
@@ -41,10 +41,10 @@ function OzmozNode({ data, selected }: NodeProps<OzmozNodeType>) {
       <div className="flex items-center gap-1.5">
         <span>{data.label}</span>
         {data.isOutput && (
-          <span className="rounded bg-sky-700/60 px-1 text-[10px] text-sky-100">输出</span>
+          <span className="rounded bg-sky-200 px-1 text-[10px] text-sky-800">输出</span>
         )}
         {data.isTableNode && (
-          <span className="rounded bg-neutral-600/60 px-1 text-[10px] text-neutral-300">表</span>
+          <span className="rounded bg-neutral-300 px-1 text-[10px] text-neutral-700">表</span>
         )}
       </div>
       <Handle type="source" position={Position.Right} className="!h-2 !w-2 !bg-neutral-500" />
@@ -169,7 +169,7 @@ export function LineageGraphView() {
   return (
     <div className="relative h-full w-full">
       {computing && (
-        <div className="pointer-events-none absolute right-3 top-3 z-10 rounded bg-neutral-800/90 px-2 py-1 text-[11px] text-neutral-300 shadow">
+        <div className="pointer-events-none absolute right-3 top-3 z-10 rounded bg-neutral-200/90 px-2 py-1 text-[11px] text-neutral-500 shadow">
           布局中…
         </div>
       )}
@@ -192,7 +192,7 @@ export function LineageGraphView() {
         deleteKeyCode={null}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#333" />
+        <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#d4d4d8" />
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>
