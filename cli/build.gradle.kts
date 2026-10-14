@@ -187,6 +187,19 @@ fun patchStartScript(file: File, anchor: String, snippet: List<String>) {
     file.writeText(text.replaceFirst(anchor, anchor + newline + snippet.joinToString(newline)))
 }
 
+// Windows 的 cmd.exe 命令行上限约 8191 字符：Gradle 生成的 .bat 把 100+ jar 的完整
+// classpath 塞进一行，展开后必然超限（实测 `The input line is too long.`）。改成 Java
+// 通配 classpath `lib\*`——由 JVM 自己在运行时展开，不经过 cmd。**Unix 侧保持 Gradle
+// 原样**（无此限制，且保留 Gradle 的显式顺序）。
+fun patchWindowsClasspath(file: File) {
+    val text = file.readText()
+    val pattern = Regex("(?m)^set CLASSPATH=.*$")
+    require(pattern.containsMatchIn(text)) {
+        "Windows 启动脚本未找到 CLASSPATH 行（Gradle 模板可能已变）"
+    }
+    file.writeText(pattern.replace(text) { "set CLASSPATH=%APP_HOME%\\lib\\*" })
+}
+
 tasks.named<CreateStartScripts>("startScripts") {
     doLast {
         patchStartScript(
@@ -210,5 +223,6 @@ tasks.named<CreateStartScripts>("startScripts") {
                 "if not defined OZML_USE_SYSTEM_JAVA if exist \"%APP_HOME%\\runtime\\bin\\java.exe\" set JAVA_HOME=%APP_HOME%\\runtime",
             ),
         )
+        patchWindowsClasspath(windowsScript)
     }
 }
