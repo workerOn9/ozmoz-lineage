@@ -1,4 +1,4 @@
-import type { ColumnRef, EdgeKind, GraphReport, LineageModel, TransformKind } from '../types'
+import type { ColumnRef, EdgeKind, GraphReport, LineageModel, Span, TransformKind } from '../types'
 import { columnRefId } from '../types'
 
 /**
@@ -23,6 +23,8 @@ export interface GraphEdgeData {
   kind: EdgeKind
   transform: TransformKind
   expression?: string
+  /** 边的源文本 span（单语句 LineageModel 有；aggregate 合并图 GraphReport 无）——树↔图按 span 联动用。 */
+  span?: Span
 }
 
 export interface MappedNode {
@@ -89,6 +91,7 @@ export function mapLineageModel(model: LineageModel): MappedGraph {
         kind: e.kind,
         transform: e.transform,
         ...(e.expression != null ? { expression: e.expression } : {}),
+        ...(e.span != null ? { span: e.span } : {}),
       },
     }
   })

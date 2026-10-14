@@ -13,13 +13,15 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../../state/store'
-import type { GraphNodeData, MappedEdge, MappedGraph, MappedNode } from '../../graph/mapping'
+import type { GraphEdgeData, GraphNodeData, MappedEdge, MappedGraph, MappedNode } from '../../graph/mapping'
 import { mapGraphReport, mapLineageModel } from '../../graph/mapping'
 import { useGraphLayout } from '../../graph/useGraphLayout'
 import { applyCollapse, internalColumnIdsByScope } from '../../graph/collapse'
 import { GRAPH_MIN_ZOOM, shouldVirtualize } from '../../graph/perf'
 import { reachableSet, subgraphHighlight } from '../../graph/traverse'
 import { shortestPath } from '../../graph/path'
+import { spansOverlap } from '../../lib/span'
+import { revealSpan } from '../../editor/editorHolder'
 import { EDGE_KIND_COLORS } from './EdgeLegend'
 
 type OzmozNodeType = Node<GraphNodeData, 'ozmoz'>
@@ -57,6 +59,7 @@ const nodeTypes = { ozmoz: OzmozNode }
 /** 稳定的空数组常量：`visible == null` 时给 hook 的入参，避免每次渲染换身份。 */
 const EMPTY_NODES: MappedNode[] = []
 const EMPTY_EDGES: MappedEdge[] = []
+const EMPTY_IDS: ReadonlySet<string> = new Set()
 
 /** path 高亮：路径上的节点集 + 两端都在路径上的边集。 */
 function pathHighlight(mapped: MappedGraph, path: string[]) {
@@ -68,10 +71,11 @@ function pathHighlight(mapped: MappedGraph, path: string[]) {
   return { nodeIds, edgeIds }
 }
 
-export function LineageGraphView() {
+export function LineageGraphView({ search = '' }: { search?: string }) {
   const lineage = useAppStore((s) => s.lineage)
   const graphReport = useAppStore((s) => s.graphReport)
   const highlight = useAppStore((s) => s.highlight)
+  const focusedSpan = useAppStore((s) => s.focusedSpan)
   const foldTables = useAppStore((s) => s.foldTables)
   const collapsedScopeIds = useAppStore((s) => s.collapsedScopeIds)
 
@@ -107,6 +111,28 @@ export function LineageGraphView() {
     visible?.edges ?? EMPTY_EDGES,
   )
 
+  // 搜索：命中标签的节点高亮，其余变淡（搜索优先于模式高亮 / 焦点高亮）。
+  const searchIds = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (q === '' || visible == null) return null
+    return new Set(visible.nodes.filter((n) => n.data.label.toLowerCase().includes(q)).map((n) => n.id))
+  }, [search, visible])
+
+  // 树→图联动：归一化树点选的节点写入 focusedSpan，这里按 span 重叠高亮列节点 / 边。
+  const focusHighlight = useMemo(() => {
+    if (focusedSpan == null || visible == null) return null
+    return {
+      nodeIds: new Set(
+        visible.nodes.filter((n) => spansOverlap(n.data.ref?.span, focusedSpan)).map((n) => n.id),
+      ),
+      edgeIds: new Set(visible.edges.filter((e) => spansOverlap(e.data.span, focusedSpan)).map((e) => e.id)),
+    }
+  }, [focusedSpan, visible])
+
+  const active = searchIds != null
+    ? { nodeIds: searchIds, edgeIds: EMPTY_IDS }
+    : (highlight ?? focusHighlight)
+
   const { nodes, edges } = useMemo(() => {
     if (visible == null) return { nodes: [] as OzmozNodeType[], edges: [] as Edge[] }
     const nodes: OzmozNodeType[] = visible.nodes.map((n) => ({
@@ -114,7 +140,7 @@ export function LineageGraphView() {
       type: 'ozmoz' as const,
       position: { x: positions.get(n.id)?.x ?? 0, y: positions.get(n.id)?.y ?? 0 },
       data: n.data,
-      className: highlight != null && !highlight.nodeIds.has(n.id) ? 'dimmed' : 'highlighted',
+      className: active != null && !active.nodeIds.has(n.id) ? 'dimmed' : 'highlighted',
     }))
     const edges: Edge[] = visible.edges.map((e) => ({
       id: e.id,
@@ -127,10 +153,10 @@ export function LineageGraphView() {
         width: 18,
         height: 18,
       },
-      className: highlight != null && !highlight.edgeIds.has(e.id) ? 'dimmed' : 'highlighted',
+      className: active != null && !active.edgeIds.has(e.id) ? 'dimmed' : 'highlighted',
     }))
     return { nodes, edges }
-  }, [visible, highlight, positions])
+  }, [visible, active, positions])
 
   if (visible == null) {
     return (
@@ -150,8 +176,13 @@ export function LineageGraphView() {
   }
 
   const onNodeClick = (_: unknown, node: Node) => {
-    const { graphMode, pathFromId, setPathFrom, selectNode, setHighlight } = useAppStore.getState()
+    const { graphMode, pathFromId, setPathFrom, selectNode, setHighlight, setFocusedSpan } =
+      useAppStore.getState()
     selectNode(node.id)
+    // 图→SQL / 图→树联动：把该节点的源文本位置写进共享焦点并选中编辑器。
+    const span = (node.data as GraphNodeData).ref?.span
+    setFocusedSpan(span ?? null)
+    if (span != null) revealSpan(span)
     if (graphMode === 'upstream' || graphMode === 'downstream') {
       const set = reachableSet(visible.edges, node.id, graphMode)
       setHighlight(subgraphHighlight(visible.edges, set))
@@ -166,6 +197,14 @@ export function LineageGraphView() {
     }
   }
 
+  const onEdgeClick = (_: unknown, edge: Edge) => {
+    const { selectEdge, setFocusedSpan } = useAppStore.getState()
+    selectEdge(edge.id)
+    const span = (edge.data as GraphEdgeData | undefined)?.span
+    setFocusedSpan(span ?? null)
+    if (span != null) revealSpan(span)
+  }
+
   return (
     <div className="relative h-full w-full">
       {computing && (
@@ -173,11 +212,17 @@ export function LineageGraphView() {
           布局中…
         </div>
       )}
+      {searchIds != null && (
+        <div className="pointer-events-none absolute left-3 top-3 z-10 rounded bg-neutral-200/90 px-2 py-1 text-[11px] text-neutral-600 shadow">
+          搜索：{searchIds.size} 个节点
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
         fitView
         fitViewOptions={{ padding: 0.15 }}
         // 大图性能治理（R2）：视口外不渲染。按规模门控，小图行为不变；

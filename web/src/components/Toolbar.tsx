@@ -70,8 +70,9 @@ export function Toolbar() {
         <button
           className={`px-2 py-1 ${view === 'main' ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:bg-neutral-100'}`}
           onClick={() => setView('main')}
+          title="两栏工作台：左 SQL，右工具面板（归一化树 / 血缘图）"
         >
-          三栏
+          工作台
         </button>
         <button
           className={`border-l border-neutral-300 px-2 py-1 ${view === 'ast-diff' ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:bg-neutral-100'}`}

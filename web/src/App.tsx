@@ -1,13 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Toolbar } from './components/Toolbar'
 import { SchemaPanel } from './components/SchemaPanel'
-import { AstTreeView } from './components/ast/AstTreeView'
 import { AstDiffPanel } from './components/ast/AstDiffPanel'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
-import { GraphToolbar } from './components/lineage/GraphToolbar'
-import { LineageGraphView } from './components/lineage/LineageGraphView'
-import { NodeInspector } from './components/lineage/NodeInspector'
-import { EdgeLegend } from './components/lineage/EdgeLegend'
+import { TreePanel } from './components/TreePanel'
+import { GraphPanel } from './components/GraphPanel'
+import { ToolRail } from './components/ToolRail'
 import { useAppStore } from './state/store'
 import { getExample } from './lib/examples'
 
@@ -16,7 +14,7 @@ const SqlEditor = lazy(() =>
   import('./components/editor/SqlEditor').then((m) => ({ default: m.SqlEditor })),
 )
 
-/** 三栏布局：左 SQL / 中归一化树 / 右血缘图 + 检查器；底部诊断面板。 */
+/** 两栏布局：左 SQL / 右工具面板（归一化树 / 血缘图，IDEA 风格工具条切换、可收起）；底部诊断面板。 */
 
 function DragHandle({
   onDelta,
@@ -50,19 +48,18 @@ export default function App() {
   const init = useAppStore((s) => s.init)
   const setSql = useAppStore((s) => s.setSql)
   const sql = useAppStore((s) => s.sql)
-  const parseReport = useAppStore((s) => s.parseReport)
-  const lineage = useAppStore((s) => s.lineage)
-  const graphReport = useAppStore((s) => s.graphReport)
   const backend = useAppStore((s) => s.backend)
   const view = useAppStore((s) => s.view)
+  const panelTool = useAppStore((s) => s.panelTool)
+  const panelOpen = useAppStore((s) => s.panelOpen)
   const formatNotice = useAppStore((s) => s.formatNotice)
   const clearFormatNotice = useAppStore((s) => s.clearFormatNotice)
   const schemaOpen = useAppStore((s) => s.schemaOpen)
   const loadExample = useAppStore((s) => s.loadExample)
   const run = useAppStore((s) => s.run)
 
-  // 左 / 中栏宽度（百分比），右栏吃剩余。
-  const [widths, setWidths] = useState({ left: 30, mid: 26 })
+  // 左右两栏宽度（左侧百分比），右栏吃剩余；右栏收起时左栏占满。
+  const [leftWidth, setLeftWidth] = useState(38)
   const [bottomOpen, setBottomOpen] = useState(false)
   const mainRef = useRef<HTMLDivElement>(null)
   // 落地页画廊深链（/app?example=<id>）：载入示例 + 后端就绪后自动跑一次。
@@ -89,7 +86,10 @@ export default function App() {
     }
   }, [backend, run])
 
-  const clamp = (v: number) => Math.min(60, Math.max(12, v))
+  const clamp = (v: number) => Math.min(70, Math.max(20, v))
+  // 工作台里「右栏展开」时左栏固定百分比；其余情况（右栏收起 / AST 对比）左栏占满或按需。
+  const panelVisible = view === 'main' && panelOpen
+  const leftFills = view === 'main' && !panelOpen
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -112,8 +112,11 @@ export default function App() {
         </div>
       )}
       <div ref={mainRef} className="flex min-h-0 flex-1">
-        {/* 左：SQL 编辑器（三栏 / AST 对比共用）+ 可选 schema 面板 */}
-        <section className="flex min-w-0 flex-col" style={{ width: `${widths.left}%` }}>
+        {/* 左：SQL 编辑器 + 可选 schema 面板（工作台 / AST 对比共用） */}
+        <section
+          className={`flex min-w-0 flex-col ${leftFills ? 'flex-1' : ''}`}
+          style={leftFills ? undefined : { width: `${leftWidth}%` }}
+        >
           <PanelTitle title="SQL 输入" />
           <div className={schemaOpen ? 'min-h-0 flex-[3]' : 'min-h-0 flex-1'}>
             <Suspense fallback={<div className="p-3 text-[12px] text-neutral-500">加载编辑器…</div>}>
@@ -129,50 +132,23 @@ export default function App() {
             </>
           )}
         </section>
-        <DragHandle
-          onDelta={(dx, w) =>
-            setWidths((v) => ({ ...v, left: clamp(v.left + (dx / w) * 100) }))
-          }
-        />
         {view === 'main' ? (
           <>
-            {/* 中：归一化树（aggregate 合并图模式没有单语句树，显示说明） */}
-            <section className="flex min-w-0 flex-col" style={{ width: `${widths.mid}%` }}>
-              <PanelTitle title="归一化树" />
-              <div className="min-h-0 flex-1">
-                {graphReport != null ? (
-                  <div className="flex h-full items-center justify-center p-3 text-center text-[12px] leading-5 text-neutral-500">
-                    聚合模式：多语句已合并为一张血缘图（右栏），
-                    <br />
-                    无单语句归一化树
-                  </div>
-                ) : (
-                  <AstTreeView root={parseReport?.root ?? null} />
-                )}
-              </div>
-            </section>
-            <DragHandle
-              onDelta={(dx, w) =>
-                setWidths((v) => {
-                  const left = clamp(v.left + (dx / w) * 100)
-                  return { left, mid: clamp(v.mid - (dx / w) * 100) }
-                })
-              }
-            />
-            {/* 右：血缘图 + 检查器 */}
-            <section className="flex min-w-0 flex-1 flex-col">
-              <GraphToolbar />
-              <div className="min-h-0 flex-[3]">
-                <LineageGraphView />
-              </div>
-              <EdgeLegend model={lineage ?? graphReport} />
-              <div className="min-h-0 flex-[2] border-t border-neutral-200">
-                <NodeInspector />
-              </div>
-            </section>
+            {panelVisible && (
+              <DragHandle
+                onDelta={(dx, w) => setLeftWidth((v) => clamp(v + (dx / w) * 100))}
+              />
+            )}
+            {panelVisible && (
+              <section className="flex min-w-0 flex-1 flex-col">
+                {panelTool === 'tree' ? <TreePanel /> : <GraphPanel />}
+              </section>
+            )}
+            {/* 右侧纵向工具条：归一化树 / 血缘图二选一 + 面板收起。 */}
+            <ToolRail />
           </>
         ) : (
-          /* AST 对比：占满中栏 + 右栏（T4） */
+          /* AST 对比：占满右栏（T4） */
           <section className="flex min-w-0 flex-1 flex-col">
             <AstDiffPanel />
           </section>
