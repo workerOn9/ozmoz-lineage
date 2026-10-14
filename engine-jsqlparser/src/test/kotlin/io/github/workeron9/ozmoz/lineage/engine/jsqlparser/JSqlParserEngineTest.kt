@@ -65,6 +65,25 @@ class JSqlParserEngineTest {
     }
 
     @Test
+    fun `CAST 与双冒号在归一化树是 cast 节点 值表达式是子节点`() {
+        val outcome = engine.parse("SELECT CAST(a AS VARCHAR) AS x, b::date AS y FROM t")
+        assertFalse(outcome.hasErrors)
+
+        val casts = outcome.root.flatten().filter { it.type == "cast" }.toList()
+        assertEquals(2, casts.size) // CAST(...) 与 b::date 各一个
+        assertTrue(casts.all { c -> c.children.any { it.type == "column" } })
+        // 不再把 cast 当字面量（这是修这个 bug 的直接断言）。
+        assertFalse(outcome.root.flatten().any { it.type == "literal" })
+    }
+
+    @Test
+    fun `认不出的表达式包成 unknown_node 而不是假装 literal`() {
+        val outcome = engine.parse("SELECT a FROM t WHERE a IN (1, 2)")
+        val types = outcome.root.flatten().map { it.type }.toList()
+        assertContains(types, "unknown_node")
+    }
+
+    @Test
     fun `节点 text 是源文本切片（Lossless）`() {
         val sql = "SELECT   ss_quantity   FROM store_sales"
         val outcome = engine.parse(sql)
