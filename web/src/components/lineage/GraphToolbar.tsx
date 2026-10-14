@@ -24,7 +24,7 @@ function FoldControls() {
   if (collapsibleScopes.length === 0 && !foldTables) {
     return (
       <button
-        className="rounded border border-neutral-300 px-2 py-0.5 text-[12px] text-text-neutral-500 hover:bg-neutral-200"
+        className="rounded border border-neutral-300 px-2 py-0.5 text-[12px] text-neutral-500 hover:bg-neutral-200"
         onClick={toggleFoldTables}
         title="隐藏 table: 哨兵节点与 SOURCE 边（T3.4 折叠）"
       >
@@ -39,7 +39,7 @@ function FoldControls() {
         className={`rounded border px-2 py-0.5 text-[12px] ${
           foldTables
             ? 'border-sky-600 bg-sky-100 text-sky-800'
-            : 'border-neutral-300 text-text-neutral-500 hover:bg-neutral-200'
+            : 'border-neutral-300 text-neutral-500 hover:bg-neutral-200'
         }`}
         onClick={toggleFoldTables}
         title="隐藏 table: 哨兵节点与 SOURCE 边（T3.4 折叠）"
@@ -54,7 +54,7 @@ function FoldControls() {
             className={`rounded border px-2 py-0.5 text-[12px] ${
               on
                 ? 'border-fuchsia-600 bg-fuchsia-950/60 text-fuchsia-200'
-                : 'border-neutral-300 text-text-neutral-500 hover:bg-neutral-200'
+                : 'border-neutral-300 text-neutral-500 hover:bg-neutral-200'
             }`}
             onClick={() => toggleScopeCollapse(sc.id)}
             title={on ? '展开该作用域内部列' : '收起该作用域的内部列（output 保留）'}
@@ -85,7 +85,7 @@ export function GraphToolbar() {
             className={`px-2.5 py-1 text-[12px] ${
               graphMode === m.id
                 ? 'bg-brand text-white'
-                : 'bg-neutral-100 text-text-neutral-500 hover:bg-neutral-200'
+                : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
             }`}
             onClick={() => setGraphMode(m.id)}
           >

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useAppStore } from '../state/store'
 import { EXAMPLES } from '../lib/examples'
 import { DOCS_URL } from '../lib/links'
@@ -24,13 +25,11 @@ export function Toolbar() {
   const validating = useAppStore((s) => s.validating)
   const schemaOpen = useAppStore((s) => s.schemaOpen)
   const setSchemaOpen = useAppStore((s) => s.setSchemaOpen)
-  const dataSource = useAppStore((s) => s.dataSource)
-  const setDataSource = useAppStore((s) => s.setDataSource)
-  const graphs = useAppStore((s) => s.graphs)
-  const graphName = useAppStore((s) => s.graphName)
-  const setGraphName = useAppStore((s) => s.setGraphName)
-  const openGraph = useAppStore((s) => s.openGraph)
-  const graphOpening = useAppStore((s) => s.graphOpening)
+
+  const engineDialects = useMemo(
+    () => engines.find((e) => e.id === engineId)?.dialects ?? [],
+    [engines, engineId],
+  )
 
   const backendBadge =
     backend === 'ok' ? (
@@ -74,47 +73,6 @@ export function Toolbar() {
           AST 对比
         </button>
       </div>
-      <div className="ml-3 flex overflow-hidden rounded border border-neutral-300 text-[12px]">
-        <button
-          className={`px-2 py-1 ${dataSource === 'sql' ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:bg-neutral-100'}`}
-          title="以左侧编辑器的 SQL 现建现查"
-          onClick={() => void setDataSource('sql')}
-        >
-          SQL
-        </button>
-        <button
-          className={`border-l border-neutral-300 px-2 py-1 ${dataSource === 'graph' ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:bg-neutral-100'}`}
-          title="浏览 ozml lineage --graph 落库的 SQLite 图库（需后端以 --graph-root 启动）"
-          onClick={() => void setDataSource('graph')}
-        >
-          本地图库
-        </button>
-      </div>
-      {dataSource === 'graph' && (
-        <>
-          <select
-            className="rounded border border-neutral-300 bg-white px-1.5 py-1 text-[12px] text-neutral-800 disabled:opacity-40"
-            value={graphName ?? ''}
-            disabled={graphs.length === 0}
-            onChange={(e) => setGraphName(e.target.value || null)}
-          >
-            {graphs.length === 0 && <option value="">（无可用图库）</option>}
-            {graphs.map((g) => (
-              <option key={g.name} value={g.name}>
-                {g.name}（{g.modelCount} 条）
-              </option>
-            ))}
-          </select>
-          <button
-            className="rounded border border-neutral-300 px-2 py-1 text-[12px] text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
-            title="读取选中图库的整库血缘图（/api/lineage graph 模式）"
-            disabled={backend !== 'ok' || graphName == null || graphOpening}
-            onClick={() => void openGraph()}
-          >
-            {graphOpening ? '打开中…' : '打开'}
-          </button>
-        </>
-      )}
       <label className="ml-auto flex items-center gap-1.5 text-[12px] text-neutral-500">
         引擎
         <select
@@ -131,12 +89,19 @@ export function Toolbar() {
       </label>
       <label className="flex items-center gap-1.5 text-[12px] text-neutral-500">
         方言
-        <input
-          className="w-24 rounded border border-neutral-300 bg-white px-1.5 py-1 font-mono text-[12px] text-neutral-800"
-          placeholder="可选"
+        <select
+          className="w-28 rounded border border-neutral-300 bg-white px-1.5 py-1 font-mono text-[12px] text-neutral-800"
           value={dialect}
+          disabled={engineDialects.length === 0}
           onChange={(e) => setDialect(e.target.value)}
-        />
+        >
+          <option value="">默认</option>
+          {engineDialects.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
       </label>
       <label
         className="flex items-center gap-1.5 text-[12px] text-neutral-500"

@@ -38,7 +38,7 @@ export function AstDiffPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-200 px-3 py-1.5 text-[12px] text-text-neutral-500">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-200 px-3 py-1.5 text-[12px] text-neutral-500">
         <span className="font-medium text-neutral-400">AST 对比</span>
         <label className="flex items-center gap-1.5">
           左

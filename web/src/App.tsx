@@ -58,16 +58,12 @@ export default function App() {
   const formatNotice = useAppStore((s) => s.formatNotice)
   const clearFormatNotice = useAppStore((s) => s.clearFormatNotice)
   const schemaOpen = useAppStore((s) => s.schemaOpen)
-  const graphSource = useAppStore((s) => s.graphSource)
-  const dataSource = useAppStore((s) => s.dataSource)
-  const graphsError = useAppStore((s) => s.graphsError)
-  const graphName = useAppStore((s) => s.graphName)
   const loadExample = useAppStore((s) => s.loadExample)
   const run = useAppStore((s) => s.run)
 
   // 左 / 中栏宽度（百分比），右栏吃剩余。
   const [widths, setWidths] = useState({ left: 30, mid: 26 })
-  const [bottomOpen, setBottomOpen] = useState(true)
+  const [bottomOpen, setBottomOpen] = useState(false)
   const mainRef = useRef<HTMLDivElement>(null)
   // 落地页画廊深链（/app?example=<id>）：载入示例 + 后端就绪后自动跑一次。
   // exampleRan 防 StrictMode 双跑；replaceState 去掉参数，避免手动刷新又触发。
@@ -109,11 +105,6 @@ export default function App() {
           </button>
         </div>
       )}
-      {dataSource === 'graph' && graphsError != null && (
-        <div className="border-b border-amber-200 bg-amber-50 px-3 py-1 text-[12px] text-amber-800">
-          图库不可用：{graphsError}
-        </div>
-      )}
       {backend === 'down' && (
         <div className="border-b border-rose-200 bg-rose-50 px-3 py-1 text-[12px] text-rose-700">
           未连接本地后端——解析不可用。请启动 <code className="font-mono">ozml serve</code>
@@ -151,19 +142,9 @@ export default function App() {
               <div className="min-h-0 flex-1">
                 {graphReport != null ? (
                   <div className="flex h-full items-center justify-center p-3 text-center text-[12px] leading-5 text-neutral-400">
-                    {graphSource === 'store' ? (
-                      <>
-                        图库模式：已载入 <span className="font-mono">{graphName}</span> 的整库血缘图（右栏），
-                        <br />
-                        库内只有模型、没有逐语句归一化树
-                      </>
-                    ) : (
-                      <>
-                        聚合模式：多语句已合并为一张血缘图（右栏），
-                        <br />
-                        无单语句归一化树
-                      </>
-                    )}
+                    聚合模式：多语句已合并为一张血缘图（右栏），
+                    <br />
+                    无单语句归一化树
                   </div>
                 ) : (
                   <AstTreeView root={parseReport?.root ?? null} />
@@ -197,13 +178,13 @@ export default function App() {
           </section>
         )}
       </div>
-      {/* 底部：诊断 / unknowns */}
+      {/* 底部：诊断面板，默认收起。 */}
       <div className="border-t border-neutral-200 bg-white">
         <button
-          className="flex w-full items-center justify-between px-3 py-1 text-[12px] text-text-neutral-500 hover:text-neutral-200"
+          className="flex w-full items-center justify-between px-3 py-1 text-[12px] text-neutral-500 hover:text-neutral-800"
           onClick={() => setBottomOpen((v) => !v)}
         >
-          <span>诊断与 unknowns</span>
+          <span>诊断</span>
           <span>{bottomOpen ? '▼' : '▲'}</span>
         </button>
         {bottomOpen && (
@@ -218,7 +199,7 @@ export default function App() {
 
 function PanelTitle({ title }: { title: string }) {
   return (
-    <div className="border-b border-neutral-200 px-3 py-1.5 text-[12px] font-medium text-text-neutral-500">
+    <div className="border-b border-neutral-200 px-3 py-1.5 text-[12px] font-medium text-neutral-500">
       {title}
     </div>
   )

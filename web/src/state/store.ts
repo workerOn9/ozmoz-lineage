@@ -195,7 +195,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   validateError: null,
 
   setSql: (sql) => set({ sql, formatNotice: null, validateReport: null, validateError: null }),
-  setEngineId: (engineId) => set({ engineId }),
+  setEngineId: (engineId) => {
+    const engine = get().engines.find((e) => e.id === engineId)
+    const dialect = engine?.dialects.includes(get().dialect) ? get().dialect : ''
+    set({ engineId, dialect })
+  },
   setDialect: (dialect) => set({ dialect }),
   setAggregate: (aggregate) => set({ aggregate }),
 

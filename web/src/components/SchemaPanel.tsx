@@ -19,7 +19,7 @@ export function SchemaPanel() {
           CREATE TABLE 文本（可选）；留空则由后端从 SQL 文本自动收集
         </span>
         <button
-          className="ml-auto shrink-0 rounded border border-neutral-300 px-1.5 py-0.5 text-[11px] text-text-neutral-500 hover:bg-neutral-200"
+          className="ml-auto shrink-0 rounded border border-neutral-300 px-1.5 py-0.5 text-[11px] text-neutral-500 hover:bg-neutral-200"
           onClick={() => setSchema('')}
           disabled={schema === ''}
         >
