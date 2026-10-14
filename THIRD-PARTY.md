@@ -74,6 +74,7 @@
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.57.0 | MIT | SQL 编辑器内核（本地打包 + 本地 worker，不引 CDN，符合离线红线） |
 | [Zustand](https://github.com/pmndrs/zustand) | 5.0.15 | MIT | 轻量全局状态 |
 | [Zod](https://github.com/colinhacks/zod) | 4.6.5 | MIT | 契约夹具的运行时校验（`web/test/fixtures/`） |
+| [@vercel/analytics](https://github.com/vercel/analytics) | 2.0.1 | MIT | 公网演示站的访问统计（`web/src/main.tsx` 挂 `<Analytics />`）：同源脚本 `/_vercel/insights/*`，非 CDN；dev 只打日志不上报 |
 
 前端**构建期**依赖（Vite / TypeScript / Tailwind / Vitest 等，devDependencies）不进入产物，不逐条登记；如上游许可证扫描要求再补。
 
