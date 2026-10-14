@@ -67,7 +67,7 @@ function FoldControls() {
   )
 }
 
-export function GraphToolbar() {
+export function GraphToolbar({ search, onSearch }: { search: string; onSearch: (v: string) => void }) {
   const graphMode = useAppStore((s) => s.graphMode)
   const setGraphMode = useAppStore((s) => s.setGraphMode)
   const pathFromId = useAppStore((s) => s.pathFromId)
@@ -93,7 +93,14 @@ export function GraphToolbar() {
           </button>
         ))}
       </div>
-      <span className="text-[12px] text-neutral-500">
+      <input
+        className="w-40 rounded border border-neutral-300 bg-white px-2 py-0.5 font-mono text-[12px] text-neutral-800"
+        placeholder="搜索节点…"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        title="按节点标签搜索；命中高亮，其余变淡"
+      />
+      <span className="truncate text-[12px] text-neutral-500">
         {graphMode === 'path' && pathFromId != null
           ? `已选起点 ${pathFromId}，点击终点`
           : active.hint}

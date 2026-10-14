@@ -7,6 +7,7 @@ import type {
   GraphReport,
   LineageModel,
   ParseReport,
+  Span,
   ValidateReport,
 } from '../types'
 import { EXAMPLES, getExample } from '../lib/examples'
@@ -24,8 +25,11 @@ export type BackendState = 'checking' | 'ok' | 'down'
 
 export type GraphMode = 'none' | 'upstream' | 'downstream' | 'path'
 
-/** 顶层视图：三栏主视图 / AST 并排对比（web 设计稿 App.tsx 的「视图切换」）。 */
+/** 顶层视图：两栏工作台 / AST 并排对比（web 设计稿 App.tsx 的「视图切换」）。 */
 export type ViewMode = 'main' | 'ast-diff'
+
+/** 右侧工具面板当前工具（IDEA 风格右侧工具条）：归一化树 / 血缘图，二选一。 */
+export type PanelTool = 'tree' | 'graph'
 
 interface AppState {
   sql: string
@@ -72,6 +76,14 @@ interface AppState {
   selectedEdgeId: string | null
   highlight: HighlightResult | null
   view: ViewMode
+  /** 右侧工具面板：当前工具（默认归一化树）与是否展开（IDEA 风格工具条收起）。 */
+  panelTool: PanelTool
+  panelOpen: boolean
+  /**
+   * 树↔图联动的共享焦点：最后一次点选对象在 SQL 源文本上的 span（树节点 / 血缘列 / 边）。
+   * 两栏工具二选一显示，靠这个值把「在另一个工具里选中的位置」带过去（按 span 重叠）。
+   */
+  focusedSpan: Span | null
   /** AST 对比（T4.2）：左右引擎（null = 尚未初始化）。 */
   diffLeftEngine: string | null
   diffRightEngine: string | null
@@ -139,6 +151,12 @@ interface AppState {
   /** 图折叠（T3.4）：切换某作用域的折叠状态。 */
   toggleScopeCollapse: (scopeId: string) => void
   setView: (view: ViewMode) => void
+  /** 切右侧工具面板的工具；顺带展开面板（点了图标就是要看它）。 */
+  setPanelTool: (tool: PanelTool) => void
+  /** 展开 / 收起右侧工具面板。 */
+  setPanelOpen: (open: boolean) => void
+  /** 设置树↔图联动的焦点 span（点树节点 / 图节点 / 边时写入）。 */
+  setFocusedSpan: (span: Span | null) => void
   setDiffLeftEngine: (id: string | null) => void
   setDiffRightEngine: (id: string | null) => void
   runDiff: () => Promise<void>
@@ -179,6 +197,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedEdgeId: null,
   highlight: null,
   view: 'main',
+  panelTool: 'tree',
+  panelOpen: true,
+  focusedSpan: null,
   diffLeftEngine: null,
   diffRightEngine: null,
   diffResult: null,
@@ -255,6 +276,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         selectedNodeId: null,
         selectedEdgeId: null,
         highlight: null,
+        focusedSpan: null,
         graphMode: 'none',
         pathFromId: null,
         collapsedScopeIds: [],
@@ -312,6 +334,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           selectedNodeId: null,
           selectedEdgeId: null,
           highlight: null,
+          focusedSpan: null,
           graphMode: 'none',
           pathFromId: null,
           collapsedScopeIds: [],
@@ -332,6 +355,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           selectedNodeId: null,
           selectedEdgeId: null,
           highlight: null,
+          focusedSpan: null,
           graphMode: 'none',
           pathFromId: null,
           collapsedScopeIds: [],
@@ -366,6 +390,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       graphSource: null,
       runError: null,
       collapsedScopeIds: [],
+      focusedSpan: null,
     })
   },
 
@@ -430,6 +455,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectEdge: (selectedEdgeId) => set({ selectedEdgeId, selectedNodeId: null }),
   setHighlight: (highlight) => set({ highlight }),
   setView: (view) => set({ view }),
+  setPanelTool: (panelTool) => set({ panelTool, panelOpen: true }),
+  setPanelOpen: (panelOpen) => set({ panelOpen }),
+  setFocusedSpan: (focusedSpan) => set({ focusedSpan }),
 
   toggleFoldTables: () => set((s) => ({ foldTables: !s.foldTables })),
   toggleScopeCollapse: (scopeId) =>
