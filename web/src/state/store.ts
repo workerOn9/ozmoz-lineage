@@ -315,15 +315,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   run: async () => {
-    const { sql, engineId, dialect, aggregate } = get()
+    const { sql, engineId, dialect, aggregate, schema } = get()
     if (get().backend !== 'ok' || sql.trim() === '') return
     set({ running: true, runError: null })
     const query = { sql, ...(engineId != null ? { engine: engineId } : {}), ...(dialect !== '' ? { dialect } : {}) }
+    // schema 面板的 DDL 一并喂给血缘：星号展开与裸列消歧的元数据来源。
+    // 只加在 lineage 上——/api/parse 的 ParseQuery 没有 schema 字段，多传会 400
+    // （服务端 ignoreUnknownKeys=false）。空白视同未提供（后端改从 SQL 收 CREATE TABLE）。
+    const lineageQuery = { ...query, ...(schema.trim() !== '' ? { schema } : {}) }
     try {
       if (aggregate) {
         // 聚合模式（ADR-0011 opt-in）：只打 /api/lineage（aggregate=true 回合并图
         // GraphReport）；多语句没有单棵归一化树，/api/parse 跳过、中栏显示说明。
-        const raw = (await endpoints.lineage({ ...query, aggregate: true })) as unknown
+        const raw = (await endpoints.lineage({ ...lineageQuery, aggregate: true })) as unknown
         const lineageUnknown = unknownReason(raw)
         set({
           parseReport: null,
@@ -342,7 +346,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         const [parseRaw, lineageRaw] = await Promise.all([
           endpoints.parse(query) as Promise<unknown>,
-          endpoints.lineage(query) as Promise<unknown>,
+          endpoints.lineage(lineageQuery) as Promise<unknown>,
         ])
         const parseUnknown = unknownReason(parseRaw)
         const lineageUnknown = unknownReason(lineageRaw)
