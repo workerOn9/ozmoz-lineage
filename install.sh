@@ -72,7 +72,7 @@ platform="${os_tag}-${arch_tag}"
 # ── 版本解析 ─────────────────────────────────────────────────────────────────
 if [ -z "$VERSION" ]; then
     echo "查询最新版本…"
-    tag="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$API_BASE/releases/latest" \
+    tag="$(curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 -H 'Accept: application/vnd.github+json' "$API_BASE/releases/latest" \
         | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1)"
     [ -n "$tag" ] || die "无法获取最新版本（可用 --version 指定；或用 OZML_API_BASE 指向本地镜像）"
     VERSION="$tag"
@@ -91,8 +91,10 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/ozml-install.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 echo "下载：$url"
-curl -fsSL "$url" -o "$tmp/$asset" || die "下载失败（版本 / 平台不存在，或网络不可达）"
-curl -fsSL "${RELEASE_BASE}/download/v${VERSION}/checksums.txt" -o "$tmp/checksums.txt" \
+# 发行产物约 90MB，跨洋链路中途断流常见——给 curl 重试与连接超时，别让一次抖动废掉安装。
+curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 20 "$url" -o "$tmp/$asset" \
+    || die "下载失败（版本 / 平台不存在，或网络不可达）"
+curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 "${RELEASE_BASE}/download/v${VERSION}/checksums.txt" -o "$tmp/checksums.txt" \
     || die "下载 checksums.txt 失败"
 
 expected="$(awk -v n="$asset" '$2 != "" { f=$2; sub(/^\*/, "", f); if (f == n) { print $1; exit } }' "$tmp/checksums.txt")"
