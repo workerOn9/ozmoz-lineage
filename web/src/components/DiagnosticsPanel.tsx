@@ -58,7 +58,7 @@ export function DiagnosticsPanel() {
           <button
             key={id}
             className={`px-2 py-1 text-[12px] ${
-              tab === id ? 'border-b border-sky-500 text-sky-700' : 'text-neutral-400 hover:text-neutral-600'
+              tab === id ? 'border-b border-sky-500 text-sky-700' : 'text-neutral-500 hover:text-neutral-700'
             }`}
             onClick={() => setTab(id)}
           >
@@ -66,7 +66,7 @@ export function DiagnosticsPanel() {
           </button>
         ))}
         {tab === 'validate' && validateReport != null && (
-          <span className="px-1 font-mono text-[11px] text-neutral-400">引擎 {validateReport.engine}</span>
+          <span className="px-1 font-mono text-[11px] text-neutral-500">引擎 {validateReport.engine}</span>
         )}
         {runError != null && (
           <span className="ml-auto truncate px-2 text-[12px] text-rose-600">{runError}</span>
@@ -75,7 +75,7 @@ export function DiagnosticsPanel() {
       <div className="min-h-0 flex-1 overflow-auto">
         {tab === 'diagnostics' &&
           (diagnostics.length === 0 ? (
-            <div className="p-3 text-[12px] text-neutral-400">无诊断</div>
+            <div className="p-3 text-[12px] text-neutral-500">无诊断</div>
           ) : (
             diagnostics.map((d, i) => {
               const style = SEVERITY_STYLE[d.severity]
@@ -88,7 +88,7 @@ export function DiagnosticsPanel() {
                   <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
                   <span className={`w-14 shrink-0 font-mono ${style.text}`}>{style.label}</span>
                   <span className="w-40 shrink-0 truncate font-mono text-neutral-500">{d.code}</span>
-                  <span className="truncate text-neutral-400">{d.message}</span>
+                  <span className="truncate text-neutral-600">{d.message}</span>
                   <LocateButton span={d.span} />
                 </div>
               )
@@ -98,7 +98,7 @@ export function DiagnosticsPanel() {
           (validateError != null ? (
             <div className="p-3 text-[12px] text-rose-600">校验请求失败：{validateError}</div>
           ) : validateReport == null ? (
-            <div className="p-3 text-[12px] text-neutral-400">
+            <div className="p-3 text-[12px] text-neutral-500">
               尚未校验——点工具栏「校验」，结合 schema 做语义校验（未知表 / 未知列 / 列歧义等）
             </div>
           ) : validate.length === 0 ? (
@@ -115,7 +115,7 @@ export function DiagnosticsPanel() {
                   <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
                   <span className={`w-14 shrink-0 font-mono ${style.text}`}>{style.label}</span>
                   <span className="w-40 shrink-0 truncate font-mono text-neutral-500">{d.code}</span>
-                  <span className="truncate text-neutral-400">{d.message}</span>
+                  <span className="truncate text-neutral-600">{d.message}</span>
                   <LocateButton span={d.span} />
                 </div>
               )

@@ -116,7 +116,7 @@ export default function App() {
         <section className="flex min-w-0 flex-col" style={{ width: `${widths.left}%` }}>
           <PanelTitle title="SQL 输入" />
           <div className={schemaOpen ? 'min-h-0 flex-[3]' : 'min-h-0 flex-1'}>
-            <Suspense fallback={<div className="p-3 text-[12px] text-neutral-400">加载编辑器…</div>}>
+            <Suspense fallback={<div className="p-3 text-[12px] text-neutral-500">加载编辑器…</div>}>
               <SqlEditor value={sql} onChange={setSql} />
             </Suspense>
           </div>
@@ -141,7 +141,7 @@ export default function App() {
               <PanelTitle title="归一化树" />
               <div className="min-h-0 flex-1">
                 {graphReport != null ? (
-                  <div className="flex h-full items-center justify-center p-3 text-center text-[12px] leading-5 text-neutral-400">
+                  <div className="flex h-full items-center justify-center p-3 text-center text-[12px] leading-5 text-neutral-500">
                     聚合模式：多语句已合并为一张血缘图（右栏），
                     <br />
                     无单语句归一化树

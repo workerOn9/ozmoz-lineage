@@ -105,7 +105,7 @@ export function Landing() {
         </section>
       </main>
 
-      <footer className="mx-auto max-w-5xl px-6 py-10 text-[12px] leading-6 text-neutral-400">
+      <footer className="mx-auto max-w-5xl px-6 py-10 text-[12px] leading-6 text-neutral-500">
         <p>
           公网实例仅作演示：无鉴权，请勿粘贴真实业务 SQL；解析只读你输入的文本，不存任何数据。
         </p>

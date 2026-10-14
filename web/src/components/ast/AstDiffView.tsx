@@ -35,11 +35,11 @@ function DiffRow({ dn, depth }: { dn: DiffNode; depth: number }) {
           if (node.span != null) revealSpan(node.span)
         }}
       >
-        <span className="w-4 shrink-0 text-center text-neutral-400 select-none">
+        <span className="w-4 shrink-0 text-center text-neutral-600 select-none">
           {STATUS_ICON[status]}
         </span>
         <span className={`shrink-0 font-mono text-[12px] ${typeColor(node.type)}`}>{node.type}</span>
-        <span className="truncate text-neutral-400">{truncate(node.text)}</span>
+        <span className="truncate text-neutral-600">{truncate(node.text)}</span>
       </div>
       {children.map((child, i) => (
         <DiffRow key={i} dn={child} depth={depth + 1} />
@@ -60,10 +60,10 @@ export function AstDiffView({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex border-b border-neutral-200 text-[12px]">
-        <div className="w-1/2 border-r border-neutral-200 px-3 py-1 font-mono text-neutral-400">
+        <div className="w-1/2 border-r border-neutral-200 px-3 py-1 font-mono text-neutral-600">
           {leftTitle}
         </div>
-        <div className="w-1/2 px-3 py-1 font-mono text-neutral-400">{rightTitle}</div>
+        <div className="w-1/2 px-3 py-1 font-mono text-neutral-600">{rightTitle}</div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         <div className="flex">

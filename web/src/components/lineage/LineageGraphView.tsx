@@ -30,24 +30,24 @@ function OzmozNode({ data, selected }: NodeProps<OzmozNodeType>) {
       className={[
         'rounded-md border px-3 py-1.5 text-[12px] font-mono shadow-sm',
         data.isTableNode
-          ? 'border-dashed border-neutral-400 bg-neutral-200/60 text-neutral-400'
+          ? 'border-dashed border-neutral-400 bg-neutral-100 text-neutral-700'
           : data.isOutput
             ? 'border-sky-500 bg-sky-50 text-sky-800'
-            : 'border-neutral-400 bg-neutral-200/80 text-neutral-200',
+            : 'border-neutral-300 bg-white text-neutral-800',
         selected ? 'ring-2 ring-sky-400' : '',
       ].join(' ')}
     >
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !bg-neutral-400" />
+      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !bg-neutral-500" />
       <div className="flex items-center gap-1.5">
         <span>{data.label}</span>
         {data.isOutput && (
-          <span className="rounded bg-sky-200 px-1 text-[10px] text-sky-100">输出</span>
+          <span className="rounded bg-sky-200 px-1 text-[10px] text-sky-800">输出</span>
         )}
         {data.isTableNode && (
-          <span className="rounded bg-neutral-400/60 px-1 text-[10px] text-neutral-400">表</span>
+          <span className="rounded bg-neutral-300 px-1 text-[10px] text-neutral-700">表</span>
         )}
       </div>
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !bg-neutral-400" />
+      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !bg-neutral-500" />
     </div>
   )
 }
@@ -134,7 +134,7 @@ export function LineageGraphView() {
 
   if (visible == null) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-neutral-400">
+      <div className="flex h-full items-center justify-center text-sm text-neutral-500">
         运行「解析」后在此展示列级血缘图
       </div>
     )
@@ -143,7 +143,7 @@ export function LineageGraphView() {
   // 大图首帧：worker 还没回坐标，先显示占位，别把节点全挤到原点。
   if (computing && positions.size === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-neutral-400">
+      <div className="flex h-full items-center justify-center text-sm text-neutral-500">
         布局中…
       </div>
     )
@@ -169,7 +169,7 @@ export function LineageGraphView() {
   return (
     <div className="relative h-full w-full">
       {computing && (
-        <div className="pointer-events-none absolute right-3 top-3 z-10 rounded bg-neutral-200/90 px-2 py-1 text-[11px] text-neutral-400 shadow">
+        <div className="pointer-events-none absolute right-3 top-3 z-10 rounded bg-neutral-200/90 px-2 py-1 text-[11px] text-neutral-500 shadow">
           布局中…
         </div>
       )}

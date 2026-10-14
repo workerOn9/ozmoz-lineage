@@ -15,7 +15,7 @@ export function SchemaPanel() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1">
-        <span className="text-[11px] text-neutral-400">
+        <span className="text-[11px] text-neutral-500">
           CREATE TABLE 文本（可选）；留空则由后端从 SQL 文本自动收集
         </span>
         <button
@@ -27,7 +27,7 @@ export function SchemaPanel() {
         </button>
       </div>
       <textarea
-        className="min-h-0 flex-1 resize-none bg-white px-3 py-2 font-mono text-[12px] leading-5 text-neutral-200 outline-none placeholder:text-neutral-400"
+        className="min-h-0 flex-1 resize-none bg-white px-3 py-2 font-mono text-[12px] leading-5 text-neutral-800 outline-none placeholder:text-neutral-500"
         placeholder={'CREATE TABLE orders (\n  order_id INT,\n  amount DECIMAL(10,2)\n);'}
         value={schema}
         spellCheck={false}

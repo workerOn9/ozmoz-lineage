@@ -5,7 +5,7 @@ import { revealSpan } from '../../editor/editorHolder'
 /** 归一化树（AstNode）递归渲染：可折叠、按 type 着色、点击定位到编辑器 span。 */
 
 const TYPE_COLORS: Array<[RegExp, string]> = [
-  [/^select|plain_select/, 'text-sky-400'],
+  [/^select|plain_select/, 'text-sky-600'],
   [/^table/, 'text-emerald-400'],
   [/^join/, 'text-teal-300'],
   [/^column/, 'text-amber-300'],
@@ -15,7 +15,7 @@ const TYPE_COLORS: Array<[RegExp, string]> = [
 ]
 
 export function typeColor(type: string): string {
-  return TYPE_COLORS.find(([re]) => re.test(type))?.[1] ?? 'text-neutral-300'
+  return TYPE_COLORS.find(([re]) => re.test(type))?.[1] ?? 'text-neutral-700'
 }
 
 export function truncate(text: string, max = 48): string {

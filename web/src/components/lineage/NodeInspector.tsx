@@ -9,8 +9,8 @@ import { revealSpan } from '../../editor/editorHolder'
 function Row({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex gap-2 text-[12px] leading-5">
-      <span className="w-20 shrink-0 text-neutral-400">{label}</span>
-      <span className={mono ? 'break-all font-mono text-neutral-200' : 'text-neutral-200'}>
+      <span className="w-20 shrink-0 text-neutral-500">{label}</span>
+      <span className={mono ? 'break-all font-mono text-neutral-800' : 'text-neutral-800'}>
         {value}
       </span>
     </div>
@@ -70,7 +70,7 @@ export function NodeInspector() {
 
   if (node == null && edge == null) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-500">
         点击图上的节点或边查看详情
       </div>
     )
@@ -80,7 +80,7 @@ export function NodeInspector() {
     <div className="h-full space-y-3 overflow-auto p-3">
       {node != null && (
         <>
-          <div className="text-[13px] font-semibold text-neutral-100">
+          <div className="text-[13px] font-semibold text-neutral-900">
             {node.data.isTableNode ? '表节点' : '列节点'}
           </div>
           <Row label="label" value={node.data.label} />
@@ -102,7 +102,7 @@ export function NodeInspector() {
               )}
               {node.data.ref.span != null && (
                 <button
-                  className="text-[12px] text-sky-400 hover:underline"
+                  className="text-[12px] text-sky-600 hover:underline"
                   onClick={() => revealSpan(node.data.ref!.span!)}
                 >
                   定位到 SQL（{node.data.ref.span.start.line}:{node.data.ref.span.start.column}）
@@ -115,7 +115,7 @@ export function NodeInspector() {
           )}
           {collapseButton != null && (
             <button
-              className="rounded border border-neutral-300 px-2 py-1 text-[12px] text-neutral-400 hover:bg-neutral-200"
+              className="rounded border border-neutral-300 px-2 py-1 text-[12px] text-neutral-500 hover:bg-neutral-200"
               onClick={collapseButton.action}
             >
               {collapseButton.label}
@@ -125,7 +125,7 @@ export function NodeInspector() {
       )}
       {edge != null && (
         <>
-          <div className="text-[13px] font-semibold text-neutral-100">边 {edge.id}</div>
+          <div className="text-[13px] font-semibold text-neutral-900">边 {edge.id}</div>
           <Row label="kind" value={edge.kind} />
           <Row label="transform" value={edge.transform} />
           {'fromColumn' in edge ? (
@@ -148,7 +148,7 @@ export function NodeInspector() {
               />
               {edge.expression != null && (
                 <div>
-                  <div className="text-[12px] text-neutral-400">expression</div>
+                  <div className="text-[12px] text-neutral-500">expression</div>
                   <pre className="mt-1 overflow-auto rounded bg-neutral-100 p-2 font-mono text-[12px] text-amber-800">
                     {edge.expression}
                   </pre>
@@ -156,7 +156,7 @@ export function NodeInspector() {
               )}
               {edge.span != null && (
                 <button
-                  className="text-[12px] text-sky-400 hover:underline"
+                  className="text-[12px] text-sky-600 hover:underline"
                   onClick={() => revealSpan(edge.span!)}
                 >
                   定位到 SQL（{edge.span.start.line}:{edge.span.start.column}）

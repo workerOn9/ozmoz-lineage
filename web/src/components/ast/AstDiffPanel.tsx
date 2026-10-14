@@ -7,7 +7,7 @@ import { AstDiffView } from './AstDiffView'
  */
 
 const SELECT_CLS =
-  'rounded border border-neutral-300 bg-neutral-100 px-1.5 py-1 font-mono text-[12px] text-neutral-200'
+  'rounded border border-neutral-300 bg-neutral-100 px-1.5 py-1 font-mono text-[12px] text-neutral-800'
 
 export function AstDiffPanel() {
   const backend = useAppStore((s) => s.backend)
@@ -39,7 +39,7 @@ export function AstDiffPanel() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-200 px-3 py-1.5 text-[12px] text-neutral-500">
-        <span className="font-medium text-neutral-400">AST 对比</span>
+        <span className="font-medium text-neutral-500">AST 对比</span>
         <label className="flex items-center gap-1.5">
           左
           {engineSelect(leftEngine, setDiffLeftEngine)}
@@ -64,7 +64,7 @@ export function AstDiffPanel() {
             <span className="text-amber-300">{result.summary.changed}</span>
           </span>
         )}
-        <span className="ml-auto text-neutral-400">
+        <span className="ml-auto text-neutral-500">
           图例：· 相同 ~ 变更 − 删除 + 新增（点行定位到 SQL）
         </span>
         {error != null && <span className="w-full text-rose-600">{error}</span>}
@@ -73,7 +73,7 @@ export function AstDiffPanel() {
         {result != null ? (
           <AstDiffView diff={result} leftTitle={leftEngine ?? ''} rightTitle={rightEngine ?? ''} />
         ) : (
-          <div className="flex h-full items-center justify-center px-4 text-center text-sm text-neutral-400">
+          <div className="flex h-full items-center justify-center px-4 text-center text-sm text-neutral-500">
             {error != null
               ? '对比失败——见上方错误信息'
               : '选择左右两个引擎后点「运行对比」，并排查看同一 SQL 的两棵归一化树差异'}

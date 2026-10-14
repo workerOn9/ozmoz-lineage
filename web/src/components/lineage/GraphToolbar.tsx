@@ -93,7 +93,7 @@ export function GraphToolbar() {
           </button>
         ))}
       </div>
-      <span className="text-[12px] text-neutral-400">
+      <span className="text-[12px] text-neutral-500">
         {graphMode === 'path' && pathFromId != null
           ? `已选起点 ${pathFromId}，点击终点`
           : active.hint}
@@ -101,7 +101,7 @@ export function GraphToolbar() {
       <FoldControls />
       {highlight != null && (
         <button
-          className="ml-auto rounded border border-neutral-300 px-2 py-0.5 text-[12px] text-neutral-400 hover:bg-neutral-200"
+          className="ml-auto rounded border border-neutral-300 px-2 py-0.5 text-[12px] text-neutral-500 hover:bg-neutral-200"
           onClick={() => setHighlight(null)}
         >
           清除高亮

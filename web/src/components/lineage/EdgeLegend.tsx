@@ -36,7 +36,7 @@ export function EdgeLegend({ model }: { model: LineageModel | GraphReport | null
             style={{ backgroundColor: EDGE_KIND_COLORS[kind] }}
           />
           {EDGE_KIND_LABELS[kind]}
-          {counts.has(kind) && <span className="text-neutral-400">×{counts.get(kind)}</span>}
+          {counts.has(kind) && <span className="text-neutral-500">×{counts.get(kind)}</span>}
         </span>
       ))}
     </div>
