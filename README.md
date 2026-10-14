@@ -6,7 +6,7 @@
 
 **渗透血缘** —— 面向 JVM 生态的离线 SQL 解析 / 血缘 / 方言对照工具链。
 
-> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版 + MCP server + 逐语句容错 + 文档站（工具百科）+ 血缘质量报表 + 自包含分发（jlink 自带运行时）与 `ozml upgrade` 自更新已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml engines` / `ozml quality` / `ozml serve`（Ktor `/api` + `web/` 静态托管）/ `ozml mcp`（stdio 工具面）可运行；Web UI 已交付三栏起步版与 AST 并排 diff，`site/` 文档站（Rspress）数据驱动渲染引擎能力与两张实测矩阵；Tauri 壳未做）。
+> 状态：**列级血缘 + 图算法 + 导出 + 全库落库 + HTTP API + Web UI 起步 + 方言转换主力 + schema 语义校验 + SQL 排版 + MCP server + 逐语句容错 + 文档站（工具百科）+ 血缘质量报表 + 自包含分发（jlink 自带运行时）与 `ozml upgrade` 自更新、`ozml uninstall` 卸载已落地**（`ir` / `engine-api` 契约 + `engine-jsqlparser` 适配器 + `engine-calcite` 适配器 + `lineage` 列解析与六类边 + `schema` 的 `SchemaProvider` SPI 与 DDL/JDBC 实现 + `graph` 图算法与 SQLite 模型库 + `format` 导出器 + `ozml parse` / `ozml lineage` / `ozml impact` / `ozml convert` / `ozml validate` / `ozml format` / `ozml engines` / `ozml quality` / `ozml serve`（Ktor `/api` + `web/` 静态托管）/ `ozml mcp`（stdio 工具面）可运行；Web UI 已交付三栏起步版与 AST 并排 diff，`site/` 文档站（Rspress）数据驱动渲染引擎能力与两张实测矩阵；Tauri 壳未做）。
 
 ## 它要解决什么
 
@@ -44,6 +44,7 @@ ozml format   -f q.sql --single-line                   # 规范化单行（关�
 ozml mcp                                               # MCP server（stdio）：把能力作为工具暴露给 AI 助手
 ozml --version                                         # 版本身份（与产物文件名 / upgrade 同源）
 ozml upgrade [--check] [--version <v>]                 # 自更新：从 GitHub Releases 拉最新版并原子切换（唯一联网子命令，见「安装与升级」）
+ozml uninstall [--yes] [--dry-run]                     # 卸载：删除启动器与安装目录（默认先展示再确认）
 ```
 
 `ozml` = **ozmoz** + **lineage**。
@@ -58,7 +59,7 @@ ozml upgrade [--check] [--version <v>]                 # 自更新：从 GitHub 
 ./cli/build/install/ozml/bin/ozml impact  --graph ./lineage.db --on db.t.c --direction upstream
 ```
 
-## 安装与升级（自包含发行版）
+## 安装、升级与卸载（自包含发行版）
 
 发行产物**自带精简运行时**（`jlink` 裁出来的 JRE），解压即用，**不需要本机装 JDK**——正是「本机默认 JDK 与构建工具链版本不一致就报 `UnsupportedClassVersionError`」的根治办法。产物优先用随包的 `runtime/`，可用 `OZML_USE_SYSTEM_JAVA=1` 强制改回系统 JDK。
 
@@ -80,6 +81,16 @@ ozml upgrade --version 0.2.0   # 指定版本（也可用于回滚到旧版）
 ```
 
 `ozml upgrade` 是**唯一**会联网的子命令，且只在显式调用时发生；正常解析 / 血缘 / serve 一律离线。旧版本目录保留，可回滚。离线 / 内网镜像：设 `OZML_RELEASE_BASE` / `OZML_API_BASE`（`install.sh` 同样识别）。
+
+### 卸载
+
+```bash
+ozml uninstall            # 先展示将删什么，确认后删除（回车即取消）
+ozml uninstall --yes      # 免确认（脚本用）
+ozml uninstall --dry-run  # 只预览，不动任何文件
+```
+
+只删**受管安装**：启动器（`~/.local/bin/ozml`）与安装根（`~/.local/share/ozml`，含 `versions/` 与 `current`）。**不动** `~/.local/bin` 目录本身（可能还放着别的工具），也不改任何 shell 配置里的 `PATH`。`--root` 打错或指向非受管目录时会**拒绝并给出原因**，不会误删。（手动解压 zip 得到的目录不属受管安装，直接 `rm -rf` 即可。）
 
 ### 从源码构建发行产物
 

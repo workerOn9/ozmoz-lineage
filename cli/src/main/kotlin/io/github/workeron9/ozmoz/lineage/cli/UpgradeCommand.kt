@@ -20,6 +20,7 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.time.Duration
+import java.util.Locale
 import java.util.zip.ZipInputStream
 import kotlin.io.path.exists
 import kotlin.io.path.name
@@ -115,6 +116,7 @@ internal object RootLayout {
     internal const val DEFAULT_ROOT_SUFFIX = ".local/share/ozml"
     internal const val CURRENT_FILE = "current"
     internal const val BIN_DIR_FILE = "bin-dir"
+    internal const val VERSIONS_DIR = "versions"
 
     /**
      * 解析安装根目录，优先级：`--root` > `$OZML_ROOT` > 从运行位置推断 > `~/.local/share/ozml`。
@@ -166,6 +168,63 @@ internal object RootLayout {
             Files.readString(file).trim().takeIf { it.isNotBlank() }?.let { return Paths.get(it) }
         }
         return Paths.get(System.getProperty("user.home"), ".local/bin")
+    }
+
+    /** 已安装的版本目录名（升序；排除升级过程的临时目录 `.x.tmp-*`）。 */
+    internal fun installedVersions(root: Path): List<String> {
+        val versionsDir = root.resolve(VERSIONS_DIR)
+        if (!Files.isDirectory(versionsDir)) return emptyList()
+        return Files.list(versionsDir).use { stream ->
+            stream.filter { Files.isDirectory(it) }
+                .map { it.fileName.toString() }
+                .filter { !it.startsWith(".") }
+                .sorted()
+                .toList()
+        }
+    }
+
+    /** 删除 `ozml` 启动器（unix `ozml` + windows `ozml.cmd`），返回实际删掉的路径。 */
+    internal fun removeShim(root: Path): List<Path> {
+        val binDir = binDir(root)
+        val removed = mutableListOf<Path>()
+        for (name in listOf("ozml", "ozml.cmd")) {
+            val candidate = binDir.resolve(name)
+            if (Files.deleteIfExists(candidate)) {
+                removed.add(candidate)
+            }
+        }
+        return removed
+    }
+
+    /** 递归删除目录（先置可写——jlink 的 `legal/` 等文件是只读的，直接删会失败）。 */
+    internal fun deleteRecursively(path: Path) {
+        if (!path.exists()) return
+        Files.walk(path).use { stream ->
+            stream.sorted(Comparator.reverseOrder()).forEach {
+                runCatching { it.toFile().setWritable(true) }
+                Files.deleteIfExists(it)
+            }
+        }
+    }
+
+    /** 目录总字节数（卸载前告知用户「将释放多少」；只读元数据，不读文件内容）。 */
+    internal fun directorySize(path: Path): Long {
+        if (!path.exists()) return 0
+        return Files.walk(path).use { stream ->
+            stream.filter { Files.isRegularFile(it) }.mapToLong { runCatching { Files.size(it) }.getOrDefault(0L) }.sum()
+        }
+    }
+
+    internal fun humanSize(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val units = listOf("KB", "MB", "GB", "TB")
+        var value = bytes.toDouble() / 1024
+        var index = 0
+        while (value >= 1024 && index < units.lastIndex) {
+            value /= 1024
+            index++
+        }
+        return if (value >= 10) "${value.toLong()} ${units[index]}" else String.format(Locale.ROOT, "%.1f %s", value, units[index])
     }
 
     /** 确保 `ozml` shim 存在且指向 `current`（`install.sh` 建立，upgrade 兜底修复）。 */
@@ -261,11 +320,11 @@ internal class SelfUpdater(
             unzipStripTop(zip, staged)
 
             val target = versionsDir.resolve(version)
-            if (target.exists()) deleteRecursively(target)
+            if (target.exists()) runCatching { RootLayout.deleteRecursively(target) }
             move(staged, target)
             return target
         } finally {
-            deleteRecursively(tmpDir)
+            deleteRecursivelyForCleanup(tmpDir)
         }
     }
 
@@ -406,13 +465,8 @@ internal class SelfUpdater(
             }
         }
 
-        private fun deleteRecursively(path: Path) {
-            if (!path.exists()) return
-            runCatching {
-                Files.walk(path).use { stream ->
-                    stream.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
-                }
-            }
+        private fun deleteRecursivelyForCleanup(path: Path) {
+            runCatching { RootLayout.deleteRecursively(path) }
         }
     }
 }
