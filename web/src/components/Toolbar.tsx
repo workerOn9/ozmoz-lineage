@@ -5,7 +5,6 @@ import { DOCS_URL } from '../lib/links'
 
 export function Toolbar() {
   const backend = useAppStore((s) => s.backend)
-  const backendVersion = useAppStore((s) => s.backendVersion)
   const engines = useAppStore((s) => s.engines)
   const engineId = useAppStore((s) => s.engineId)
   const dialect = useAppStore((s) => s.dialect)
@@ -43,7 +42,7 @@ export function Toolbar() {
     backend === 'ok' ? (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[12px] text-emerald-700">
         <span className="h-2 w-2 rounded-full bg-emerald-500" />
-        后端 v{backendVersion}
+        已连接后端
       </span>
     ) : backend === 'checking' ? (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-[12px] text-neutral-500">
