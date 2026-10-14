@@ -1,9 +1,14 @@
 @import "tailwindcss";
 
-/* React Flow 主题（xyflow v12 官方样式，随组件导入亦可；这里集中放全局样式）。 */
+/* 品牌色板（design/logo 资产流水线同源）：靛蓝主色 + 琥珀点缀。 */
+@theme {
+  --color-brand: #3451b2;
+  --color-brand-dark: #2a4394;
+  --color-brand-soft: #eef2fb;
+}
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html,
@@ -14,7 +19,7 @@ body,
 }
 
 body {
-  @apply bg-neutral-950 text-neutral-200 antialiased;
+  @apply bg-neutral-50 text-neutral-800 antialiased;
   font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Segoe UI", sans-serif;
 }
 
@@ -29,8 +34,8 @@ body {
 
 /* AST 树的行 hover 与选中。 */
 .ast-row:hover {
-  background-color: rgb(255 255 255 / 0.06);
+  background-color: rgb(0 0 0 / 0.05);
 }
 .ast-row-selected {
-  background-color: rgb(59 130 246 / 0.25);
+  background-color: rgb(59 130 246 / 0.2);
 }

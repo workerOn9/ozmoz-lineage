@@ -9,7 +9,7 @@ import { revealSpan } from '../../editor/editorHolder'
 function Row({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex gap-2 text-[12px] leading-5">
-      <span className="w-20 shrink-0 text-neutral-500">{label}</span>
+      <span className="w-20 shrink-0 text-neutral-400">{label}</span>
       <span className={mono ? 'break-all font-mono text-neutral-200' : 'text-neutral-200'}>
         {value}
       </span>
@@ -70,7 +70,7 @@ export function NodeInspector() {
 
   if (node == null && edge == null) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-500">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
         点击图上的节点或边查看详情
       </div>
     )
@@ -115,7 +115,7 @@ export function NodeInspector() {
           )}
           {collapseButton != null && (
             <button
-              className="rounded border border-neutral-700 px-2 py-1 text-[12px] text-neutral-300 hover:bg-neutral-800"
+              className="rounded border border-neutral-300 px-2 py-1 text-[12px] text-neutral-400 hover:bg-neutral-200"
               onClick={collapseButton.action}
             >
               {collapseButton.label}
@@ -148,8 +148,8 @@ export function NodeInspector() {
               />
               {edge.expression != null && (
                 <div>
-                  <div className="text-[12px] text-neutral-500">expression</div>
-                  <pre className="mt-1 overflow-auto rounded bg-neutral-900 p-2 font-mono text-[12px] text-amber-200">
+                  <div className="text-[12px] text-neutral-400">expression</div>
+                  <pre className="mt-1 overflow-auto rounded bg-neutral-100 p-2 font-mono text-[12px] text-amber-800">
                     {edge.expression}
                   </pre>
                 </div>

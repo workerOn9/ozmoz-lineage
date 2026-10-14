@@ -14,12 +14,12 @@ export function SchemaPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1">
-        <span className="text-[11px] text-neutral-500">
+      <div className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1">
+        <span className="text-[11px] text-neutral-400">
           CREATE TABLE 文本（可选）；留空则由后端从 SQL 文本自动收集
         </span>
         <button
-          className="ml-auto shrink-0 rounded border border-neutral-700 px-1.5 py-0.5 text-[11px] text-neutral-400 hover:bg-neutral-800"
+          className="ml-auto shrink-0 rounded border border-neutral-300 px-1.5 py-0.5 text-[11px] text-text-neutral-500 hover:bg-neutral-200"
           onClick={() => setSchema('')}
           disabled={schema === ''}
         >
@@ -27,7 +27,7 @@ export function SchemaPanel() {
         </button>
       </div>
       <textarea
-        className="min-h-0 flex-1 resize-none bg-neutral-950 px-3 py-2 font-mono text-[12px] leading-5 text-neutral-200 outline-none placeholder:text-neutral-600"
+        className="min-h-0 flex-1 resize-none bg-white px-3 py-2 font-mono text-[12px] leading-5 text-neutral-200 outline-none placeholder:text-neutral-400"
         placeholder={'CREATE TABLE orders (\n  order_id INT,\n  amount DECIMAL(10,2)\n);'}
         value={schema}
         spellCheck={false}

@@ -9,6 +9,7 @@ import { LineageGraphView } from './components/lineage/LineageGraphView'
 import { NodeInspector } from './components/lineage/NodeInspector'
 import { EdgeLegend } from './components/lineage/EdgeLegend'
 import { useAppStore } from './state/store'
+import { getExample } from './lib/examples'
 
 // Monaco 体积大：编辑器懒加载，首屏不背这个 chunk（设计稿 §9 R1）。
 const SqlEditor = lazy(() =>
@@ -39,7 +40,7 @@ function DragHandle({
   )
   return (
     <div
-      className="w-1 cursor-col-resize bg-neutral-800 hover:bg-sky-700 active:bg-sky-600"
+      className="w-1 cursor-col-resize bg-neutral-200 hover:bg-brand active:bg-sky-600"
       onPointerDown={onPointerDown}
     />
   )
@@ -61,15 +62,36 @@ export default function App() {
   const dataSource = useAppStore((s) => s.dataSource)
   const graphsError = useAppStore((s) => s.graphsError)
   const graphName = useAppStore((s) => s.graphName)
+  const loadExample = useAppStore((s) => s.loadExample)
+  const run = useAppStore((s) => s.run)
 
   // 左 / 中栏宽度（百分比），右栏吃剩余。
   const [widths, setWidths] = useState({ left: 30, mid: 26 })
   const [bottomOpen, setBottomOpen] = useState(true)
   const mainRef = useRef<HTMLDivElement>(null)
+  // 落地页画廊深链（/app?example=<id>）：载入示例 + 后端就绪后自动跑一次。
+  // exampleRan 防 StrictMode 双跑；replaceState 去掉参数，避免手动刷新又触发。
+  const examplePending = useRef(false)
+  const exampleRan = useRef(false)
 
   useEffect(() => {
     void init()
   }, [init])
+
+  useEffect(() => {
+    const ex = getExample(new URLSearchParams(window.location.search).get('example'))
+    if (ex == null) return
+    examplePending.current = true
+    loadExample(ex.id)
+    window.history.replaceState(null, '', '/app')
+  }, [loadExample])
+
+  useEffect(() => {
+    if (backend === 'ok' && examplePending.current && !exampleRan.current) {
+      exampleRan.current = true
+      void run()
+    }
+  }, [backend, run])
 
   const clamp = (v: number) => Math.min(60, Math.max(12, v))
 
@@ -77,10 +99,10 @@ export default function App() {
     <div className="flex h-full flex-col overflow-hidden">
       <Toolbar />
       {formatNotice != null && (
-        <div className="flex items-center gap-2 border-b border-amber-900 bg-amber-950/50 px-3 py-1 text-[12px] text-amber-200">
+        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1 text-[12px] text-amber-800">
           <span className="truncate">SQL 排版：{formatNotice}</span>
           <button
-            className="ml-auto shrink-0 text-amber-400 hover:text-amber-200"
+            className="ml-auto shrink-0 text-amber-600 hover:text-amber-800"
             onClick={clearFormatNotice}
           >
             知道了
@@ -88,12 +110,12 @@ export default function App() {
         </div>
       )}
       {dataSource === 'graph' && graphsError != null && (
-        <div className="border-b border-amber-900 bg-amber-950/50 px-3 py-1 text-[12px] text-amber-200">
+        <div className="border-b border-amber-200 bg-amber-50 px-3 py-1 text-[12px] text-amber-800">
           图库不可用：{graphsError}
         </div>
       )}
       {backend === 'down' && (
-        <div className="border-b border-rose-900 bg-rose-950/60 px-3 py-1 text-[12px] text-rose-200">
+        <div className="border-b border-rose-200 bg-rose-50 px-3 py-1 text-[12px] text-rose-700">
           未连接本地后端——解析不可用。请启动 <code className="font-mono">ozml serve</code>
           （默认 8765 端口）；docker 部署见仓库 Dockerfile。
         </div>
@@ -103,14 +125,14 @@ export default function App() {
         <section className="flex min-w-0 flex-col" style={{ width: `${widths.left}%` }}>
           <PanelTitle title="SQL 输入" />
           <div className={schemaOpen ? 'min-h-0 flex-[3]' : 'min-h-0 flex-1'}>
-            <Suspense fallback={<div className="p-3 text-[12px] text-neutral-500">加载编辑器…</div>}>
+            <Suspense fallback={<div className="p-3 text-[12px] text-neutral-400">加载编辑器…</div>}>
               <SqlEditor value={sql} onChange={setSql} />
             </Suspense>
           </div>
           {schemaOpen && (
             <>
               <PanelTitle title="Schema（DDL）" />
-              <div className="min-h-0 flex-[2] border-t border-neutral-800">
+              <div className="min-h-0 flex-[2] border-t border-neutral-200">
                 <SchemaPanel />
               </div>
             </>
@@ -128,7 +150,7 @@ export default function App() {
               <PanelTitle title="归一化树" />
               <div className="min-h-0 flex-1">
                 {graphReport != null ? (
-                  <div className="flex h-full items-center justify-center p-3 text-center text-[12px] leading-5 text-neutral-500">
+                  <div className="flex h-full items-center justify-center p-3 text-center text-[12px] leading-5 text-neutral-400">
                     {graphSource === 'store' ? (
                       <>
                         图库模式：已载入 <span className="font-mono">{graphName}</span> 的整库血缘图（右栏），
@@ -163,7 +185,7 @@ export default function App() {
                 <LineageGraphView />
               </div>
               <EdgeLegend model={lineage ?? graphReport} />
-              <div className="min-h-0 flex-[2] border-t border-neutral-800">
+              <div className="min-h-0 flex-[2] border-t border-neutral-200">
                 <NodeInspector />
               </div>
             </section>
@@ -176,9 +198,9 @@ export default function App() {
         )}
       </div>
       {/* 底部：诊断 / unknowns */}
-      <div className="border-t border-neutral-800 bg-neutral-950">
+      <div className="border-t border-neutral-200 bg-white">
         <button
-          className="flex w-full items-center justify-between px-3 py-1 text-[12px] text-neutral-400 hover:text-neutral-200"
+          className="flex w-full items-center justify-between px-3 py-1 text-[12px] text-text-neutral-500 hover:text-neutral-200"
           onClick={() => setBottomOpen((v) => !v)}
         >
           <span>诊断与 unknowns</span>
@@ -196,7 +218,7 @@ export default function App() {
 
 function PanelTitle({ title }: { title: string }) {
   return (
-    <div className="border-b border-neutral-800 px-3 py-1.5 text-[12px] font-medium text-neutral-400">
+    <div className="border-b border-neutral-200 px-3 py-1.5 text-[12px] font-medium text-text-neutral-500">
       {title}
     </div>
   )

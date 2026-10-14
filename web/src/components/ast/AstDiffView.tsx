@@ -18,9 +18,9 @@ const STATUS_ICON: Record<DiffStatus, string> = {
 
 const STATUS_ROW_CLS: Record<DiffStatus, string> = {
   same: '',
-  changed: 'bg-amber-950/40',
-  removed: 'bg-rose-950/40',
-  added: 'bg-emerald-950/40',
+  changed: 'bg-amber-100/60',
+  removed: 'bg-rose-100/60',
+  added: 'bg-emerald-100/60',
 }
 
 function DiffRow({ dn, depth }: { dn: DiffNode; depth: number }) {
@@ -35,11 +35,11 @@ function DiffRow({ dn, depth }: { dn: DiffNode; depth: number }) {
           if (node.span != null) revealSpan(node.span)
         }}
       >
-        <span className="w-4 shrink-0 text-center text-neutral-500 select-none">
+        <span className="w-4 shrink-0 text-center text-neutral-400 select-none">
           {STATUS_ICON[status]}
         </span>
         <span className={`shrink-0 font-mono text-[12px] ${typeColor(node.type)}`}>{node.type}</span>
-        <span className="truncate text-neutral-500">{truncate(node.text)}</span>
+        <span className="truncate text-neutral-400">{truncate(node.text)}</span>
       </div>
       {children.map((child, i) => (
         <DiffRow key={i} dn={child} depth={depth + 1} />
@@ -59,15 +59,15 @@ export function AstDiffView({
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex border-b border-neutral-800 text-[12px]">
-        <div className="w-1/2 border-r border-neutral-800 px-3 py-1 font-mono text-neutral-300">
+      <div className="flex border-b border-neutral-200 text-[12px]">
+        <div className="w-1/2 border-r border-neutral-200 px-3 py-1 font-mono text-neutral-400">
           {leftTitle}
         </div>
-        <div className="w-1/2 px-3 py-1 font-mono text-neutral-300">{rightTitle}</div>
+        <div className="w-1/2 px-3 py-1 font-mono text-neutral-400">{rightTitle}</div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         <div className="flex">
-          <div className="w-1/2 min-w-0 border-r border-neutral-800 py-1 font-mono">
+          <div className="w-1/2 min-w-0 border-r border-neutral-200 py-1 font-mono">
             <DiffRow dn={diff.left} depth={0} />
           </div>
           <div className="w-1/2 min-w-0 py-1 font-mono">

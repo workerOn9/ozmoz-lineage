@@ -7,7 +7,7 @@ import { revealSpan } from '../editor/editorHolder'
 
 const SEVERITY_STYLE: Record<Severity, { dot: string; text: string; label: string }> = {
   INFO: { dot: 'bg-sky-500', text: 'text-sky-400', label: 'INFO' },
-  WARNING: { dot: 'bg-amber-500', text: 'text-amber-400', label: 'WARN' },
+  WARNING: { dot: 'bg-amber-500', text: 'text-amber-600', label: 'WARN' },
   ERROR: { dot: 'bg-rose-500', text: 'text-rose-400', label: 'ERROR' },
 }
 
@@ -49,7 +49,7 @@ export function DiagnosticsPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-1 border-b border-neutral-800 px-2">
+      <div className="flex items-center gap-1 border-b border-neutral-200 px-2">
         {(
           [
             ['diagnostics', `诊断 (${diagnostics.length})`],
@@ -60,7 +60,7 @@ export function DiagnosticsPanel() {
           <button
             key={id}
             className={`px-2 py-1 text-[12px] ${
-              tab === id ? 'border-b border-sky-400 text-sky-300' : 'text-neutral-500 hover:text-neutral-300'
+              tab === id ? 'border-b border-sky-400 text-sky-700' : 'text-neutral-400 hover:text-neutral-400'
             }`}
             onClick={() => setTab(id)}
           >
@@ -68,7 +68,7 @@ export function DiagnosticsPanel() {
           </button>
         ))}
         {tab === 'validate' && validateReport != null && (
-          <span className="px-1 font-mono text-[11px] text-neutral-500">引擎 {validateReport.engine}</span>
+          <span className="px-1 font-mono text-[11px] text-neutral-400">引擎 {validateReport.engine}</span>
         )}
         {runError != null && (
           <span className="ml-auto truncate px-2 text-[12px] text-rose-400">{runError}</span>
@@ -77,20 +77,20 @@ export function DiagnosticsPanel() {
       <div className="min-h-0 flex-1 overflow-auto">
         {tab === 'diagnostics' &&
           (diagnostics.length === 0 ? (
-            <div className="p-3 text-[12px] text-neutral-500">无诊断</div>
+            <div className="p-3 text-[12px] text-neutral-400">无诊断</div>
           ) : (
             diagnostics.map((d, i) => {
               const style = SEVERITY_STYLE[d.severity]
               return (
                 <div
                   key={i}
-                  className="flex cursor-pointer items-center gap-2 border-b border-neutral-900 px-3 py-1 text-[12px] hover:bg-neutral-900/60"
+                  className="flex cursor-pointer items-center gap-2 border-b border-neutral-100 px-3 py-1 text-[12px] hover:bg-neutral-100/60"
                   onClick={() => d.span != null && revealSpan(d.span)}
                 >
                   <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
                   <span className={`w-14 shrink-0 font-mono ${style.text}`}>{style.label}</span>
-                  <span className="w-40 shrink-0 truncate font-mono text-neutral-400">{d.code}</span>
-                  <span className="truncate text-neutral-300">{d.message}</span>
+                  <span className="w-40 shrink-0 truncate font-mono text-text-neutral-500">{d.code}</span>
+                  <span className="truncate text-neutral-400">{d.message}</span>
                   <LocateButton span={d.span} />
                 </div>
               )
@@ -100,7 +100,7 @@ export function DiagnosticsPanel() {
           (validateError != null ? (
             <div className="p-3 text-[12px] text-rose-400">校验请求失败：{validateError}</div>
           ) : validateReport == null ? (
-            <div className="p-3 text-[12px] text-neutral-500">
+            <div className="p-3 text-[12px] text-neutral-400">
               尚未校验——点工具栏「校验」，结合 schema 做语义校验（未知表 / 未知列 / 列歧义等）
             </div>
           ) : validate.length === 0 ? (
@@ -111,13 +111,13 @@ export function DiagnosticsPanel() {
               return (
                 <div
                   key={i}
-                  className="flex cursor-pointer items-center gap-2 border-b border-neutral-900 px-3 py-1 text-[12px] hover:bg-neutral-900/60"
+                  className="flex cursor-pointer items-center gap-2 border-b border-neutral-100 px-3 py-1 text-[12px] hover:bg-neutral-100/60"
                   onClick={() => d.span != null && revealSpan(d.span)}
                 >
                   <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
                   <span className={`w-14 shrink-0 font-mono ${style.text}`}>{style.label}</span>
-                  <span className="w-40 shrink-0 truncate font-mono text-neutral-400">{d.code}</span>
-                  <span className="truncate text-neutral-300">{d.message}</span>
+                  <span className="w-40 shrink-0 truncate font-mono text-text-neutral-500">{d.code}</span>
+                  <span className="truncate text-neutral-400">{d.message}</span>
                   <LocateButton span={d.span} />
                 </div>
               )
@@ -125,18 +125,18 @@ export function DiagnosticsPanel() {
           ))}
         {tab === 'unknowns' &&
           (unknowns.length === 0 ? (
-            <div className="p-3 text-[12px] text-neutral-500">
+            <div className="p-3 text-[12px] text-neutral-400">
               无 unknown——所有引用都已确知归属
             </div>
           ) : (
             unknowns.map((u, i) => (
               <div
                 key={i}
-                className="flex cursor-pointer items-center gap-2 border-b border-neutral-900 px-3 py-1 text-[12px] hover:bg-neutral-900/60"
+                className="flex cursor-pointer items-center gap-2 border-b border-neutral-100 px-3 py-1 text-[12px] hover:bg-neutral-100/60"
                 onClick={() => u.span != null && revealSpan(u.span)}
               >
-                <span className="shrink-0 font-mono text-neutral-500">unknown</span>
-                <span className="truncate text-amber-200/90">{u.reason}</span>
+                <span className="shrink-0 font-mono text-neutral-400">unknown</span>
+                <span className="truncate text-amber-800/90">{u.reason}</span>
                 <LocateButton span={u.span} />
               </div>
             ))

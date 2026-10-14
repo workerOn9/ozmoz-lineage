@@ -9,7 +9,7 @@ import type {
   ParseReport,
   ValidateReport,
 } from '../types'
-import { SAMPLE_SCHEMA, SAMPLE_SQL } from '../lib/sample'
+import { EXAMPLES, getExample } from '../lib/examples'
 import { diffAstTrees } from '../lib/astDiff'
 import type { AstDiff } from '../lib/astDiff'
 import type { HighlightResult } from '../graph/traverse'
@@ -120,7 +120,8 @@ interface AppState {
   setSchemaOpen: (open: boolean) => void
   init: () => Promise<void>
   run: () => Promise<void>
-  loadSample: () => void
+  /** 载入示例库里的一个演示场景（SQL / schema / aggregate 一并切好）。 */
+  loadExample: (id: string) => void
   /** 对当前 sql + schema 打 `/api/validate` 语义校验，结果进校验诊断流。 */
   validate: () => Promise<void>
   /** 清掉上一次校验产物（改 SQL / 改 schema 时避免陈旧诊断滞留）。 */
@@ -153,7 +154,7 @@ function unknownReason(raw: unknown): string | null {
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  sql: SAMPLE_SQL,
+  sql: EXAMPLES[0].sql,
   engineId: null,
   dialect: '',
   engines: [],
@@ -187,7 +188,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   formatNotice: null,
   foldTables: false,
   collapsedScopeIds: [],
-  schema: SAMPLE_SCHEMA,
+  schema: EXAMPLES[0].schema ?? '',
   schemaOpen: false,
   validating: false,
   validateReport: null,
@@ -345,10 +346,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  loadSample: () =>
+  loadExample: (id) => {
+    const ex = getExample(id)
+    if (ex == null) return
     set({
-      sql: SAMPLE_SQL,
-      schema: SAMPLE_SCHEMA,
+      sql: ex.sql,
+      schema: ex.schema ?? '',
+      aggregate: ex.aggregate ?? false,
       formatNotice: null,
       validateReport: null,
       validateError: null,
@@ -358,7 +362,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       graphSource: null,
       runError: null,
       collapsedScopeIds: [],
-    }),
+    })
+  },
 
   clearFormatNotice: () => set({ formatNotice: null }),
 

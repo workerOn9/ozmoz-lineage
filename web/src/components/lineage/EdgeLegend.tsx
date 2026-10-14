@@ -28,7 +28,7 @@ export function EdgeLegend({ model }: { model: LineageModel | GraphReport | null
   }
   const kinds = Object.keys(EDGE_KIND_COLORS) as EdgeKind[]
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[11px] text-neutral-400">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[11px] text-text-neutral-500">
       {kinds.map((kind) => (
         <span key={kind} className="inline-flex items-center gap-1">
           <span
@@ -36,7 +36,7 @@ export function EdgeLegend({ model }: { model: LineageModel | GraphReport | null
             style={{ backgroundColor: EDGE_KIND_COLORS[kind] }}
           />
           {EDGE_KIND_LABELS[kind]}
-          {counts.has(kind) && <span className="text-neutral-500">×{counts.get(kind)}</span>}
+          {counts.has(kind) && <span className="text-neutral-400">×{counts.get(kind)}</span>}
         </span>
       ))}
     </div>
