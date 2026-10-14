@@ -25,6 +25,7 @@ import net.sf.jsqlparser.expression.AnalyticExpression
 import net.sf.jsqlparser.expression.BinaryExpression
 import net.sf.jsqlparser.expression.BooleanValue
 import net.sf.jsqlparser.expression.CaseExpression
+import net.sf.jsqlparser.expression.CastExpression
 import net.sf.jsqlparser.expression.DateTimeLiteralExpression
 import net.sf.jsqlparser.expression.DateValue
 import net.sf.jsqlparser.expression.DoubleValue
@@ -380,6 +381,19 @@ internal class SemanticExtractor(private val source: String) {
             is NotExpression -> SqlExpr.UnaryOp(
                 op = "NOT",
                 operand = expr(expression.expression),
+                raw = raw,
+                span = span,
+            )
+            // `CAST(x AS t)` / `x::t`：值表达式参与列推导，目标类型不参与。与 calcite 侧
+            // 同形（`Function(name="cast", args=[值, Unknown(类型)])`），AST diff 两侧可比。
+            is CastExpression -> SqlExpr.Function(
+                name = "cast",
+                args = buildList {
+                    expression.leftExpression?.let { add(expr(it)) }
+                    expression.colDataType?.let {
+                        add(SqlExpr.Unknown(it.toString(), "CAST 目标类型不参与列推导", null))
+                    }
+                },
                 raw = raw,
                 span = span,
             )
