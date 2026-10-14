@@ -174,6 +174,25 @@ class SemanticExtractorTest {
         assertEquals(null, case.operand)
     }
 
+    // ——— CAST ———
+
+    @Test
+    fun `CAST 与双冒号转换映射为 cast 函数 值参与列推导 类型不参与`() {
+        val scope = selectScope("SELECT CAST(age AS VARCHAR) AS a, created_at::date AS d FROM users")
+
+        val cast = assertIs<SqlExpr.Function>(scope.outputs[0].expr)
+        assertEquals("cast", cast.name)
+        // arg0 = 值表达式（血缘靠它取列引用），arg1 = 目标类型（显式 Unknown，不参与列推导）。
+        assertEquals("age", assertIs<SqlExpr.Column>(cast.args[0]).ref.name)
+        assertIs<SqlExpr.Unknown>(cast.args[1])
+        assertEquals("CAST(age AS VARCHAR)", cast.raw) // Lossless：整段原文
+
+        // `created_at::date` 同一条路径（不再落 Unknown 丢边）。
+        val shorthand = assertIs<SqlExpr.Function>(scope.outputs[1].expr)
+        assertEquals("cast", shorthand.name)
+        assertEquals("created_at", assertIs<SqlExpr.Column>(shorthand.args[0]).ref.name)
+    }
+
     // ——— INSERT ———
 
     @Test

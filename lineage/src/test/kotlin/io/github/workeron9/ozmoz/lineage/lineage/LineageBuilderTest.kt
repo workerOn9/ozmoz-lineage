@@ -160,6 +160,38 @@ class LineageBuilderTest {
     }
 
     @Test
+    fun `CAST 包裹的聚合产 EXPRESSION 边 值表达式贡献上游`() {
+        // SQL 侧 `CAST(SUM(b) AS NUMERIC)` 被引擎映射成 Function("cast", [SUM(b), Unknown(类型)])。
+        val cast = SqlExpr.Function(
+            "cast",
+            listOf(
+                SqlExpr.Function("SUM", listOf(SqlExpr.Column(col("b"))), raw = "SUM(b)", span = null),
+                SqlExpr.Unknown("NUMERIC", "CAST 目标类型不参与列推导", null),
+            ),
+            raw = "CAST(SUM(b) AS NUMERIC)",
+            span = null,
+        )
+        val stmt = SemanticStatement(
+            kind = StatementKind.SELECT,
+            query = select(
+                selectScope(
+                    sources = listOf(TableSource(table("t"))),
+                    outputs = listOf(OutputItem(cast, alias = "r")),
+                ),
+            ),
+        )
+
+        val model = LineageBuilder.build(stmt)
+
+        // 修 bug 前：CAST 整体落 Unknown → 该列一条边都没有。现在值表达式的列引用照常连边。
+        val edge = edgeOf(model, "t.b", "r")
+        assertEquals(TransformKind.EXPRESSION, edge.transform)
+        assertEquals("CAST(SUM(b) AS NUMERIC)", edge.expression)
+        // 类型参数是嵌套 Unknown，不贡献上游，也不进 unknowns（只有顶层 Unknown 才是问题）。
+        assertTrue(model.unknowns.none { it.reason.contains("CAST") })
+    }
+
+    @Test
     fun `窗口函数产 WINDOW 边 上游含 partition 与 order 列`() {
         val window = SqlExpr.Window(
             function = SqlExpr.Function("ROW_NUMBER", emptyList(), raw = "ROW_NUMBER()", span = null),

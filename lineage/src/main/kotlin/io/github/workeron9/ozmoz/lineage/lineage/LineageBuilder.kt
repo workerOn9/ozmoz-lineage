@@ -64,6 +64,7 @@ import io.github.workeron9.ozmoz.lineage.schema.SchemaProvider
  * `referencedColumns()` 的每个列引用端点 → 对本作用域每个有名输出槽的 consumerRef
  * 各发 1 条边（GROUP_BY / GROUPING、ORDER_BY / ORDERING，expression=表达式原文、
  * span=表达式 span）；集合运算容器承载 `SetOperationQuery.orderBy`（容器无输出）→ 不发。
+ * 例外：裸名命中本作用域自己的输出名（引用 select 别名）→ 不发边、不记 unknown。
  * SOURCE（表级血缘）：本作用域每个**有表身份**的来源（物理表 / CTE 引用；派生表无表
  * 身份不发）→ 一个表级哨兵 [ColumnRef]（`table = null`）→ 对本作用域每个有名输出槽的
  * consumerRef 各发 1 条边（SOURCE / SOURCE，expression=null、span=来源 span）；
@@ -294,12 +295,19 @@ private class Assembler(
      * 对本作用域**每个有名输出槽的 consumerRef** 各发 1 条边（[kind] / [transform]
      * 由调用方给出，expression=表达式原文 raw，span=表达式 span）。
      * 解析失败 → 记 Unknown（不猜）；作用域无名输出 → 不发边（但解析仍尝试）。
+     *
+     * 例外：裸名引用命中**本作用域自己的输出名**时（`ORDER BY "payDate"` / `GROUP BY x`，
+     * 标准 SQL 允许引用 select 别名）→ 不发边、不记 unknown。它不引入新的上游列，
+     * 且解析器给的「来源没有列」在这里是假阳性（别名不是来源的列）。
      */
     private fun qualifierEdges(expr: SqlExpr, scope: ScopePlan, kind: EdgeKind, transform: TransformKind) {
+        val ownOutputNames = slotsEngine.slots(scope.id).mapNotNull { it.consumerRef?.name?.lowercase() }.toSet()
         for (ref in expr.referencedColumns()) {
             when (val resolved = resolver.resolve(ref, scope)) {
                 is Resolved.Known -> qualifierFromEndpoint(resolved.value, expr, scope, kind, transform)
-                is Resolved.Unknown -> newUnknowns += resolved
+                is Resolved.Unknown ->
+                    if (ref.table == null && ref.name.lowercase() in ownOutputNames) continue
+                    else newUnknowns += resolved
             }
         }
     }

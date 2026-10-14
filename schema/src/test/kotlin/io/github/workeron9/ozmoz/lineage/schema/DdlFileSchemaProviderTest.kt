@@ -127,4 +127,56 @@ class DdlFileSchemaProviderTest {
         val provider = DdlFileSchemaProvider.parse(sqlTexts = arrayOf("CREATE TABLE t (a INT)"))
         assertNull(provider.table(tableRef("missing")))
     }
+
+    @Test
+    fun `CREATE VIEW 显式列清单被收录 类型不猜`() {
+        val provider = DdlFileSchemaProvider.parse(
+            sqlTexts = arrayOf(
+                """
+                CREATE VIEW v_prd (group_id, product_id, prd_name) AS
+                SELECT t1.group_id, t1.prdid, t1.prd_name FROM prd_config t1;
+                """.trimIndent(),
+            ),
+        )
+
+        val schema = provider.table(tableRef("v_prd"))!!
+        assertEquals(listOf("group_id", "product_id", "prd_name"), schema.columns.map { it.name })
+        assertEquals(listOf(1, 2, 3), schema.columns.map { it.ordinal })
+        assertNull(schema.columns[0].type) // 视图列类型由引擎决定，DDL 里写不出 → 不猜
+    }
+
+    @Test
+    fun `CREATE VIEW 无显式列清单 从 select 输出项推导列名`() {
+        val provider = DdlFileSchemaProvider.parse(sqlTexts = arrayOf("CREATE VIEW v AS SELECT a, b AS bee FROM t"))
+        assertEquals(listOf("a", "bee"), provider.table(tableRef("v"))!!.columns.map { it.name })
+    }
+
+    @Test
+    fun `CREATE VIEW 有输出项定不出名字时整张不收录`() {
+        val provider = DdlFileSchemaProvider.parse(
+            sqlTexts = arrayOf(
+                // count(*) 无别名 → 列清单推不全 → 跳过（不完整清单会错误证伪真实列）
+                "CREATE VIEW v AS SELECT a, count(*) FROM t",
+                "CREATE TABLE keep (x INT)",
+            ),
+        )
+
+        assertNull(provider.table(tableRef("v")))
+        assertEquals(listOf("x"), provider.table(tableRef("keep"))!!.columns.map { it.name })
+    }
+
+    @Test
+    fun `CREATE VIEW 推导出重复列名时整张不收录`() {
+        // TableSchema 要求列名唯一；重复则跳过，不让 schema 装载整体抛异常。
+        val provider = DdlFileSchemaProvider.parse(sqlTexts = arrayOf("CREATE VIEW v AS SELECT a, a FROM t"))
+        assertNull(provider.table(tableRef("v")))
+    }
+
+    @Test
+    fun `CREATE VIEW 与同名表先定义者胜`() {
+        val provider = DdlFileSchemaProvider.parse(
+            sqlTexts = arrayOf("CREATE TABLE t (a INT)", "CREATE VIEW t AS SELECT 1 AS b"),
+        )
+        assertEquals(listOf("a"), provider.table(tableRef("t"))!!.columns.map { it.name })
+    }
 }

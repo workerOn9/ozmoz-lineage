@@ -4,10 +4,21 @@ import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import net.sf.jsqlparser.expression.Alias
 import net.sf.jsqlparser.expression.AnalyticExpression
 import net.sf.jsqlparser.expression.BinaryExpression
+import net.sf.jsqlparser.expression.BooleanValue
 import net.sf.jsqlparser.expression.CaseExpression
+import net.sf.jsqlparser.expression.CastExpression
+import net.sf.jsqlparser.expression.DateTimeLiteralExpression
+import net.sf.jsqlparser.expression.DateValue
+import net.sf.jsqlparser.expression.DoubleValue
 import net.sf.jsqlparser.expression.Expression
 import net.sf.jsqlparser.expression.Function
+import net.sf.jsqlparser.expression.HexValue
+import net.sf.jsqlparser.expression.LongValue
+import net.sf.jsqlparser.expression.NullValue
 import net.sf.jsqlparser.expression.SignedExpression
+import net.sf.jsqlparser.expression.StringValue
+import net.sf.jsqlparser.expression.TimeValue
+import net.sf.jsqlparser.expression.TimestampValue
 import net.sf.jsqlparser.expression.WhenClause
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList
 import net.sf.jsqlparser.schema.Column
@@ -195,8 +206,14 @@ internal class AstNormalizer(private val source: String) {
         // 探针实测 select-item 与 WHERE 左侧都是 PEL）——括号信息不单独成节点，
         // 归一化树与其他 expression_list 一致。
         is ExpressionList<*> -> node("expression_list", expr, expr.map { expression(it) })
-        // 字面量（LongValue / StringValue / DateValue …）：叶子，text 即原文
-        else -> node("literal", expr, emptyList())
+        // `CAST(x AS t)` / `x::t`：值表达式是子节点（与语义提取器的 cast 分支对应）。
+        is CastExpression -> node("cast", expr, listOf(expression(expr.leftExpression)))
+        // 真字面量：叶子，text 即原文
+        is LongValue, is DoubleValue, is StringValue, is NullValue, is BooleanValue,
+        is DateValue, is TimeValue, is TimestampValue, is HexValue, is DateTimeLiteralExpression,
+        -> node("literal", expr, emptyList())
+        // 认不出的表达式**不假装成字面量**（Never-wrong）：包成 unknown_node，text 是原文切片。
+        else -> unknown(expr)
     }
 
     private fun function(fn: Function): AstNode {

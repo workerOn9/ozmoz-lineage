@@ -10,6 +10,7 @@ import com.github.ajalt.clikt.parameters.types.choice
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.engine.calcite.CalciteEngine
+import io.github.workeron9.ozmoz.lineage.engine.jooq.JooqEngine
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Severity
@@ -22,7 +23,7 @@ import java.io.File
  */
 public class ParseCommand : CliktCommand(name = "parse") {
 
-    private val engineId: String by option("--engine", help = "解析引擎（jsqlparser / calcite）")
+    private val engineId: String by option("--engine", help = "解析引擎（jsqlparser / calcite / jooq）")
         .choice(*SUPPORTED_ENGINES)
         .default(JSqlParserEngine.ID)
 
@@ -83,6 +84,6 @@ public class ParseCommand : CliktCommand(name = "parse") {
     }
 
     public companion object {
-        private val SUPPORTED_ENGINES = arrayOf(JSqlParserEngine.ID, CalciteEngine.ID)
+        private val SUPPORTED_ENGINES = arrayOf(JSqlParserEngine.ID, CalciteEngine.ID, JooqEngine.ID)
     }
 }
