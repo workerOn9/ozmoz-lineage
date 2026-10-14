@@ -26,6 +26,8 @@ export function NodeInspector() {
   const toggleFoldTables = useAppStore((s) => s.toggleFoldTables)
   const collapsedScopeIds = useAppStore((s) => s.collapsedScopeIds)
   const toggleScopeCollapse = useAppStore((s) => s.toggleScopeCollapse)
+  const inspectorOpen = useAppStore((s) => s.inspectorOpen)
+  const setInspectorOpen = useAppStore((s) => s.setInspectorOpen)
 
   const mapped = useMemo(
     () =>
@@ -68,110 +70,128 @@ export function NodeInspector() {
     }
   }, [node, columnMeta, foldTables, collapsedScopeIds, toggleFoldTables, toggleScopeCollapse])
 
-  if (node == null && edge == null) {
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-500">
-        点击图上的节点或边查看详情
-      </div>
-    )
-  }
+  // 详情面板表头：收起时只留这一条，把高度让给血缘图。选中对象写在标题里，
+  // 收起状态也能看出选的是什么。
+  const title =
+    node != null
+      ? `${node.data.isTableNode ? '表节点' : '列节点'}详情`
+      : edge != null
+        ? `边 ${edge.id}`
+        : '详情'
 
   return (
-    <div className="h-full space-y-3 overflow-auto p-3">
-      {node != null && (
-        <>
-          <div className="text-[13px] font-semibold text-neutral-900">
-            {node.data.isTableNode ? '表节点' : '列节点'}
+    <div className="flex h-full flex-col">
+      <button
+        className="flex w-full shrink-0 items-center gap-2 px-3 py-1 text-left text-[12px] text-neutral-500 hover:bg-neutral-100"
+        title={inspectorOpen ? '收起详情，把空间让给血缘图' : '展开详情'}
+        onClick={() => setInspectorOpen(!inspectorOpen)}
+      >
+        <span className="truncate">{title}</span>
+        <span className="ml-auto shrink-0">{inspectorOpen ? '▾' : '▸'}</span>
+      </button>
+      {inspectorOpen &&
+        (node == null && edge == null ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center text-xs text-neutral-500">
+            点击图上的节点或边查看详情
           </div>
-          <Row label="label" value={node.data.label} />
-          {node.data.ref != null ? (
-            <>
-              <Row label="raw" value={node.data.ref.raw} />
-              <Row label="canonical" value={node.data.ref.canonical} />
-              {node.data.ref.table != null && <Row label="table" value={node.data.ref.table} />}
-              {node.data.ref.schema != null && <Row label="schema" value={node.data.ref.schema} />}
-              {columnMeta != null && (
-                <>
-                  <Row label="isOutput" value={String(columnMeta.isOutput)} />
-                  {columnMeta.scopeId != null && <Row label="scope" value={columnMeta.scopeId} />}
-                  {columnMeta.type != null && <Row label="type" value={columnMeta.type} />}
-                  {columnMeta.nullable != null && (
-                    <Row label="nullable" value={String(columnMeta.nullable)} />
-                  )}
-                </>
-              )}
-              {node.data.ref.span != null && (
-                <button
-                  className="text-[12px] text-sky-600 hover:underline"
-                  onClick={() => revealSpan(node.data.ref!.span!)}
-                >
-                  定位到 SQL（{node.data.ref.span.start.line}:{node.data.ref.span.start.column}）
-                </button>
-              )}
-            </>
-          ) : (
-            // 聚合图（GraphReport）节点没有 ColumnRef：只能给稳定 id。
-            <Row label="id" value={node.id} />
-          )}
-          {collapseButton != null && (
-            <button
-              className="rounded border border-neutral-300 px-2 py-1 text-[12px] text-neutral-500 hover:bg-neutral-200"
-              onClick={collapseButton.action}
-            >
-              {collapseButton.label}
-            </button>
-          )}
-        </>
-      )}
-      {edge != null && (
-        <>
-          <div className="text-[13px] font-semibold text-neutral-900">边 {edge.id}</div>
-          <Row label="kind" value={edge.kind} />
-          <Row label="transform" value={edge.transform} />
-          {'fromColumn' in edge ? (
-            <>
-              <Row
-                label="from"
-                value={
-                  edge.fromColumn.table != null
-                    ? `${edge.fromColumn.table}.${edge.fromColumn.name}`
-                    : edge.fromColumn.name
-                }
-              />
-              <Row
-                label="to"
-                value={
-                  edge.toColumn.table != null
-                    ? `${edge.toColumn.table}.${edge.toColumn.name}`
-                    : edge.toColumn.name
-                }
-              />
-              {edge.expression != null && (
-                <div>
-                  <div className="text-[12px] text-neutral-500">expression</div>
-                  <pre className="mt-1 overflow-auto rounded bg-neutral-100 p-2 font-mono text-[12px] text-amber-800">
-                    {edge.expression}
-                  </pre>
+        ) : (
+          <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3">
+            {node != null && (
+              <>
+                <div className="text-[13px] font-semibold text-neutral-900">
+                  {node.data.isTableNode ? '表节点' : '列节点'}
                 </div>
-              )}
-              {edge.span != null && (
-                <button
-                  className="text-[12px] text-sky-600 hover:underline"
-                  onClick={() => revealSpan(edge.span!)}
-                >
-                  定位到 SQL（{edge.span.start.line}:{edge.span.start.column}）
-                </button>
-              )}
-            </>
-          ) : (
-            // 聚合图边：端点是列 id（无 ColumnRef / expression / span）。
-            <>
-              <Row label="from" value={edge.from} />
-              <Row label="to" value={edge.to} />
-            </>
-          )}
-        </>
-      )}
+                <Row label="label" value={node.data.label} />
+                {node.data.ref != null ? (
+                  <>
+                    <Row label="raw" value={node.data.ref.raw} />
+                    <Row label="canonical" value={node.data.ref.canonical} />
+                    {node.data.ref.table != null && <Row label="table" value={node.data.ref.table} />}
+                    {node.data.ref.schema != null && <Row label="schema" value={node.data.ref.schema} />}
+                    {columnMeta != null && (
+                      <>
+                        <Row label="isOutput" value={String(columnMeta.isOutput)} />
+                        {columnMeta.scopeId != null && <Row label="scope" value={columnMeta.scopeId} />}
+                        {columnMeta.type != null && <Row label="type" value={columnMeta.type} />}
+                        {columnMeta.nullable != null && (
+                          <Row label="nullable" value={String(columnMeta.nullable)} />
+                        )}
+                      </>
+                    )}
+                    {node.data.ref.span != null && (
+                      <button
+                        className="text-[12px] text-sky-600 hover:underline"
+                        onClick={() => revealSpan(node.data.ref!.span!)}
+                      >
+                        定位到 SQL（{node.data.ref.span.start.line}:{node.data.ref.span.start.column}）
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  // 聚合图（GraphReport）节点没有 ColumnRef：只能给稳定 id。
+                  <Row label="id" value={node.id} />
+                )}
+                {collapseButton != null && (
+                  <button
+                    className="rounded border border-neutral-300 px-2 py-1 text-[12px] text-neutral-500 hover:bg-neutral-200"
+                    onClick={collapseButton.action}
+                  >
+                    {collapseButton.label}
+                  </button>
+                )}
+              </>
+            )}
+            {edge != null && (
+              <>
+                <div className="text-[13px] font-semibold text-neutral-900">边 {edge.id}</div>
+                <Row label="kind" value={edge.kind} />
+                <Row label="transform" value={edge.transform} />
+                {'fromColumn' in edge ? (
+                  <>
+                    <Row
+                      label="from"
+                      value={
+                        edge.fromColumn.table != null
+                          ? `${edge.fromColumn.table}.${edge.fromColumn.name}`
+                          : edge.fromColumn.name
+                      }
+                    />
+                    <Row
+                      label="to"
+                      value={
+                        edge.toColumn.table != null
+                          ? `${edge.toColumn.table}.${edge.toColumn.name}`
+                          : edge.toColumn.name
+                      }
+                    />
+                    {edge.expression != null && (
+                      <div>
+                        <div className="text-[12px] text-neutral-500">expression</div>
+                        <pre className="mt-1 overflow-auto rounded bg-neutral-100 p-2 font-mono text-[12px] text-amber-800">
+                          {edge.expression}
+                        </pre>
+                      </div>
+                    )}
+                    {edge.span != null && (
+                      <button
+                        className="text-[12px] text-sky-600 hover:underline"
+                        onClick={() => revealSpan(edge.span!)}
+                      >
+                        定位到 SQL（{edge.span.start.line}:{edge.span.start.column}）
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  // 聚合图边：端点是列 id（无 ColumnRef / expression / span）。
+                  <>
+                    <Row label="from" value={edge.from} />
+                    <Row label="to" value={edge.to} />
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        ))}
     </div>
   )
 }

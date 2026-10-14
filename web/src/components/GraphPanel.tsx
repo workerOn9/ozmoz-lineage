@@ -9,6 +9,7 @@ import { EdgeLegend } from './lineage/EdgeLegend'
 export function GraphPanel() {
   const lineage = useAppStore((s) => s.lineage)
   const graphReport = useAppStore((s) => s.graphReport)
+  const inspectorOpen = useAppStore((s) => s.inspectorOpen)
   const [search, setSearch] = useState('')
 
   return (
@@ -18,7 +19,8 @@ export function GraphPanel() {
         <LineageGraphView search={search} />
       </div>
       <EdgeLegend model={lineage ?? graphReport} />
-      <div className="min-h-0 flex-[2] border-t border-neutral-200">
+      {/* 详情收起时只留一条表头，把剩余高度全让给上面的图。 */}
+      <div className={`border-t border-neutral-200 ${inspectorOpen ? 'min-h-0 flex-[2]' : 'shrink-0'}`}>
         <NodeInspector />
       </div>
     </div>

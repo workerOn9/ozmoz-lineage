@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -9,7 +9,9 @@ import {
   ReactFlow,
   type Edge,
   type Node,
+  type NodeChange,
   type NodeProps,
+  type XYPosition,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useAppStore } from '../../state/store'
@@ -19,6 +21,7 @@ import { useGraphLayout } from '../../graph/useGraphLayout'
 import { applyCollapse, internalColumnIdsByScope } from '../../graph/collapse'
 import { visibleEdges } from '../../graph/edgeFilter'
 import { ownershipEdges } from '../../graph/ownership'
+import { mergePositionChanges } from '../../graph/dragPositions'
 import { GRAPH_MIN_ZOOM, shouldVirtualize } from '../../graph/perf'
 import { reachableSet, subgraphHighlight } from '../../graph/traverse'
 import { shortestPath } from '../../graph/path'
@@ -62,6 +65,8 @@ const nodeTypes = { ozmoz: OzmozNode }
 const EMPTY_NODES: MappedNode[] = []
 const EMPTY_EDGES: MappedEdge[] = []
 const EMPTY_IDS: ReadonlySet<string> = new Set()
+/** 空闲的拖动覆盖表：重置时传它（同一引用 → React 直接跳过重渲染）。 */
+const EMPTY_POSITIONS: ReadonlyMap<string, XYPosition> = new Map()
 
 /** path 高亮：路径上的节点集 + 两端都在路径上的边集。 */
 function pathHighlight(mapped: MappedGraph, path: string[]) {
@@ -149,15 +154,31 @@ export function LineageGraphView({ search = '' }: { search?: string }) {
     ? { nodeIds: searchIds, edgeIds: EMPTY_IDS }
     : (highlight ?? focusHighlight)
 
+  // 节点拖动：React Flow 传 `nodes` prop 属**受控模式**——位置改动只经
+  // `onNodesChange` 交回调用方（store 自己不落地，见 `graph/dragPositions.ts`）。
+  // 不接这个回调，拖动会「开始了但不动」。位置覆盖是叠加在布局坐标之上的，
+  // **布局一变（新解析 / 折叠 / 边过滤）就作废**，免得与重算后的坐标错位。
+  const [dragPositions, setDragPositions] = useState(EMPTY_POSITIONS)
+  useEffect(() => {
+    setDragPositions(EMPTY_POSITIONS)
+  }, [positions])
+
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setDragPositions((prev) => mergePositionChanges(prev, changes) ?? prev)
+  }, [])
+
   const { nodes, edges } = useMemo(() => {
     if (visible == null) return { nodes: [] as OzmozNodeType[], edges: [] as Edge[] }
-    const nodes: OzmozNodeType[] = visible.nodes.map((n) => ({
-      id: n.id,
-      type: 'ozmoz' as const,
-      position: { x: positions.get(n.id)?.x ?? 0, y: positions.get(n.id)?.y ?? 0 },
-      data: n.data,
-      className: active != null && !active.nodeIds.has(n.id) ? 'dimmed' : 'highlighted',
-    }))
+    const nodes: OzmozNodeType[] = visible.nodes.map((n) => {
+      const pos = dragPositions.get(n.id) ?? positions.get(n.id)
+      return {
+        id: n.id,
+        type: 'ozmoz' as const,
+        position: { x: pos?.x ?? 0, y: pos?.y ?? 0 },
+        data: n.data,
+        className: active != null && !active.nodeIds.has(n.id) ? 'dimmed' : 'highlighted',
+      }
+    })
     const lineage: Edge[] = lineageEdges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -181,7 +202,7 @@ export function LineageGraphView({ search = '' }: { search?: string }) {
       style: { stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '3 3' },
     }))
     return { nodes, edges: [...lineage, ...owns] }
-  }, [visible, lineageEdges, ownership, active, positions])
+  }, [visible, lineageEdges, ownership, active, positions, dragPositions])
 
   if (visible == null) {
     return (
@@ -246,6 +267,7 @@ export function LineageGraphView({ search = '' }: { search?: string }) {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         fitView

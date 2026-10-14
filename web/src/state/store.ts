@@ -93,6 +93,11 @@ interface AppState {
   panelTool: PanelTool
   panelOpen: boolean
   /**
+   * 血缘图底部的「详情」（NodeInspector）是否展开。收起后图占满面板、可视面积更大；
+   * 收起**不清空选中**，展开即恢复。与 `panelOpen`（右侧整个工具面板）是两层开关。
+   */
+  inspectorOpen: boolean
+  /**
    * 树↔图联动的共享焦点：最后一次点选对象在 SQL 源文本上的 span（树节点 / 血缘列 / 边）。
    * 两栏工具二选一显示，靠这个值把「在另一个工具里选中的位置」带过去（按 span 重叠）。
    */
@@ -176,6 +181,8 @@ interface AppState {
   setPanelTool: (tool: PanelTool) => void
   /** 展开 / 收起右侧工具面板。 */
   setPanelOpen: (open: boolean) => void
+  /** 展开 / 收起血缘图底部的「详情」面板。 */
+  setInspectorOpen: (open: boolean) => void
   /** 设置树↔图联动的焦点 span（点树节点 / 图节点 / 边时写入）。 */
   setFocusedSpan: (span: Span | null) => void
   setDiffLeftEngine: (id: string | null) => void
@@ -220,6 +227,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   view: 'main',
   panelTool: 'tree',
   panelOpen: true,
+  inspectorOpen: true,
   focusedSpan: null,
   diffLeftEngine: null,
   diffRightEngine: null,
@@ -483,6 +491,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setView: (view) => set({ view }),
   setPanelTool: (panelTool) => set({ panelTool, panelOpen: true }),
   setPanelOpen: (panelOpen) => set({ panelOpen }),
+  setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
   setFocusedSpan: (focusedSpan) => set({ focusedSpan }),
 
   toggleFoldTables: () => set((s) => ({ foldTables: !s.foldTables })),
