@@ -63,6 +63,14 @@ class ParseCommandTest {
     }
 
     @Test
+    fun `--engine jooq 可用（与 api parse 对齐）`() {
+        val f = tempSql("SELECT a FROM t")
+        val result = command.test("--engine jooq --file ${f.absolutePath} --format json")
+        assertEquals(0, result.statusCode)
+        assertContains(result.stdout, "\"type\"")
+    }
+
+    @Test
     fun `--format 校验取值`() {
         val f = tempSql("SELECT 1")
         val result = command.test("--file ${f.absolutePath} --format yaml")
