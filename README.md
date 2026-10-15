@@ -82,6 +82,13 @@ ozml upgrade --version 0.2.0   # 指定版本（也可用于回滚到旧版）
 
 `ozml upgrade` 是**唯一**会联网的子命令，且只在显式调用时发生；正常解析 / 血缘 / serve 一律离线。旧版本目录保留，可回滚。离线 / 内网镜像：设 `OZML_RELEASE_BASE` / `OZML_API_BASE`（`install.sh` 同样识别）。
 
+> ⚠️ **开着 MITM 类加速器（Steam++ 等）时，`ozml upgrade` 会以证书错误失败**
+> （`PKIX path building failed: unable to find valid certification path`），而 `install.sh` 正常。
+> 原因是**信任源不同**：`install.sh` 走 `curl`（信系统钥匙串，加速器会把自己的根证书装进去），
+> 而 `ozml upgrade` 走 JVM（用自带 `cacerts`，没有该根证书）——表现为「**装得上、升不了**」。
+> 处置：**先关掉加速器再 upgrade**，或把 `OZML_RELEASE_BASE` / `OZML_API_BASE` 指向**可信镜像**
+> （不经过 MITM）。这是环境问题，不是发行版缺陷（发版自验时的实测记录见仓库开发记录）。
+
 ### 卸载
 
 ```bash
