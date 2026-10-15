@@ -112,24 +112,27 @@ export function Toolbar() {
           ))}
         </select>
       </label>
-      <label
-        className="flex items-center gap-1.5 text-[12px] text-neutral-500"
-        title="方言选项取决于当前引擎；jsqlparser 无方言概念"
-      >
-        方言
-        <select
-          className="w-44 rounded border border-neutral-300 bg-white px-1.5 py-1 font-mono text-[12px] text-neutral-800"
-          value={dialect}
-          disabled={dialectOptions.length === 0}
-          onChange={(e) => setDialect(e.target.value)}
+      {/* 方言选择：**该引擎没有真方言可选时整块不显示**——jsqlparser 无方言概念，
+          只给一个「通用 SQL」占位，摆在那儿是废话选项（用户实测反馈）。 */}
+      {dialectOptions.length > 1 && (
+        <label
+          className="flex items-center gap-1.5 text-[12px] text-neutral-500"
+          title="方言选项取决于当前引擎；无方言概念的引擎不显示本项"
         >
-          {dialectOptions.map((d) => (
-            <option key={d.value} value={d.value}>
-              {d.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          方言
+          <select
+            className="w-44 rounded border border-neutral-300 bg-white px-1.5 py-1 font-mono text-[12px] text-neutral-800"
+            value={dialect}
+            onChange={(e) => setDialect(e.target.value)}
+          >
+            {dialectOptions.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label
         className="flex items-center gap-1.5 text-[12px] text-neutral-500"
         title="多语句输入合并为一张血缘图（/api/lineage aggregate=true，opt-in 契约）；合并图无单语句归一化树"
