@@ -20,7 +20,9 @@ import org.apache.calcite.sql.SqlNode
 import org.apache.calcite.sql.dialect.CalciteSqlDialect
 import org.apache.calcite.sql.parser.SqlParseException
 import org.apache.calcite.sql.parser.SqlParser
+import org.apache.calcite.sql.parser.SqlParserImplFactory
 import org.apache.calcite.sql.parser.SqlParserPos
+import org.apache.calcite.sql.parser.babel.SqlBabelParserImpl
 import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl
 import org.apache.calcite.sql.validate.SqlConformanceEnum
 import org.apache.calcite.sql.validate.SqlDelegatingConformance
@@ -332,29 +334,50 @@ public class CalciteEngine : SqlEngine {
 
     // ————— 解析 —————
 
-    /** 统一用 no-arg `parseStmtList()`（抽测 E5：`SqlParser.create(sql, cfg)` + 无参方法，quoting 生效）。 */
+    /**
+     * **解析器回退链**（按序尝试，第一条成功的为准）：
+     *
+     * 1. [SqlDdlParserImpl.FACTORY]——calcite-core 默认语法 + DDL 扩展
+     *    （`CREATE TABLE` / `CREATE VIEW`）；
+     * 2. [SqlBabelParserImpl.FACTORY]——Calcite 的 babel 方言扩展解析器
+     *    （PostgreSQL 的 `::` 强转等默认语法之外的写法）。
+     *
+     * 为什么要两条而不是只留一条（本机 probe1 实测）：
+     * - babel 的 DDL 覆盖**不如** DDL 解析器——`CREATE VIEW v (x) AS SELECT …` 在 babel 下
+     *   报 `Encountered "VIEW"`；而视图 DDL 是血缘的 schema 来源（PR #56 收了视图列），
+     *   丢不得；
+     * - 反过来 `SELECT x::date` 只有 babel 认（默认语法报 `Encountered ": :"`）。
+     *
+     * 两条都失败时**抛第一条的异常**（即既有诊断口径逐字不变，零行为漂移）；
+     * 成功时不暴露「用的是哪条」，报告里不留噪声。
+     */
     private fun parseStatementList(sql: String, lex: Lex): List<SqlNode> {
-        val parser = SqlParser.create(sql, parserConfig(lex))
-        return parser.parseStmtList().getList().filterNotNull()
+        var firstFailure: Exception? = null
+        for (factory in PARSER_FACTORIES) {
+            try {
+                return SqlParser.create(sql, parserConfig(lex, factory)).parseStmtList().getList().filterNotNull()
+            } catch (e: Exception) {
+                if (firstFailure == null) firstFailure = e
+            }
+        }
+        throw firstFailure ?: IllegalStateException("解析器回退链为空")
     }
 
     /**
-     * 解析器配置：按方言配 [Lex]（quoting），**统一带 DDL 扩展语法**
-     *（[SqlDdlParserImpl.FACTORY]——CREATE TABLE / VIEW 等默认语法没有，本机 probe5/6 实测）
-     * 与 `!=`（`isBangEqualAllowed`，语义与 `<>` 等价、SQL Server 系语料必需）。
-     * `ConfigBuilder` / `setAllowBangEqual` 在 1.42.0 已弃用（2.0 移除），改走
-     * `SqlParser.config()` + `withXxx` 链；bang-equal 的官方路径是
-     * [SqlDelegatingConformance] 子类只覆写 `isBangEqualAllowed`（builder 内部
-     * 实现就是它，语义与旧版逐字等价——源码核对）。
+     * 解析器配置：按方言配 [Lex]（quoting）、把 `!=` 放行
+     *（[SqlDelegatingConformance] 子类只覆写 `isBangEqualAllowed`——builder 内部实现就是它，
+     * 1.42.0 起 `ConfigBuilder` / `setAllowBangEqual` 已弃用），解析器本体由 [factory] 指定
+     *（回退链见 [parseStatementList]）。
+     *
+     * Lossless：裸标识符不重写大小写（`Lex.ORACLE` 默认会把裸名转大写——本机 probe 实测），
+     * canonical 折叠交给 ir 层统一做。
      */
-    private fun parserConfig(lex: Lex): SqlParser.Config =
+    private fun parserConfig(lex: Lex, factory: SqlParserImplFactory): SqlParser.Config =
         SqlParser.config()
             .withLex(lex)
-            // Lossless：裸标识符不重写大小写（Lex.ORACLE 默认会把裸名转大写——
-            // 本机 probe 实测），canonical 折叠交给 ir 层统一做。
             .withUnquotedCasing(Casing.UNCHANGED)
             .withQuotedCasing(Casing.UNCHANGED)
-            .withParserFactory(SqlDdlParserImpl.FACTORY)
+            .withParserFactory(factory)
             .withConformance(
                 object : SqlDelegatingConformance(SqlConformanceEnum.DEFAULT) {
                     override fun isBangEqualAllowed(): Boolean = true
@@ -443,6 +466,13 @@ public class CalciteEngine : SqlEngine {
         public const val RENDER_FAIL_PREFIX: String = "calcite.render_failed"
 
         private const val TYPE_STATEMENT_LIST: String = "statement_list"
+
+        /**
+         * 解析器**回退链**（详见 [parseStatementList]）：DDL 扩展优先，babel 兜底。
+         * 顺序固定 ⇒ 同一输入永远解析成同一棵树（确定性）。
+         */
+        private val PARSER_FACTORIES: List<SqlParserImplFactory> =
+            listOf(SqlDdlParserImpl.FACTORY, SqlBabelParserImpl.FACTORY)
 
         /** 多语句的拼接分隔符（解析侧 `;` 切分，渲染侧用分隔符回拼）。 */
         private const val STATEMENT_SEPARATOR: String = ";\n"

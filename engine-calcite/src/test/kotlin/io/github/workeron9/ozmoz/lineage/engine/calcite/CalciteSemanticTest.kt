@@ -178,6 +178,23 @@ class CalciteSemanticTest {
         assertContains(refs.toSet(), "x")
     }
 
+    @Test
+    fun `niladic 日期时间关键字不产列引用（与 jsqlparser 同口径）`() {
+        // Calcite 把 CURRENT_DATE 等解析成 SqlIdentifier（换任何 Lex / Conformance 都一样），
+        // 不拦就会变成叫 current_date 的列引用——在列可枚举的来源（派生表 / CTE）上落一条
+        // 假 unknown「来源没有列: current_date」。2026-10-15 修。
+        val scope = selectScope(
+            "SELECT CURRENT_DATE AS d, CURRENT_TIMESTAMP AS t, LOCALTIME AS l FROM t",
+        ).scope
+        val refs = scope.outputs.flatMap { it.expr.referencedColumns() }.map { it.id }
+        for (keyword in listOf("current_date", "current_timestamp", "localtime")) {
+            assertTrue(keyword !in refs, "$keyword 不应被当成列引用：$refs")
+        }
+        // 非标准方言函数不在白名单里（可能是真列名）——`SYSDATE` 仍按列引用处理
+        val sysdate = selectScope("SELECT SYSDATE AS s FROM t").scope
+        assertContains(sysdate.outputs[0].expr.referencedColumns().map { it.id }.toSet(), "sysdate")
+    }
+
     // ————— Never-wrong —————
 
     @Test
