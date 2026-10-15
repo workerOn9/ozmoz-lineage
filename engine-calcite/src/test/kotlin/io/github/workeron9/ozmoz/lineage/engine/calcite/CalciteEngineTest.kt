@@ -63,9 +63,41 @@ class CalciteEngineTest {
         assertEquals("[a]", identifier.text)
     }
 
+    /**
+     * 解析器**回退链**（2026-10-15）：DDL 扩展解析器吃不下的方言写法交给 babel。
+     * 这一组是用户真实报表 SQL 暴露的——PostgreSQL `::` 强转让整段解析失败 ⇒ calcite 空树。
+     */
     @Test
-    fun `parse 星号展开记为 star`() {
-        val outcome = engine.parse("SELECT * FROM t")
+    fun `parse postgres 双冒号强转走 babel 回退`() {
+        val outcome = engine.parse(
+            "SELECT to_date(paid_at, 'yyyy-mm-dd')::date AS d FROM t",
+            ParseRequest(dialect = "postgresql"),
+        )
+        assertTrue(outcome.hasErrors.not(), outcome.diagnostics.toString())
+        assertEquals("select", outcome.root.type)
+    }
+
+    @Test
+    fun `parse CREATE VIEW 仍走 DDL 解析器 回退链不回归`() {
+        // babel **不认** CREATE VIEW（本机 probe：`Encountered "VIEW"`），必须仍由 DDL 解析器吃下
+        val outcome = engine.parse("CREATE VIEW v (x, y) AS SELECT a, b FROM t", ParseRequest(dialect = "ansi"))
+        assertTrue(outcome.hasErrors.not(), outcome.diagnostics.toString())
+        assertEquals("create_view", outcome.root.type)
+    }
+
+    @Test
+    fun `两条解析器都失败时报第一条的错 零漂移`() {
+        // 回退链只在「第一条失败」时才试第二条；两条都失败时抛第一条例外——
+        // 即引入回退之前的诊断口径逐字不变。
+        val outcome = engine.parse("SELECT no FROM", ParseRequest(dialect = "mysql"))
+        assertTrue(outcome.hasErrors)
+        val diagnostic = outcome.diagnostics.first()
+        assertEquals(CalciteEngine.CODE_PARSE_ERROR, diagnostic.code)
+        assertTrue(diagnostic.span != null, "解析失败仍带位置：$diagnostic")
+    }
+
+    @Test
+    fun `parse 星号展开记为 star`() {        val outcome = engine.parse("SELECT * FROM t")
         assertTrue(outcome.hasErrors.not(), outcome.diagnostics.toString())
         val identifier = outcome.root.children.first { it.type == "select_list" }.children.first()
         assertEquals("star", identifier.type)
