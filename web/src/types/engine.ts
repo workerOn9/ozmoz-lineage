@@ -13,6 +13,8 @@ export const engineReportSchema = z.object({
   id: z.string(),
   features: z.array(z.string()),
   dialects: z.array(z.string()),
+  /** 别名 → 正名（如 `postgres → postgresql`）：展示层只列正名，别名标在正名后面。 */
+  dialectAliases: z.record(z.string(), z.string()).default({}),
   reasons: z.record(z.string(), z.string()),
 })
 export type EngineReport = z.infer<typeof engineReportSchema>

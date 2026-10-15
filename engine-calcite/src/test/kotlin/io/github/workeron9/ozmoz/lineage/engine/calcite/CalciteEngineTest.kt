@@ -19,6 +19,17 @@ class CalciteEngineTest {
 
     private val engine = CalciteEngine()
 
+    @Test
+    fun `方言别名映射到已声明的正名`() {
+        // 不变量：别名与正名都在 dialects 里、别名不会同时是别人的正名（否则展示层会漏掉方言）
+        val caps = engine.capabilities
+        for ((alias, canonical) in caps.dialectAliases) {
+            assertTrue(alias in caps.dialects, "别名 $alias 应在 dialects 里")
+            assertTrue(canonical in caps.dialects, "$alias 的正名 $canonical 应在 dialects 里")
+            assertTrue(alias !in caps.dialectAliases.values, "$alias 不应同时是正名")
+        }
+    }
+
     // ————— 能力表 —————
 
     @Test

@@ -58,8 +58,8 @@ internal object CalciteDialects {
         register(id = "calcite", lex = Lex.ORACLE, dialect = CalciteSqlDialect.DEFAULT)
     }
 
-    /** 方言别名：对外 id（如语料里的 `tsql`）→ 主 id。 */
-    private val ALIASES: Map<String, String> = mapOf(
+    /** 方言别名：对外 id（如语料里的 `tsql`）→ 主 id（对外展示用，见 [EngineCapabilities.dialectAliases]）。 */
+    internal val ALIASES: Map<String, String> = mapOf(
         "tsql" to "mssql",
         "big_query" to "bigquery",
         "postgres" to "postgresql",

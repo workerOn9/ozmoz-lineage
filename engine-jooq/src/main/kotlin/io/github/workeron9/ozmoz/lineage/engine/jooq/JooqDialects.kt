@@ -44,8 +44,8 @@ internal object JooqDialects {
         "ansi" to SQLDialect.DEFAULT,
     )
 
-    /** 别名：对齐 Calcite 侧语料习惯（`postgresql` → `postgres`）。 */
-    private val ALIASES: Map<String, String> = mapOf("postgresql" to "postgres")
+    /** 别名：对齐 Calcite 侧语料习惯（`postgresql` → `postgres`）；对外展示用（见 `EngineCapabilities.dialectAliases`）。 */
+    internal val ALIASES: Map<String, String> = mapOf("postgresql" to "postgres")
 
     /** 已注册的方言 id（含别名）。 */
     private val IDS: Set<String> = SPECS.keys + ALIASES.keys

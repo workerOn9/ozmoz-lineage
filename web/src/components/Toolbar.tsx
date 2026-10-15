@@ -29,14 +29,31 @@ export function Toolbar() {
     () => engines.find((e) => e.id === engineId)?.dialects ?? [],
     [engines, engineId],
   )
+  // 别名（`postgres` → `postgresql`）与正名是**同一个方言**：只列正名、把别名标在括号里
+  // ——否则下拉里会出现看起来重复的两项（用户实测反馈：「结果一样，区别在哪」）。
+  const dialectAliases = useMemo(
+    () => engines.find((e) => e.id === engineId)?.dialectAliases ?? {},
+    [engines, engineId],
+  )
   // jsqlparser 等引擎注册表只有 'ansi' 占位（实际无方言概念），不把它当可选方言展示。
   const dialectOptions = useMemo(() => {
     if (engineDialects.length === 0) return []
     if (engineDialects.length === 1 && engineDialects[0] === 'ansi') {
       return [{ value: '', label: '通用 SQL' }]
     }
-    return [{ value: '', label: '默认' }, ...engineDialects.map((d) => ({ value: d, label: d }))]
-  }, [engineDialects])
+    const aliasesOf = new Map<string, string[]>()
+    for (const [alias, canonical] of Object.entries(dialectAliases)) {
+      aliasesOf.set(canonical, [...(aliasesOf.get(canonical) ?? []), alias])
+    }
+    const canonicals = engineDialects.filter((d) => !(d in dialectAliases))
+    return [
+      { value: '', label: '默认' },
+      ...canonicals.map((d) => {
+        const aliases = aliasesOf.get(d)
+        return { value: d, label: aliases != null ? `${d}（= ${aliases.join(' / ')}）` : d }
+      }),
+    ]
+  }, [engineDialects, dialectAliases])
 
   const backendBadge =
     backend === 'ok' ? (
@@ -101,7 +118,7 @@ export function Toolbar() {
       >
         方言
         <select
-          className="w-28 rounded border border-neutral-300 bg-white px-1.5 py-1 font-mono text-[12px] text-neutral-800"
+          className="w-44 rounded border border-neutral-300 bg-white px-1.5 py-1 font-mono text-[12px] text-neutral-800"
           value={dialect}
           disabled={dialectOptions.length === 0}
           onChange={(e) => setDialect(e.target.value)}

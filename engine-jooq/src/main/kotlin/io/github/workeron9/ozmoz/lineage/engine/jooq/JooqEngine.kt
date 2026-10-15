@@ -50,6 +50,8 @@ public class JooqEngine : SqlEngine {
             Feature.AST_EXPORT,
         ),
         dialects = JooqDialects.ids(),
+        // 别名（`postgresql` → `postgres`）与正名同一个方言：展示层只列正名。
+        dialectAliases = JooqDialects.ALIASES,
         reasons = mapOf(
             Feature.SEMANTIC_MODEL to "语义模型暂未实现，血缘由 jsqlparser 引擎承担",
             Feature.MULTI_STATEMENT to "多语句语义提取暂未实现（analyze 不可用）",

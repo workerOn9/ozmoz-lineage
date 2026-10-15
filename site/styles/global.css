@@ -6,6 +6,12 @@
   margin-bottom: 4px;
 }
 
+/* 方言别名标注：与正名同一个方言的另一种写法（如 `postgres` = `postgresql`）。 */
+.ozml-alias {
+  opacity: 0.65;
+  font-weight: 400;
+}
+
 .ozml-meta {
   color: var(--rp-c-text-2, #6b7280);
   font-size: 13px;

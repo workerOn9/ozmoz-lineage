@@ -5,7 +5,13 @@ import DataMissing from './DataMissing'
 export default function EngineCatalog() {
   const engines = dataset.engines as {
     available: boolean
-    items: Array<{ id: string; features: string[]; dialects: string[]; reasons: Record<string, string> }>
+    items: Array<{
+      id: string
+      features: string[]
+      dialects: string[]
+      dialectAliases?: Record<string, string>
+      reasons: Record<string, string>
+    }>
   }
 
   if (!engines.available) return <DataMissing what="引擎能力表" />
@@ -31,7 +37,18 @@ export default function EngineCatalog() {
               <tr>
                 <th>方言</th>
                 <td>
-                  {engine.dialects.length === 0 ? '—' : engine.dialects.map((d) => <code key={d}>{d}</code>)}
+                  {engine.dialects.length === 0
+                    ? '—'
+                    : engine.dialects.map((d) => {
+                        // 别名标在正名旁：`postgres` 与 `postgresql` 是同一个方言，不是两个。
+                        const canonical = engine.dialectAliases?.[d]
+                        return (
+                          <code key={d}>
+                            {d}
+                            {canonical != null && <span className="ozml-alias">（= {canonical}）</span>}
+                          </code>
+                        )
+                      })}
                 </td>
               </tr>
               {Object.keys(engine.reasons).length > 0 && (

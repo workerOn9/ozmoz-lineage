@@ -65,6 +65,9 @@ public class CalciteEngine : SqlEngine {
         ),
         // 只列 [CalciteDialects] 注册（= 抽测实测 / 有意保有）的方言，不预支承诺。
         dialects = CalciteDialects.IDS,
+        // 别名（`postgres` → `postgresql` 等）与正名是同一个方言：展示层只列正名，
+        // 别把同一档列两遍（用户实测反馈：下拉里 `postgresql` / `postgres` 看不出区别）。
+        dialectAliases = CalciteDialects.ALIASES,
         reasons = mapOf(
             Feature.EXTRACT_TABLES to "表提取暂未实现，血缘由 jsqlparser 引擎承担",
             Feature.FIELD_LINEAGE to "字段级血缘由 lineage 模块承担（两类引擎都能产语义模型）",

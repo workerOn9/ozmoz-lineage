@@ -35,6 +35,12 @@ public data class EngineReport(
     val id: String,
     val features: List<String>,
     val dialects: List<String>,
+    /**
+     * 方言**别名 → 正名**（如 `postgres → postgresql`）。
+     * [dialects] 是「有哪些取值可用」，本字段是「哪些只是同一个方言的另一种写法」——
+     * 展示层据此只列正名（否则下拉里会出现看起来重复的两项）。
+     */
+    val dialectAliases: Map<String, String> = emptyMap(),
     /** 能力名 → 不支持原因（[Feature] 名）。 */
     val reasons: Map<String, String>,
 ) {
@@ -48,6 +54,7 @@ public data class EngineReport(
             id = engine.id,
             features = Feature.entries.filter { engine.capabilities.supports(it) }.map { it.name },
             dialects = engine.capabilities.dialects.toList(),
+            dialectAliases = engine.capabilities.dialectAliases,
             reasons = engine.capabilities.reasons.mapKeys { (feature, _) -> feature.name },
         )
     }
