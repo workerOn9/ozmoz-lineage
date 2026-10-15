@@ -6,6 +6,7 @@ import io.github.workeron9.ozmoz.lineage.engine.ParseOutcome
 import io.github.workeron9.ozmoz.lineage.engine.ParseRequest
 import io.github.workeron9.ozmoz.lineage.engine.RenderRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
+import io.github.workeron9.ozmoz.lineage.engine.semantics.SemanticStatement
 import io.github.workeron9.ozmoz.lineage.ir.AstNode
 import io.github.workeron9.ozmoz.lineage.ir.Diagnostic
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
@@ -48,14 +49,16 @@ public class JooqEngine : SqlEngine {
             Feature.DIALECT_PARSE,
             Feature.DIALECT_RENDER,
             Feature.AST_EXPORT,
+            Feature.SEMANTIC_MODEL,
+            Feature.MULTI_STATEMENT,
         ),
         dialects = JooqDialects.ids(),
+        // 别名（`postgresql` → `postgres`）与正名同一个方言：展示层只列正名。
+        dialectAliases = JooqDialects.ALIASES,
         reasons = mapOf(
-            Feature.SEMANTIC_MODEL to "语义模型暂未实现，血缘由 jsqlparser 引擎承担",
-            Feature.MULTI_STATEMENT to "多语句语义提取暂未实现（analyze 不可用）",
             Feature.EXTRACT_TABLES to "表提取暂未实现，血缘由 jsqlparser 引擎承担",
             Feature.VALIDATE_SCHEMA to "不做 schema 语义校验",
-            Feature.FIELD_LINEAGE to "字段级血缘由 lineage 模块 + jsqlparser 引擎承担",
+            Feature.FIELD_LINEAGE to "字段级血缘由 lineage 模块承担（collections 模型的入口是 analyze*）",
             Feature.ERROR_TOLERANT to "jOOQ 解析器不支持误差容忍",
             Feature.PRETTY_PRINT to "渲染固定单行风格，未提供排版开关",
         ),
@@ -168,6 +171,69 @@ public class JooqEngine : SqlEngine {
         return Resolved.Known(rendered.joinToString(STATEMENT_SEPARATOR))
     }
 
+    /**
+     * 提取**单条语句**的语义模型（[Feature.SEMANTIC_MODEL]）——`lineage` 模块的输入。
+     *
+     * 数据来源是 jOOQ 的 QOM（见 [JooqSemanticExtractor] 的四点差异声明）。
+     * 解析失败 / 多语句 / 不可建模种类（MERGE / VALUES / UNION… / 纯 DDL）→
+     * [Resolved.Unknown]，不抛异常（Never-wrong）。
+     */
+    override fun analyze(sql: String, request: ParseRequest): Resolved<SemanticStatement> {
+        if (sql.isBlank()) return Resolved.Unknown("SQL 为空，无可提取内容")
+
+        val sourceId = resolveDialect(request.dialect)
+            ?: return Resolved.Unknown(dialectUnknownMessage(request.dialect))
+
+        val queries = try {
+            queries(sourceId, sql)
+        } catch (e: ParserException) {
+            return Resolved.Unknown(parseFailureReason(e), spanOf(sql, e))
+        } catch (e: RuntimeException) {
+            return Resolved.Unknown(parseFailureReason(e))
+        }
+        when {
+            queries.isEmpty() -> return Resolved.Unknown("没有可提取内容")
+            queries.size > 1 -> return Resolved.Unknown("多条语句请走 analyzeAll（本接口只收单条）")
+        }
+
+        return when (val extracted = JooqSemanticExtractor(sql).extract(queries.first())) {
+            is Resolved.Known -> extracted
+            null -> Resolved.Unknown("该语句暂不支持语义提取（MERGE / VALUES / 纯 DDL 等）")
+            else -> extracted
+        }
+    }
+
+    /**
+     * 提取**多语句脚本**的语义模型（[Feature.MULTI_STATEMENT]，加法契约）。
+     *
+     * 一次解析成语句列表，逐条独立提取（每条新建 extractor，不让上一条的诊断串场）；
+     * 不可建模的语句（MERGE / VALUES / 纯 DDL / 集合运算）**跳过**。
+     * 只有整段语法解析失败才返回 [Resolved.Unknown]。
+     */
+    override fun analyzeAll(sql: String, request: ParseRequest): Resolved<List<SemanticStatement>> {
+        if (sql.isBlank()) return Resolved.Unknown("SQL 为空，无可提取内容")
+
+        val sourceId = resolveDialect(request.dialect)
+            ?: return Resolved.Unknown(dialectUnknownMessage(request.dialect))
+
+        val queries = try {
+            queries(sourceId, sql)
+        } catch (e: ParserException) {
+            return Resolved.Unknown(parseFailureReason(e), spanOf(sql, e))
+        } catch (e: RuntimeException) {
+            return Resolved.Unknown(parseFailureReason(e))
+        }
+        if (queries.isEmpty()) return Resolved.Unknown("没有可提取内容")
+
+        val extracted = ArrayList<SemanticStatement>(queries.size)
+        for (query in queries) {
+            val result = JooqSemanticExtractor(sql).extract(query)
+            if (result is Resolved.Known) extracted += result.value
+            // null = 无法建模（MERGE / VALUES / 纯 DDL），跳过——Never-wrong 不硬塞。
+        }
+        return Resolved.Known(extracted)
+    }
+
     // ————— 解析 —————
 
     /** `Parser.parse(String)` 支持多语句；单语句等价于列表里的一条。 */
@@ -199,6 +265,10 @@ public class JooqEngine : SqlEngine {
     )
 
     // ————— 渲染校验 —————
+
+    /** `analyze` / `analyzeAll` 的失败原因（与 calcite 侧同措辞）。 */
+    private fun parseFailureReason(e: Exception): String =
+        "解析失败: " + (firstLine(e.message) ?: e.javaClass.simpleName)
 
     /** `ParserException.position()`（0 基字符偏移，可等于串长=EOF）→ [Span]；越界返回 null。 */
     private fun spanOf(source: String, e: ParserException): Span? {

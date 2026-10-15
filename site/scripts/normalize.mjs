@@ -35,10 +35,14 @@ function normalizeEngines(raw) {
     if (!isObj(e) || typeof e.id !== 'string') fail('engines.json', `第 ${i} 项缺 id`)
     if (!Array.isArray(e.features) || !Array.isArray(e.dialects)) fail('engines.json', `${e.id} 的 features/dialects 应为数组`)
     if (!isObj(e.reasons)) fail('engines.json', `${e.id} 的 reasons 应为对象`)
+    if (e.dialectAliases != null && !isObj(e.dialectAliases)) fail('engines.json', `${e.id} 的 dialectAliases 应为对象`)
     return {
       id: e.id,
       features: e.features,
       dialects: e.dialects,
+      // 别名 → 正名：展示层把「同一个方言的另一种写法」标在正名旁边，
+      // 免得目录里看起来多出几个方言（用户实测反馈）。
+      dialectAliases: e.dialectAliases ?? {},
       // 不支持原因按 Feature 名排序，保证渲染顺序稳定（JSON 对象键序不进入契约）。
       reasons: Object.fromEntries(Object.entries(e.reasons).sort(([a], [b]) => a.localeCompare(b))),
     }

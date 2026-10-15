@@ -65,6 +65,15 @@ public enum class Feature {
 public data class EngineCapabilities(
     val features: Set<Feature>,
     val dialects: Set<String> = emptySet(),
+    /**
+     * **方言别名 → 正名**（如 `postgres → postgresql`）。
+     *
+     * [dialects] 是**可接受的取值全集**（含别名，语料 / `--from` / `--to` 都用得上），
+     * 这份映射回答的是另一个问题：**哪些 id 只是同一个方言的另一个写法**。
+     * 展示层（`/api/engines` 的消费方）据此只列正名，并把别名标在正名后面——
+     * 否则下拉里会出现「postgresql / postgres」这种看起来像两个方言的重复项。
+     */
+    val dialectAliases: Map<String, String> = emptyMap(),
     val reasons: Map<Feature, String> = emptyMap(),
 ) {
     public fun supports(feature: Feature): Boolean = feature in features

@@ -43,11 +43,12 @@ class MatrixCommandTest {
         assertEquals(0, result.statusCode)
         // 坏 JSON 不静默：WARN 点名文件；好 case 照跑。
         assertTrue(result.stderr.contains("WARN junk/broken.json"), result.stderr)
-        // 两引擎格（血缘矩阵 = 声明 SEMANTIC_MODEL 的引擎）：2 引擎 × 3 case = 6 cells。
+        // 血缘矩阵 = 声明 SEMANTIC_MODEL 的引擎：3 引擎 × 3 case = 9 cells
+        // （2026-10-15 起 jooq 也申报语义模型 → 进矩阵）。
         val matrix = CorpusLoader.jsonBuilder().decodeFromString(CompatMatrix.serializer(), result.stdout)
-        // 发生变化的引擎列表（jsqlparser 解析主力 + calcite 方言/语义主力）
-        assertEquals(2, matrix.meta.engineCount)
-        assertEquals(6, matrix.cells.size)
+        // 引擎列表（jsqlparser 解析主力 + calcite 方言/语义主力 + jooq QOM）
+        assertEquals(3, matrix.meta.engineCount)
+        assertEquals(9, matrix.cells.size)
         assertTrue(matrix.cells.first { it.caseId == "good" }.ok)
         assertTrue(matrix.cells.first { it.caseId == "broken-sql" }.let { !it.ok && it.reason != null })
     }
@@ -65,11 +66,11 @@ class MatrixCommandTest {
 
         assertEquals(0, result.statusCode)
         assertTrue(Files.exists(out))
-        assertTrue(result.stdout.contains("cases: 1  engines: 2  ok: 2/2"), result.stdout)
+        assertTrue(result.stdout.contains("cases: 1  engines: 3  ok: 3/3"), result.stdout)
 
         val matrix = CorpusLoader.jsonBuilder().decodeFromString(CompatMatrix.serializer(), out.readText().trim())
         assertEquals("deadbeef", matrix.meta.commit)
-        assertEquals(2, matrix.cells.size) // 血缘矩阵引擎面 = jsqlparser + calcite
+        assertEquals(3, matrix.cells.size) // 血缘矩阵引擎面 = jsqlparser + calcite + jooq（2026-10-15 起）
         assertTrue(matrix.cells.all { it.ok })
         assertEquals("ansi/good.json", matrix.cells.first().sourcePath)
     }

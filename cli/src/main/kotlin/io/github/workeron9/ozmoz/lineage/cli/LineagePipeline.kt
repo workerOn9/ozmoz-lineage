@@ -51,10 +51,10 @@ internal object LineagePipeline {
      * **血缘可用**的引擎 id 列表（`ozml lineage --engine` / `ozml matrix` 的展开源）。
      *
      * 计算：声明 `SEMANTIC_MODEL` 的注册引擎——`jsqlparser`（解析主力）+
-     * `calcite`（方言转换主力，M3 补语义模型）。`jooq` 无语义模型，
-     * 只走方言转换（`renderEngines()`），不进血缘矩阵。
+     * `calcite`（方言转换主力，M3 补语义模型）+ `jooq`（2026-10-15 起 QOM 语义模型）。
+     * 三者都进血缘矩阵（`jooq` 的集合运算 / MERGE / VALUES 不建模，如实入格）。
      */
-    val ENGINE_IDS: List<String> = listOf(JSqlParserEngine.ID, CalciteEngine.ID)
+    val ENGINE_IDS: List<String> = listOf(JSqlParserEngine.ID, CalciteEngine.ID, JooqEngine.ID)
 
     /** 注册的引擎实例（`ozml matrix` 等按列表逐个跑的入口用）。 */
     fun engines(): List<SqlEngine> = ENGINE_IDS.map { engine(it) }
@@ -62,8 +62,8 @@ internal object LineagePipeline {
     /**
      * **可渲染**引擎实例（`ozml matrix --convert` 的方言转换矩阵用）：
      * 注册的引擎里声明 [io.github.workeron9.ozmoz.lineage.engine.Feature.DIALECT_RENDER] 的。
-     * 与 [engines]（血缘主力，仅 [ENGINE_IDS]）分开——calcite / jooq 只做方言，
-     * 没语义模型，不进血缘矩阵。
+     * 与 [engines]（血缘矩阵，[ENGINE_IDS]）分开——两个矩阵的引擎面本来就不同
+     * （血缘矩阵按 `SEMANTIC_MODEL`，转换矩阵按 `DIALECT_RENDER`）。
      */
     fun renderEngines(): List<SqlEngine> =
         allEngines().filter { it.capabilities.supports(io.github.workeron9.ozmoz.lineage.engine.Feature.DIALECT_RENDER) }

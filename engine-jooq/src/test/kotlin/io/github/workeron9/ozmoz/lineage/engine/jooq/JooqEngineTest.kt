@@ -26,7 +26,8 @@ class JooqEngineTest {
         assertTrue(engine.capabilities.supports(Feature.DIALECT_RENDER))
         // QOM 归一化树（2026-10-15 起）：不再是浅树，能力表如实申报
         assertTrue(engine.capabilities.supports(Feature.AST_EXPORT))
-        assertTrue(!engine.capabilities.supports(Feature.SEMANTIC_MODEL))
+        // 2026-10-15 起有语义模型（QOM）——血缘图不再是 jsqlparser 专属
+        assertTrue(engine.capabilities.supports(Feature.SEMANTIC_MODEL))
         // OSS 可承诺清单（jOOQ support-matrix 口径；derby 3.21 起弃用待移除，不承诺）
         for (id in listOf("mysql", "mariadb", "postgres", "postgresql", "h2", "hsqldb", "firebird", "sqlite", "duckdb", "trino", "clickhouse", "yugabytedb", "ansi")) {
             assertContains(engine.capabilities.dialects, id)
@@ -42,6 +43,17 @@ class JooqEngineTest {
         // AST_EXPORT 已申报，不再有不支持原因
         assertTrue(engine.capabilities.reason(Feature.AST_EXPORT) == null)
         assertContains(engine.capabilities.reason(Feature.PRETTY_PRINT)!!, "排版")
+    }
+
+    @Test
+    fun `方言别名映射到已声明的正名`() {
+        // 不变量：别名与正名都在 dialects 里、别名不会同时是别人的正名（否则展示层会漏掉方言）
+        val caps = engine.capabilities
+        for ((alias, canonical) in caps.dialectAliases) {
+            assertTrue(alias in caps.dialects, "别名 $alias 应在 dialects 里")
+            assertTrue(canonical in caps.dialects, "$alias 的正名 $canonical 应在 dialects 里")
+            assertTrue(alias !in caps.dialectAliases.values, "$alias 不应同时是正名")
+        }
     }
 
     // ————— parse —————
