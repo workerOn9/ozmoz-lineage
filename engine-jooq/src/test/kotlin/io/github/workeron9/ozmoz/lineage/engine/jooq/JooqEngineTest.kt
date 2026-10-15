@@ -11,8 +11,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * `JooqEngine`：OSS 方言面（12 + DEFAULT）、浅归一化树、parse-verified 门禁
- * （中性渲染基线）与 Never-wrong（不抛异常）。
+ * `JooqEngine`：OSS 方言面（12 + DEFAULT）、**QOM 归一化树**（结构 + 函数 + 算子）、
+ * parse-verified 门禁（中性渲染基线）与 Never-wrong（不抛异常）。
  */
 class JooqEngineTest {
 
@@ -24,6 +24,8 @@ class JooqEngineTest {
     fun `能力表声明 parse 与方言渲染 且方言面为 OSS 承诺清单`() {
         assertTrue(engine.capabilities.supports(Feature.PARSE))
         assertTrue(engine.capabilities.supports(Feature.DIALECT_RENDER))
+        // QOM 归一化树（2026-10-15 起）：不再是浅树，能力表如实申报
+        assertTrue(engine.capabilities.supports(Feature.AST_EXPORT))
         assertTrue(!engine.capabilities.supports(Feature.SEMANTIC_MODEL))
         // OSS 可承诺清单（jOOQ support-matrix 口径；derby 3.21 起弃用待移除，不承诺）
         for (id in listOf("mysql", "mariadb", "postgres", "postgresql", "h2", "hsqldb", "firebird", "sqlite", "duckdb", "trino", "clickhouse", "yugabytedb", "ansi")) {
@@ -37,18 +39,79 @@ class JooqEngineTest {
 
     @Test
     fun `能力表对不支持项给可解释的原因`() {
-        assertContains(engine.capabilities.reason(Feature.AST_EXPORT)!!, "AST")
+        // AST_EXPORT 已申报，不再有不支持原因
+        assertTrue(engine.capabilities.reason(Feature.AST_EXPORT) == null)
         assertContains(engine.capabilities.reason(Feature.PRETTY_PRINT)!!, "排版")
     }
 
     // ————— parse —————
 
     @Test
-    fun `parse 单语句出浅树 type 去 Impl 后缀`() {
-        val outcome = engine.parse("SELECT id FROM customer", ParseRequest(dialect = "mysql"))
+    fun `parse 单语句出 select 树不是一层浅树`() {
+        val outcome = engine.parse("SELECT id, name FROM customer WHERE id > 1", ParseRequest(dialect = "mysql"))
         assertTrue(!outcome.hasErrors, outcome.diagnostics.toString())
         assertEquals("select", outcome.root.type)
-        assertContains(outcome.root.text, "SELECT id FROM customer")
+        // jOOQ 的 text 是**渲染文本**（不是源文切片）：小写、逐子句换行
+        assertContains(outcome.root.text.lowercase(), "from customer")
+        // QOM 真树：结构 + 表达式都拍下来了（2026-10-15 之前这里只有 1 个节点）。
+        val types = outcome.root.flatten().map { it.type }.toList()
+        assertContains(types, "from")
+        assertContains(types, "select_list")
+        assertContains(types, "where")
+        assertContains(types, "column")
+        assertContains(types, "literal")
+        assertContains(types, "binary_op")
+    }
+
+    @Test
+    fun `parse QOM 树覆盖 WITH 连接 大小写 CASE 聚合 CAST 与排序分页`() {
+        val sql = """
+            WITH paid AS (SELECT order_id, amount FROM orders WHERE status = 'paid')
+            SELECT c.name,
+                   CASE WHEN o.amount > 100 THEN 'big' ELSE 'small' END AS bucket,
+                   COALESCE(SUM(o.amount), 0) AS total,
+                   CAST(o.amount AS NUMERIC(10, 2)) AS casted
+            FROM paid o
+            LEFT JOIN customers c ON c.id = o.order_id
+            WHERE o.amount > 0
+            GROUP BY c.name
+            HAVING SUM(o.amount) > 10
+            ORDER BY total DESC
+            LIMIT 10
+        """.trimIndent()
+        val outcome = engine.parse(sql, ParseRequest(dialect = "postgres"))
+        assertTrue(!outcome.hasErrors, outcome.diagnostics.toString())
+        val types = outcome.root.flatten().map { it.type }.toList()
+        for (expected in listOf(
+            "select", "with", "cte", "from", "left_join", "on", "select_list", "alias",
+            "case", "when", "else", "function", "cast", "column", "literal",
+            "where", "group_by", "having", "order_by", "limit",
+        )) {
+            assertTrue(types.contains(expected), "QOM 树缺 $expected；实际：${types.toSet()}")
+        }
+        // 别名节点的 text 是别名本身（与另两引擎同口径）
+        val bucket = outcome.root.flatten().first { it.type == "alias" && it.text.equals("bucket", true) }
+        assertEquals("case", bucket.children.first().type)
+    }
+
+    @Test
+    fun `parse QOM 树的子节点没有源位置但根节点有整条语句的切片`() {
+        val outcome = engine.parse("SELECT id FROM customer", ParseRequest(dialect = "mysql"))
+        // jOOQ 不保留 token 位置：只有根节点给整条语句切片（「定位到 SQL」落到语句）
+        assertEquals(0, outcome.root.span?.start?.offset)
+        val child = outcome.root.children.first()
+        assertTrue(child.span == null, "子节点不应有 span（jOOQ 不保留位置）：${child.type}")
+    }
+
+    @Test
+    fun `parse 认不出的结构落 unknown_node 但保留渲染文本`() {
+        // SortField（ORDER BY 项）在 OSS 的 QOM 里没有可用接口 → 如实落 unknown_node
+        val outcome = engine.parse("SELECT a FROM t ORDER BY a DESC", ParseRequest(dialect = "mysql"))
+        assertTrue(!outcome.hasErrors, outcome.diagnostics.toString())
+        val orderBy = outcome.root.flatten().first { it.type == "order_by" }
+        val leaf = orderBy.children.single()
+        assertEquals("unknown_node", leaf.type)
+        assertContains(leaf.text.uppercase(), "DESC")
     }
 
     @Test

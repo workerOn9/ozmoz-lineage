@@ -30,9 +30,13 @@ import org.jooq.SQLDialect
  *   `DSL.using(SQLDialect.DEFAULT).render(q)` 的**中性渲染**对比两侧
  *   （本机 probe 实测：MYSQL→POSTGRES 的 `LIMIT 10` 两侧中性渲染都是
  *   `fetch next 10 rows only`，等价成立）。
- * - ❌ 无 AST 导出（jOOQ 未公开 SQL AST）；`analyze` 未实现（`Resolved.Unknown`）。
+ * - ❌ 无 `SEMANTIC_MODEL`（jOOQ 不公开语义模型）；`analyze` 未实现（`Resolved.Unknown`）。
+ * - ✅ **归一化树走 QOM**（实验性的 Query Object Model，`$` 前缀访问器）——不是浅树：
+ *   结构（select / from / join / where / group_by / having / order_by / limit / offset /
+ *   with）、别名、字段、字面量、常见函数与算子都拍进 `ir.AstNode`；**无源位置**（子节点
+ *   `span = null`）、`text` 是 jOOQ 渲染文本（见 [JooqAstNormalizer] 的三点差异声明）。
  *
- * 引擎私有类型（`Query` / `DSLContext`）**只在本适配器内部出现**。
+ * 引擎私有类型（`Query` / `DSLContext` / `QOM`）**只在本适配器内部出现**。
  */
 public class JooqEngine : SqlEngine {
 
@@ -43,6 +47,7 @@ public class JooqEngine : SqlEngine {
             Feature.PARSE,
             Feature.DIALECT_PARSE,
             Feature.DIALECT_RENDER,
+            Feature.AST_EXPORT,
         ),
         dialects = JooqDialects.ids(),
         reasons = mapOf(
@@ -52,7 +57,6 @@ public class JooqEngine : SqlEngine {
             Feature.VALIDATE_SCHEMA to "不做 schema 语义校验",
             Feature.FIELD_LINEAGE to "字段级血缘由 lineage 模块 + jsqlparser 引擎承担",
             Feature.ERROR_TOLERANT to "jOOQ 解析器不支持误差容忍",
-            Feature.AST_EXPORT to "jOOQ 无公开 SQL AST，不产归一化树（解析主力是 jsqlparser）",
             Feature.PRETTY_PRINT to "渲染固定单行风格，未提供排版开关",
         ),
     )
