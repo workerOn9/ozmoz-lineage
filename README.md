@@ -228,7 +228,7 @@ ozml impact  --graph ./lineage.db --on db.t.c
 `ozml convert` 有**两档实现**（ADR-0004）：
 
 - **Calcite 主力**（`--engine calcite`，缺省）：数仓系 + 常用库，方言 `mysql` / `postgresql` / `oracle` / `hive` / `spark` / `bigquery` / `snowflake` / `duckdb` / `trino` / `mssql`（别名 `tsql`）/ `calcite`。**只承诺注册表里实测过的方言**，`AnsiSqlDialect` 有已知 quoting 缺陷，有意未注册。
-- **jOOQ 第二实现**（`--engine jooq`）：OSS edition 的 11 个可承诺开源方言（`mysql` / `mariadb` / `postgres` / `h2` / `hsqldb` / `firebird` / `sqlite` / `duckdb` / `trino` / `clickhouse` / `yugabytedb`）+ 无方言族 `ansi`；`derby` 在 jOOQ 3.21 弃用待移除（厂商停支持），不承诺；Oracle / Snowflake / 数仓系在 jOOQ OSS **编译期不存在**（不是受限，枚举里没有），不对外预支。归一化树走 jOOQ 的 **QOM**（Query Object Model，`$` 访问器）——结构与常见函数 / 算子都拍得出来（`AST_EXPORT` 能力如实申报）；但与 jsqlparser / calcite 有三点不同：**没有源位置**（子节点无 `span`）、**`text` 是 jOOQ 渲染文本**（不是源文切片）、算子/函数按其接口形状归类、认不出的落 `unknown_node`（保留渲染文本）。
+- **jOOQ 第二实现**（`--engine jooq`）：OSS edition 的 11 个可承诺开源方言（`mysql` / `mariadb` / `postgres` / `h2` / `hsqldb` / `firebird` / `sqlite` / `duckdb` / `trino` / `clickhouse` / `yugabytedb`）+ 无方言族 `ansi`；`derby` 在 jOOQ 3.21 弃用待移除（厂商停支持），不承诺；Oracle / Snowflake / 数仓系在 jOOQ OSS **编译期不存在**（不是受限，枚举里没有），不对外预支。归一化树与**语义模型**都走 jOOQ 的 **QOM**（Query Object Model，`$` 访问器）——结构与常见函数 / 算子都拍得出来（`AST_EXPORT` / `SEMANTIC_MODEL` / `MULTI_STATEMENT` 能力如实申报，`ozml lineage --engine jooq` 与 `/api/lineage` 都能出列级血缘图）。与 jsqlparser / calcite 的**已知差异**（都写进各自 KDoc）：**没有源位置**（`span` 为 null）、`raw` / `text` 是 jOOQ **渲染文本**（不是 Lossless 源文切片）、词表按接口形状归类、认不出的落 `unknown_node` / `SqlExpr.Unknown`；**集合运算（UNION / INTERSECT / EXCEPT）不建模**（QOM 的 `$select()` 只给第一个分支，照它建模会静默漏分支——检测到即拒绝并给原因）；**`WITH c(a, b)` 的显式列清单不携带**；`VALUES` 被 jOOQ 解析成无来源的 SELECT。
 
 ```bash
 ozml convert --from mysql --to postgresql -f q.sql

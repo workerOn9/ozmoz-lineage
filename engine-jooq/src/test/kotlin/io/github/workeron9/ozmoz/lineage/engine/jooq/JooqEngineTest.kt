@@ -26,7 +26,8 @@ class JooqEngineTest {
         assertTrue(engine.capabilities.supports(Feature.DIALECT_RENDER))
         // QOM 归一化树（2026-10-15 起）：不再是浅树，能力表如实申报
         assertTrue(engine.capabilities.supports(Feature.AST_EXPORT))
-        assertTrue(!engine.capabilities.supports(Feature.SEMANTIC_MODEL))
+        // 2026-10-15 起有语义模型（QOM）——血缘图不再是 jsqlparser 专属
+        assertTrue(engine.capabilities.supports(Feature.SEMANTIC_MODEL))
         // OSS 可承诺清单（jOOQ support-matrix 口径；derby 3.21 起弃用待移除，不承诺）
         for (id in listOf("mysql", "mariadb", "postgres", "postgresql", "h2", "hsqldb", "firebird", "sqlite", "duckdb", "trino", "clickhouse", "yugabytedb", "ansi")) {
             assertContains(engine.capabilities.dialects, id)
