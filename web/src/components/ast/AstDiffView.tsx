@@ -59,13 +59,16 @@ export function AstDiffView({
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex border-b border-neutral-200 text-[12px]">
-        <div className="w-1/2 border-r border-neutral-200 px-3 py-1 font-mono text-neutral-600">
-          {leftTitle}
-        </div>
-        <div className="w-1/2 px-3 py-1 font-mono text-neutral-600">{rightTitle}</div>
-      </div>
+      {/* 表头与正文**同一个滚动容器**：正文有纵向滚动条（占宽）而表头没有时，
+          两半的 50% 会差出一个滚动条的宽度，分隔线就对不齐（实测 578 vs 570）。
+          放进同一个 scroller 后两者共享同一 clientWidth，`sticky top-0` 保住常驻可见。 */}
       <div className="min-h-0 flex-1 overflow-auto">
+        <div className="sticky top-0 z-10 flex border-b border-neutral-200 bg-neutral-50 text-[12px]">
+          <div className="w-1/2 border-r border-neutral-200 px-3 py-1 font-mono text-neutral-600">
+            {leftTitle}
+          </div>
+          <div className="w-1/2 px-3 py-1 font-mono text-neutral-600">{rightTitle}</div>
+        </div>
         <div className="flex">
           <div className="w-1/2 min-w-0 border-r border-neutral-200 py-1 font-mono">
             <DiffRow dn={diff.left} depth={0} />
