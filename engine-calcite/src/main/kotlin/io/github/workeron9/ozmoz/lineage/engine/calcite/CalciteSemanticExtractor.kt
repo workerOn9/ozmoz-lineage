@@ -411,6 +411,15 @@ internal class CalciteSemanticExtractor(private val source: String) {
                 span = span,
             )
         }
+        // Calcite 把 SQL 标准的 niladic 日期时间关键字**解析成 `SqlIdentifier`**（本机 probe：
+        // 换任何 Lex / SqlConformance 都一样），于是 `CURRENT_DATE` 会变成一个叫
+        // `current_date` 的列引用——在派生表 / CTE 这类**列可枚举**的来源上就落一条假
+        // unknown「来源没有列: current_date」（jsqlparser 侧把 TimeKeyExpression 记成
+        // 未支持表达式、不产列引用，所以没这一条）。按关键字白名单**如实归为不参与列推导**，
+        // 与 jsqlparser 同口径；非标准的 `SYSDATE` 之类不在此列（那可能是真列名，不猜）。
+        if (identifier.names.size == 1 && identifier.getSimple().lowercase() in NILADIC_DATETIME_KEYWORDS) {
+            return SqlExpr.Unknown(raw, "niladic 日期时间关键字不参与列推导", span)
+        }
         val ref = columnRef(identifier, raw)
             ?: return SqlExpr.Unknown(raw, "标识符缺失列名", span)
         return SqlExpr.Column(ref)
@@ -626,5 +635,21 @@ internal class CalciteSemanticExtractor(private val source: String) {
 
         private val SET_OP_KINDS =
             setOf(SqlKind.UNION, SqlKind.INTERSECT, SqlKind.EXCEPT)
+
+        /**
+         * SQL 标准的 **niladic 日期时间关键字**（不带括号、无参）。Calcite 把它们解析成
+         * `SqlIdentifier`（本机 probe：换任何 Lex / `SqlConformance` 都一样），所以需要
+         * 白名单把它们与真列名区分开——[identifierExpr] 依赖这份名单。
+         *
+         * 只收**标准**关键字：`SYSDATE` / `GETDATE()` 之类是方言函数（Calcite 也按函数解析），
+         * 不在名单里；把非标准名也吞掉就等于猜列名，Never-wrong 不允许。
+         */
+        private val NILADIC_DATETIME_KEYWORDS: Set<String> = setOf(
+            "current_date",
+            "current_time",
+            "current_timestamp",
+            "localtime",
+            "localtimestamp",
+        )
     }
 }
