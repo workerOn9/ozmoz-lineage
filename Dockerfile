@@ -43,8 +43,10 @@ COPY lineage/ ./lineage/
 COPY graph/ ./graph/
 COPY schema/ ./schema/
 COPY format/ ./format/
+COPY pipeline/ ./pipeline/
 COPY cli/ ./cli/
 COPY server/ ./server/
+COPY desktop/ ./desktop/
 COPY bench/ ./bench/
 COPY conformance/ ./conformance/
 # installDist 产出可执行发行版（bin/ozml + lib/），不打测试（测试由 CI 的 build 轴守）。
