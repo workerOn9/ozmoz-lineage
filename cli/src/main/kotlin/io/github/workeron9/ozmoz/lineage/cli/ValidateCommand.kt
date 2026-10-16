@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.cli
 
+import io.github.workeron9.ozmoz.lineage.pipeline.LineagePipeline
+
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult

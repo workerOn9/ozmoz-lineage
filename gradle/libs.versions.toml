@@ -1,6 +1,9 @@
 [versions]
 kotlin = "2.4.20"
 jdk = "25"
+compose-plugin = "1.12.1"
+# material3 的发行版本独立于 compose 插件（1.12.1 插件内对应 1.9.0，取自插件实现）。
+compose-material3 = "1.9.0"
 ktor = "3.5.2"
 clikt = "5.1.0"
 serialization = "1.11.0"
@@ -40,4 +43,7 @@ jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-plugin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

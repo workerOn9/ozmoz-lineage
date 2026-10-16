@@ -1,4 +1,4 @@
-package io.github.workeron9.ozmoz.lineage.cli
+package io.github.workeron9.ozmoz.lineage.pipeline
 
 import io.github.workeron9.ozmoz.lineage.engine.jsqlparser.JSqlParserEngine
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 /**
  * 端到端：真实引擎（`engine-jsqlparser`）产出语义模型 → `lineage` 建作用域树。
  *
- * 这一层在 `cli`（组合根）验证，避免 `lineage` 反向依赖任何引擎适配器
+ * 这一层在 `pipeline`（编排层）验证，避免 `lineage` 反向依赖任何引擎适配器
  * （依赖铁律：`lineage` 只依赖 `ir` + `engine-api` + `schema` SPI）。
  */
 class LineagePipelineTest {
@@ -80,12 +80,12 @@ class LineagePipelineTest {
 
     @Test
     fun `autoSchema 从输入文本收集 CREATE TABLE`() {
-        val inputs = listOf(
-            "schema.sql" to "CREATE TABLE t (a INT, b INT)",
-            "query.sql" to "SELECT * FROM t",
+        val schema = LineagePipeline.autoSchema(
+            listOf(
+                "CREATE TABLE t (a INT, b INT)",
+                "SELECT * FROM t",
+            ),
         )
-
-        val schema = LineagePipeline.autoSchema(inputs)
 
         assertNotNull(schema)
         assertEquals(listOf("a", "b"), schema.table(io.github.workeron9.ozmoz.lineage.ir.TableRef(raw = "t", canonical = "t", name = "t"))!!.columns.map { it.name })
@@ -96,13 +96,13 @@ class LineagePipelineTest {
         // 坏文件不影响其余文件的收集（读取侧已按文件 WARN，schema 不二次报错）。
         val schema = LineagePipeline.autoSchema(
             listOf(
-                "bad.sql" to "THIS IS NOT SQL",
-                "ok.sql" to "CREATE TABLE t (a INT)",
+                "THIS IS NOT SQL",
+                "CREATE TABLE t (a INT)",
             ),
         )
         assertNotNull(schema)
 
-        assertNull(LineagePipeline.autoSchema(listOf("query.sql" to "SELECT 1")))
+        assertNull(LineagePipeline.autoSchema(listOf("SELECT 1")))
         assertNull(LineagePipeline.autoSchema(emptyList()))
     }
 

@@ -1,5 +1,10 @@
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
+    // 桌面模块（desktop/）用的插件也在这里声明：同一构建里 Kotlin 插件只能有一个版本，
+    // 在 root 声明 = 让所有子项目共享同一个版本，子项目再用 alias 时不再各自解析。
+    alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.compose.multiplatform) apply false
 }
 
 val jdkVersion = libs.versions.jdk.get().toInt()

@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.server
 
+import io.github.workeron9.ozmoz.lineage.pipeline.LineagePipeline
+
 import io.github.workeron9.ozmoz.lineage.engine.Feature
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
 import io.github.workeron9.ozmoz.lineage.format.LineageExporters
@@ -59,7 +61,7 @@ public fun Application.serverModule(
         }
 
         get("/api/engines") {
-            call.respond(ServerPipeline.allEngines().map { EngineReport.from(it) })
+            call.respond(LineagePipeline.allEngines().map { EngineReport.from(it) })
         }
 
         post("/api/graphs") {
@@ -87,10 +89,10 @@ public fun Application.serverModule(
 
         post("/api/parse") {
             val query = call.receiveQuery<ParseQuery>() ?: return@post call.badRequest("invalid_request", bodyShape("sql"))
-            val engine = ServerPipeline.engineById(query.engine ?: ServerPipeline.DEFAULT_ENGINE)
+            val engine = LineagePipeline.engineById(query.engine ?: LineagePipeline.DEFAULT_ENGINE)
                 ?: return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
             // 解析失败（诊断 ERROR）不是 HTTP 错误——错误进 diagnostics，仍是 200。
-            val outcome = ServerPipeline.parse(query.sql, engine, query.dialect)
+            val outcome = LineagePipeline.parse(query.sql, engine, query.dialect)
             call.respond(ParseReportDto(outcome.root, outcome.tables, outcome.diagnostics))
         }
 
@@ -141,29 +143,29 @@ public fun Application.serverModule(
                     reason = "aggregate=true 返回合并图 JSON，与非 json 的 format 导出互斥（format 与缺省同义时可用）",
                 )
             }
-            val engine = ServerPipeline.engineById(query.engine ?: ServerPipeline.DEFAULT_ENGINE)
+            val engine = LineagePipeline.engineById(query.engine ?: LineagePipeline.DEFAULT_ENGINE)
                 ?: return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
             val schema = query.schema?.let {
                 try {
-                    ServerPipeline.schemaFromInlineDdl(it)
+                    LineagePipeline.schemaFromInlineDdl(it)
                 } catch (e: Exception) {
                     return@post call.badRequest("invalid_schema", e.message ?: e.toString())
                 }
             }
-            when (val built = ServerPipeline.models(sql, engine, query.dialect, schema)) {
+            when (val built = LineagePipeline.models(sql, engine, query.dialect, schema ?: LineagePipeline.autoSchema(listOf(sql)))) {
                 // 整段语法解析失败：错误是数据（reason + span），200，不是 4xx。
                 is Resolved.Unknown -> call.respond(UnknownReport(unknown = built))
                 is Resolved.Known -> when {
                     // opt-in 聚合（2026-10-10 拍板）：不论语句数统一回合并图，
                     // 与 CLI `ozml lineage --format graph-json` 同形；0 条仍 422。
-                    query.aggregate && built.value.isNotEmpty() ->
-                        call.respond(GraphReportDto.from(LineageGraph.of(built.value)))
-                    built.value.isEmpty() -> call.respondUnprocessableEntity(
+                    query.aggregate && built.value.models.isNotEmpty() ->
+                        call.respond(GraphReportDto.from(LineageGraph.of(built.value.models)))
+                    built.value.models.isEmpty() -> call.respondUnprocessableEntity(
                         error = "no_modelable_statement",
                         reason = "未从输入提取到可建模的语句（可能只含 DDL / MERGE 等不产出列级血缘的语句）",
                     )
-                    built.value.size == 1 -> {
-                        val model = built.value.single()
+                    built.value.models.size == 1 -> {
+                        val model = built.value.models.single()
                         if (exporter == null) {
                             call.respond(model)
                         } else {
@@ -176,7 +178,7 @@ public fun Application.serverModule(
                         error = "multi_statement_input",
                         reason = "HTTP 层缺省只接受一条可建模语句（多语句用 aggregate=true 拿合并图）或用 CLI " +
                             "（ozml lineage -f <目录> --graph <db>）落库后查询",
-                        statementCount = built.value.size,
+                        statementCount = built.value.models.size,
                     )
                 }
             }
@@ -184,7 +186,7 @@ public fun Application.serverModule(
 
         post("/api/validate") {
             val query = call.receiveQuery<ValidateQuery>() ?: return@post call.badRequest("invalid_request", bodyShape("sql"))
-            val engine = ServerPipeline.engineById(query.engine ?: ValidateReportDto.DEFAULT_ENGINE)
+            val engine = LineagePipeline.engineById(query.engine ?: ValidateReportDto.DEFAULT_ENGINE)
                 ?: return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
             // 能力表路由：引擎没申报 VALIDATE_SCHEMA 直接给可解释的 400（与 CLI 的
             // UsageError 同惯例，不靠异常碰运气）。reason 带出引擎自陈的不支持原因。
@@ -193,14 +195,14 @@ public fun Application.serverModule(
             }
             val schema = query.schema?.let {
                 try {
-                    ServerPipeline.schemaFromInlineDdl(it)
+                    LineagePipeline.schemaFromInlineDdl(it)
                 } catch (e: Exception) {
                     return@post call.badRequest("invalid_schema", e.message ?: e.toString())
                 }
             }
             // 形状恒定：跑成（Known）与没跑成（Unknown）都回 {engine, dialect, diagnostics}；
             // 后者落一条 validate.skipped ERROR（与 CLI 的 stderr 口径一致，Never-wrong）。
-            val diagnostics = when (val result = ServerPipeline.validate(query.sql, engine, query.dialect, schema)) {
+            val diagnostics = when (val result = LineagePipeline.validate(query.sql, engine, query.dialect, schema ?: LineagePipeline.autoSchema(listOf(query.sql)))) {
                 is Resolved.Known -> result.value
                 is Resolved.Unknown -> listOf(
                     Diagnostic(
@@ -217,7 +219,7 @@ public fun Application.serverModule(
 
         post("/api/format") {
             val query = call.receiveQuery<FormatQuery>() ?: return@post call.badRequest("invalid_request", bodyShape("sql"))
-            val engine = ServerPipeline.engineById(query.engine ?: FormatReportDto.DEFAULT_ENGINE)
+            val engine = LineagePipeline.engineById(query.engine ?: FormatReportDto.DEFAULT_ENGINE)
                 ?: return@post call.badRequest("unknown_engine", "未注册的引擎：${query.engine}")
             // 能力表路由：引擎没申报 PRETTY_PRINT 直接给可解释的 400（与 CLI 同惯例）。
             engine.capabilities.reason(Feature.PRETTY_PRINT)?.let { reason ->
@@ -225,7 +227,7 @@ public fun Application.serverModule(
             }
             // 形状恒定：跑成（Known）与没跑成（Unknown）都回 {engine, dialect, sql, diagnostics}；
             // 后者 sql=null，落一条 format.skipped ERROR（与 CLI 的 stderr 口径一致）。
-            val report = when (val result = ServerPipeline.format(query.sql, engine, query.dialect, query.multiline)) {
+            val report = when (val result = LineagePipeline.format(query.sql, engine, query.dialect, query.multiline)) {
                 is Resolved.Known -> FormatReportDto(
                     engine = engine.id,
                     dialect = query.dialect,
@@ -384,12 +386,12 @@ internal fun modelsToGraph(
     dialect: String?,
     schema: SchemaProvider?,
 ): LineageGraph {
-    val built = ServerPipeline.models(sql, engine, dialect, schema)
+    val built = LineagePipeline.models(sql, engine, dialect, schema ?: LineagePipeline.autoSchema(listOf(sql)))
     val models: List<LineageModel> = when (built) {
         // 语法错误：同样当数据返回 200 unknown（与 /api/lineage 的取舍一致）。
         is Resolved.Unknown -> throw SemanticUnavailable(built.reason)
         is Resolved.Known -> {
-            if (built.value.isEmpty()) throw NoModelableStatement() else built.value
+            if (built.value.models.isEmpty()) throw NoModelableStatement() else built.value.models
         }
     }
     return LineageGraph.of(models)
@@ -431,13 +433,13 @@ private suspend fun ApplicationCall.resolveGraph(
     graphName != null -> loadStoredGraph(graphRoot, graphName)
     // 未注册引擎在建图**之前**短路（旧契约不变）；graph 模式不适用——库里的模型已定型，
     // engine / dialect / schema 一并忽略（ADR-0015）。
-    engineId != null && ServerPipeline.engineById(engineId) == null -> {
+    engineId != null && LineagePipeline.engineById(engineId) == null -> {
         badRequest("unknown_engine", "未注册的引擎：$engineId")
         null
     }
     else -> buildGraphFromSql(
         sql = sql!!,
-        engine = ServerPipeline.engineById(engineId ?: ServerPipeline.DEFAULT_ENGINE)!!,
+        engine = LineagePipeline.engineById(engineId ?: LineagePipeline.DEFAULT_ENGINE)!!,
         dialect = dialect,
         build = build,
     )
