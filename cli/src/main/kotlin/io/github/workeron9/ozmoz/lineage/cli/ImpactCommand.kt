@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.cli
 
+import io.github.workeron9.ozmoz.lineage.pipeline.LineagePipeline
+
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
@@ -138,7 +140,7 @@ public class ImpactCommand : CliktCommand(name = "impact") {
         }
         val inputs = LineagePipeline.readInputs(path)
         // 显式 --schema 永远优先；未给出时从输入文本顺手收集 CREATE TABLE（可能为 null）。
-        val schema: SchemaProvider? = schemaPath?.let { LineagePipeline.schema(it) } ?: LineagePipeline.autoSchema(inputs)
+        val schema: SchemaProvider? = schemaPath?.let { LineagePipeline.schema(it) } ?: LineagePipeline.autoSchema(inputs.map { it.second })
         val single = inputs.size == 1
         val models = ArrayList<LineageModel>()
         for ((source, text) in inputs) {

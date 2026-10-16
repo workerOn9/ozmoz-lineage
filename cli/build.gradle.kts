@@ -25,6 +25,7 @@ dependencies {
     implementation(project(":graph"))
     implementation(project(":server"))
     implementation(project(":conformance"))
+    implementation(project(":pipeline"))
     implementation(libs.clikt)
     implementation(libs.serialization.json)
 }

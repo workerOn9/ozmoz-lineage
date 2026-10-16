@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.cli
 
+import io.github.workeron9.ozmoz.lineage.pipeline.LineagePipeline
+
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
@@ -131,7 +133,7 @@ public class LineageCommand : CliktCommand(name = "lineage") {
 
         val inputs = LineagePipeline.readInputs(file)
         // 显式 --schema 永远优先；未给出时从输入文本顺手收集 CREATE TABLE（可能为 null）。
-        val schema = schemaPath?.let { LineagePipeline.schema(it) } ?: LineagePipeline.autoSchema(inputs)
+        val schema = schemaPath?.let { LineagePipeline.schema(it) } ?: LineagePipeline.autoSchema(inputs.map { it.second })
 
         if (incremental) {
             runIncremental(engine, inputs, schema)
@@ -253,7 +255,7 @@ public class LineageCommand : CliktCommand(name = "lineage") {
         val files: List<Pair<String, String>> = inputs.map { (source, text) ->
             requireNotNull(source) { "增量模式收到无来源输入（stdin 未被拦截）" } to text
         }
-        val context = LineagePipeline.contextDigest(engineId, dialect, schemaPath, noSourceEdges, tolerant, inputs)
+        val context = LineagePipeline.contextDigest(engineId, dialect, schemaPath, noSourceEdges, tolerant, inputs.map { it.second })
         val inputSources = files.map { it.first }.toSet()
         var reused = 0
         var parsed = 0

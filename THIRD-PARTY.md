@@ -63,6 +63,25 @@
 
 `sqlite-jdbc` 自身为 Apache-2.0（[POM](https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.53.4.0/sqlite-jdbc-3.53.4.0.pom)）；其内嵌的 SQLite 内核属 **Public Domain**。本项目以**未修改的独立依赖**方式使用（JDBC 驱动），不内联、不 fork。
 
+## 桌面端运行时依赖（`desktop/`，2026-10-16 随 D1 引入）
+
+桌面包里是 Compose Multiplatform 的 JVM/桌面产物，以及它带进来的 androidx 坐标（逐条核对上游 POM 原文）：
+
+| 依赖 | 版本 | 许可证 | 用途 |
+|---|---|---|---|
+| [Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform)（`org.jetbrains.compose.*`：runtime / foundation / material3 / ui / animation / material / desktop） | 1.12.1（material3 走独立版本线 1.9.0） | Apache-2.0 | 桌面 UI 框架（ADR-0022 选型） |
+| [Skiko](https://github.com/JetBrains/skiko)（skiko / skiko-awt / skiko-awt-runtime-&lt;平台&gt;） | 0.150.1 | Apache-2.0 | Compose 的渲染后端（Skia 的 Kotlin 绑定，含各平台原生库） |
+| [androidx](https://developer.android.com/jetpack/androidx)（`androidx.compose.runtime` / `androidx.collection` / `androidx.annotation` / `androidx.lifecycle` / `androidx.savedstate` / `androidx.navigationevent` / `androidx.arch.core`，Compose 桌面产物的**直接依赖**） | 以解析结果为准（2026-10-16：runtime-desktop 1.12.1 / lifecycle 2.11.0 / collection 1.5.0 / annotation 1.9.1 / savedstate 1.4.0） | Apache-2.0 | Compose 桌面实现的底层坐标 |
+| [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime)（material3 传递） | 0.7.1 | Apache-2.0 | material3 日期组件的日期时间类型 |
+| [atomicfu](https://github.com/Kotlin/kotlinx-atomicfu)（Compose 传递） | 0.28.0 | Apache-2.0 | 无锁状态的原子操作抽象 |
+| [JBR API](https://github.com/JetBrains/JetBrainsRuntimeApi)（skiko 传递） | 1.9.0 | Apache-2.0 | JetBrains Runtime 的运行时 API（非 JBR 上走可选路径） |
+| [jspecify](https://github.com/jspecify/jspecify)（kotlin-stdlib / Compose 传递） | 1.0.0 | Apache-2.0 | 空安全注解 |
+| [JetBrains annotations](https://github.com/JetBrains/java-annotations) | 23.0.0（与前述 13.0 并存） | Apache-2.0 | 编译期注解 |
+
+> **仓库声明**：`desktop/` 模块自己声明了 `google()`（见 `desktop/build.gradle.kts` 注释）——`androidx.compose.runtime:runtime-desktop` 这类坐标**只发布在 Google Maven**，Maven Central 上没有（2026-10-16 实测 `runtime-desktop-1.12.1.pom` 在 repo1.maven.org 返回 404）。除这一处外，桌面模块的依赖都在 Maven Central。
+> 既有行已覆盖的 `kotlinx.coroutines`（桌面侧解析到 1.9.0）与 `kotlinx.serialization` 不重复登记。
+> **尚未做**：ProGuard/R8 收缩、三平台打包（D4）与随之而来的新依赖（keychain 库等）——引入时按本文规则补行。
+
 ## 前端运行时依赖（`web/`，2026-10-10 随 M4 引入）
 
 打进 `web/dist` 的浏览器端依赖（版本以 `web/package-lock.json` 为准，许可证逐条核对上游）：

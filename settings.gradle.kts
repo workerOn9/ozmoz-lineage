@@ -28,8 +28,10 @@ include(
     "graph",
     "schema",
     "format",
+    "pipeline",
     "cli",
     "server",
+    "desktop",
     "bench",
     "conformance",
 )

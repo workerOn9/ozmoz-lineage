@@ -15,6 +15,7 @@ dependencies {
     implementation(project(":schema"))
     implementation(project(":graph"))
     implementation(project(":format"))
+    implementation(project(":pipeline"))
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
     implementation(libs.ktor.server.content.negotiation)

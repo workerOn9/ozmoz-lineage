@@ -1,5 +1,7 @@
 package io.github.workeron9.ozmoz.lineage.server
 
+import io.github.workeron9.ozmoz.lineage.pipeline.LineagePipeline
+
 import io.github.workeron9.ozmoz.lineage.engine.Feature
 import io.github.workeron9.ozmoz.lineage.engine.RenderRequest
 import io.github.workeron9.ozmoz.lineage.engine.SqlEngine
@@ -252,12 +254,12 @@ public object OzmlMcpServer {
      * impact / path 是 jsqlparser；validate / convert 是 calcite）。
      */
     private fun engineOrFail(a: Map<String, Any?>, defaultId: String): SqlEngine? =
-        ServerPipeline.engineById(strArg(a, "engine") ?: defaultId)
+        LineagePipeline.engineById(strArg(a, "engine") ?: defaultId)
 
     // ———————————————————— 各工具实现（语义镜像 Routes.kt，sql-only 子集） ————————————————————
 
     private fun handleEngines(request: McpSchema.CallToolRequest): McpSchema.CallToolResult {
-        val reports = ServerPipeline.allEngines().map { engine ->
+        val reports = LineagePipeline.allEngines().map { engine ->
             EngineReport(
                 id = engine.id,
                 features = Feature.entries.filter { engine.capabilities.supports(it) }.map { it.name },
@@ -271,35 +273,35 @@ public object OzmlMcpServer {
     private fun handleParse(request: McpSchema.CallToolRequest): McpSchema.CallToolResult {
         val a = args(request)
         val sql = requiredSql(a) ?: return fail("invalid_request", "缺少非空 sql 参数")
-        val engine = engineOrFail(a, ServerPipeline.DEFAULT_ENGINE)
+        val engine = engineOrFail(a, LineagePipeline.DEFAULT_ENGINE)
             ?: return fail("unknown_engine", "未注册的引擎：${strArg(a, "engine")}")
-        val outcome = ServerPipeline.parse(sql, engine, strArg(a, "dialect"))
+        val outcome = LineagePipeline.parse(sql, engine, strArg(a, "dialect"))
         return ok(ServerJson.json.encodeToString(ParseReportDto(outcome.root, outcome.tables, outcome.diagnostics)))
     }
 
     private fun handleLineage(request: McpSchema.CallToolRequest): McpSchema.CallToolResult {
         val a = args(request)
         val sql = requiredSql(a) ?: return fail("invalid_request", "缺少非空 sql 参数")
-        val engine = engineOrFail(a, ServerPipeline.DEFAULT_ENGINE)
+        val engine = engineOrFail(a, LineagePipeline.DEFAULT_ENGINE)
             ?: return fail("unknown_engine", "未注册的引擎：${strArg(a, "engine")}")
         val schema = when (val s = inlineSchema(a)) {
             is SchemaOutcome.Ok -> s.provider
             is SchemaOutcome.Invalid -> return fail("invalid_schema", "内联 DDL 解析失败：${s.message}")
         }
-        return when (val built = ServerPipeline.models(sql, engine, strArg(a, "dialect"), schema)) {
+        return when (val built = LineagePipeline.models(sql, engine, strArg(a, "dialect"), schema ?: LineagePipeline.autoSchema(listOf(sql)))) {
             // 整段语法解析失败：错误是数据（reason + span），isError=false（与 /api/lineage 同取舍）。
             is Resolved.Unknown -> ok(ServerJson.json.encodeToString(UnknownReport(unknown = built)))
             is Resolved.Known -> when {
                 // opt-in 聚合（与 /api/lineage 的 aggregate=true 同义）：多语句合并图。
-                boolArg(a, "aggregate", false) && built.value.isNotEmpty() ->
-                    ok(ServerJson.json.encodeToString(GraphReportDto.from(LineageGraph.of(built.value))))
-                built.value.isEmpty() ->
+                boolArg(a, "aggregate", false) && built.value.models.isNotEmpty() ->
+                    ok(ServerJson.json.encodeToString(GraphReportDto.from(LineageGraph.of(built.value.models))))
+                built.value.models.isEmpty() ->
                     fail("no_modelable_statement", "未从输入提取到可建模的语句（可能只含 DDL / MERGE 等不产出列级血缘的语句）")
-                built.value.size == 1 -> ok(ServerJson.json.encodeToString(built.value.single()))
+                built.value.models.size == 1 -> ok(ServerJson.json.encodeToString(built.value.models.single()))
                 else -> fail(
                     "multi_statement_input",
                     "输入含多条可建模语句：传 aggregate=true 拿合并图，或拆开逐条调用",
-                    built.value.size,
+                    built.value.models.size,
                 )
             }
         }
@@ -313,7 +315,7 @@ public object OzmlMcpServer {
             ?: return fail("invalid_direction", "direction 必须是 upstream / downstream / both")
         val depth = intArg(a, "depth")
         if (depth != null && depth < 0) return fail("invalid_depth", "depth 不能为负数")
-        val engine = engineOrFail(a, ServerPipeline.DEFAULT_ENGINE)
+        val engine = engineOrFail(a, LineagePipeline.DEFAULT_ENGINE)
             ?: return fail("unknown_engine", "未注册的引擎：${strArg(a, "engine")}")
         val schema = when (val s = inlineSchema(a)) {
             is SchemaOutcome.Ok -> s.provider
@@ -340,7 +342,7 @@ public object OzmlMcpServer {
         val to = strArg(a, "to") ?: return fail("invalid_request", "缺少 to 参数（终点列 id）")
         val direction = parseDirection(strArg(a, "direction"), Direction.DOWNSTREAM)
             ?: return fail("invalid_direction", "direction 必须是 upstream / downstream / both")
-        val engine = engineOrFail(a, ServerPipeline.DEFAULT_ENGINE)
+        val engine = engineOrFail(a, LineagePipeline.DEFAULT_ENGINE)
             ?: return fail("unknown_engine", "未注册的引擎：${strArg(a, "engine")}")
         val schema = when (val s = inlineSchema(a)) {
             is SchemaOutcome.Ok -> s.provider
@@ -385,7 +387,7 @@ public object OzmlMcpServer {
         }
         // 形状恒定：跑成（Known）与没跑成（Unknown）都回 ValidateReportDto；
         // 后者落一条 validate.skipped ERROR（validate 的产物本身就是诊断流）。
-        val diagnostics = when (val result = ServerPipeline.validate(sql, engine, strArg(a, "dialect"), schema)) {
+        val diagnostics = when (val result = LineagePipeline.validate(sql, engine, strArg(a, "dialect"), schema ?: LineagePipeline.autoSchema(listOf(sql)))) {
             is Resolved.Known -> result.value
             is Resolved.Unknown -> listOf(
                 Diagnostic(
@@ -415,7 +417,7 @@ public object OzmlMcpServer {
         }
         val multiline = boolArg(a, "multiline", true)
         // 形状恒定：跑成（Known）与没跑成（Unknown）都回 FormatReportDto；后者 sql=null。
-        val report = when (val result = ServerPipeline.format(sql, engine, strArg(a, "dialect"), multiline)) {
+        val report = when (val result = LineagePipeline.format(sql, engine, strArg(a, "dialect"), multiline)) {
             is Resolved.Known -> FormatReportDto(
                 engine = engine.id,
                 dialect = strArg(a, "dialect"),
@@ -504,7 +506,7 @@ public object OzmlMcpServer {
     private fun inlineSchema(a: Map<String, Any?>): SchemaOutcome {
         val text = strArg(a, "schema") ?: return SchemaOutcome.Ok(null)
         return try {
-            SchemaOutcome.Ok(ServerPipeline.schemaFromInlineDdl(text))
+            SchemaOutcome.Ok(LineagePipeline.schemaFromInlineDdl(text))
         } catch (e: Exception) {
             SchemaOutcome.Invalid(e.message ?: e.toString())
         }

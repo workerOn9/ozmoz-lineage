@@ -46,9 +46,6 @@ dist/
 *.tsbuildinfo
 coverage/
 
-# —— 桌面壳（desktop/，M5 才用）——
-target/
-
 # —— 本项目产物 ——
 /conformance/out/
 /local/
