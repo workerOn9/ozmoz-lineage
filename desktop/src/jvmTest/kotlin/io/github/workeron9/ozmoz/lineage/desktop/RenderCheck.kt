@@ -77,6 +77,24 @@ class RenderCheck {
         render("workspace-agent", ThemeMode.DARK, state)
     }
 
+    /** 窄窗：侧栏应自动收起（用户 2026-10-19 反馈展开态 220dp 在窄窗里不协调）。 */
+    @Test
+    fun renderWorkspaceNarrow() {
+        if (!enabled) return
+        val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.LIGHT))
+        state.runAnalysis()
+        render("workspace-narrow", ThemeMode.LIGHT, state, width = 900, height = 760)
+    }
+
+    /** 最小窗口（960×640）：侧栏收起后三栏仍要能看。 */
+    @Test
+    fun renderWorkspaceMinimum() {
+        if (!enabled) return
+        val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.DARK))
+        state.runAnalysis()
+        render("workspace-minimum", ThemeMode.DARK, state, width = 960, height = 640)
+    }
+
     @Test
     fun renderSettingsComfortable() {
         if (!enabled) return
@@ -161,9 +179,15 @@ class RenderCheck {
         }
     }
 
-    private fun render(name: String, mode: ThemeMode, state: WorkbenchState) {
+    private fun render(
+        name: String,
+        mode: ThemeMode,
+        state: WorkbenchState,
+        width: Int = 1280,
+        height: Int = 820,
+    ) {
         val out = File(System.getProperty("java.io.tmpdir"), "ozml-desktop-$name.png")
-        val scene = ImageComposeScene(width = 1280, height = 820, density = Density(1f)) {
+        val scene = ImageComposeScene(width = width, height = height, density = Density(1f)) {
             DesktopTheme(mode = mode) { AppContent(state) }
         }
         try {

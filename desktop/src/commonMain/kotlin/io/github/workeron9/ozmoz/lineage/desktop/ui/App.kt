@@ -2,12 +2,14 @@ package io.github.workeron9.ozmoz.lineage.desktop.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,43 +63,60 @@ public fun App(initial: OpenedFile? = null) {
     }
 }
 
+/**
+ * 侧栏展开所需的最小窗口宽度。M3 的展开态侧栏固定 220dp 起（`NavigationRailExpandedTokens`
+ * 的 ContainerWidthMinimum），窗口一窄就吃掉四分之一屏——所以窄窗强制收起（96dp，只剩图标）。
+ */
+private val RailExpandMinWidth = 1024.dp
+
 /** 壳层内容（主题与副作用在外面）：离屏渲染与 UI 测试直接驱动它。 */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun AppContent(state: WorkbenchState) {
-    var railExpanded by remember { mutableStateOf(true) }
-    val railState = rememberWideNavigationRailState(WideNavigationRailValue.Expanded)
-    LaunchedEffect(railExpanded) {
-        if (railExpanded) railState.expand() else railState.collapse()
-    }
-    val railIsExpanded = railState.currentValue == WideNavigationRailValue.Expanded
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wideEnough = maxWidth >= RailExpandMinWidth
+        var userExpanded by remember { mutableStateOf(true) }
+        // 窄窗一律收起：展开态的 220dp 侧栏在小窗口里不协调（用户 2026-10-19 反馈的截图）。
+        val railExpanded = wideEnough && userExpanded
+        // 初值就按目标态：否则第一帧是展开的，窄窗上会闪一下 220dp 的侧栏。
+        val railState = rememberWideNavigationRailState(
+            if (railExpanded) WideNavigationRailValue.Expanded else WideNavigationRailValue.Collapsed,
+        )
+        LaunchedEffect(railExpanded) {
+            if (railExpanded) railState.expand() else railState.collapse()
+        }
+        val railIsExpanded = railState.currentValue == WideNavigationRailValue.Expanded
 
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Row(Modifier.fillMaxSize()) {
-            WideNavigationRail(
-                state = railState,
-                // 缺省是 Arrangement.Center：桌面侧栏里「目的地」要贴顶。
-                arrangement = Arrangement.Top,
-                header = { RailHeader(railIsExpanded) { railExpanded = !railExpanded } },
-            ) {
-                for (destination in Page.entries) {
-                    WideNavigationRailItem(
-                        selected = state.page == destination,
-                        onClick = { state.page = destination },
-                        icon = { Icon(destination.icon, contentDescription = destination.label) },
-                        label = { Text(destination.label) },
-                        railExpanded = railIsExpanded,
-                    )
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Row(Modifier.fillMaxSize()) {
+                WideNavigationRail(
+                    state = railState,
+                    // 缺省是 Arrangement.Center：桌面侧栏里「目的地」要贴顶。
+                    arrangement = Arrangement.Top,
+                    header = {
+                        // 窄窗下折叠按钮点了也没用（展开会被宽度规则收回去），直接不画。
+                        if (wideEnough) RailHeader(railIsExpanded) { userExpanded = !userExpanded }
+                    },
+                ) {
+                    for (destination in Page.entries) {
+                        WideNavigationRailItem(
+                            selected = state.page == destination,
+                            onClick = { state.page = destination },
+                            icon = { Icon(destination.icon, contentDescription = destination.label) },
+                            label = { Text(destination.label) },
+                            railExpanded = railIsExpanded,
+                        )
+                    }
                 }
-            }
-            VerticalDivider()
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                OzmlTopBar(state)
-                when (state.page) {
-                    Page.WORKSPACE -> WorkspacePage(state)
-                    Page.CONNECTION -> ConnectionPage(state)
-                    Page.AGENT -> AgentPage(state)
-                    Page.SETTINGS -> SettingsPage(state)
+                VerticalDivider()
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    OzmlTopBar(state, compact = !wideEnough)
+                    when (state.page) {
+                        Page.WORKSPACE -> WorkspacePage(state)
+                        Page.CONNECTION -> ConnectionPage(state)
+                        Page.AGENT -> AgentPage(state)
+                        Page.SETTINGS -> SettingsPage(state)
+                    }
                 }
             }
         }
@@ -106,7 +125,12 @@ internal fun AppContent(state: WorkbenchState) {
 
 @Composable
 private fun RailHeader(expanded: Boolean, onToggle: () -> Unit) {
-    Box(Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) {
+    // **不能** fillMaxWidth：WideNavigationRail 用最宽子项算展开宽度，header 撑满整窗时
+    // 侧栏会一路涨到 360dp 上限（D2 首版实测）。限制在展开态最小宽度 220dp。
+    Box(
+        Modifier.widthIn(max = 220.dp).fillMaxWidth().height(56.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         IconButton(onClick = onToggle) {
             Icon(
                 Icons.Chevron,

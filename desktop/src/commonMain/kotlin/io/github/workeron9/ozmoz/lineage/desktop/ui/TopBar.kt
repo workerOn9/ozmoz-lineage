@@ -40,7 +40,7 @@ import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionStatus
  */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-internal fun OzmlTopBar(state: WorkbenchState) {
+internal fun OzmlTopBar(state: WorkbenchState, compact: Boolean = false) {
     val tokens = LocalTokens.current
     val density = LocalUiDensity.current
     TopAppBar(
@@ -64,14 +64,17 @@ internal fun OzmlTopBar(state: WorkbenchState) {
             if (state.page == Page.WORKSPACE) {
                 EngineSelector(state)
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Text("容错", fontSize = density.bodySize, color = tokens.textMuted)
-                    Spacer(Modifier.width(6.dp))
+                    // 窄窗省掉文字标签（开关本身留着——它现在只有这一个家）。
+                    if (!compact) {
+                        Text("容错", fontSize = density.bodySize, color = tokens.textMuted)
+                        Spacer(Modifier.width(6.dp))
+                    }
                     Switch(checked = state.tolerant, onCheckedChange = { state.tolerant = it })
                 }
-                Button(onClick = { state.pickFile() }) { Text("打开 SQL 文件") }
+                Button(onClick = { state.pickFile() }) { Text(if (compact) "打开" else "打开 SQL 文件") }
                 Spacer(Modifier.width(8.dp))
             }
-            ConnectionIndicator(state)
+            ConnectionIndicator(state, compact = compact)
             Spacer(Modifier.width(12.dp))
         },
     )
@@ -101,7 +104,7 @@ private fun EngineSelector(state: WorkbenchState) {
 
 /** 连接状态指示器：绿点 = 有一条连接在线；点它去连接页。 */
 @Composable
-private fun ConnectionIndicator(state: WorkbenchState) {
+private fun ConnectionIndicator(state: WorkbenchState, compact: Boolean = false) {
     val tokens = LocalTokens.current
     val density = LocalUiDensity.current
     val online = state.store.connections.filter { state.connectionRuntime(it.id).status == ConnectionStatus.ONLINE }
@@ -116,12 +119,14 @@ private fun ConnectionIndicator(state: WorkbenchState) {
         modifier = Modifier.clickable { state.page = Page.CONNECTION }.padding(horizontal = 6.dp),
     ) {
         Box(Modifier.size(8.dp).background(color, CircleShape))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            active?.name ?: if (state.store.connections.isEmpty()) "无连接" else "${online.size} 条在线",
-            fontSize = density.bodySize,
-            color = tokens.textMuted,
-        )
+        if (!compact) {
+            Spacer(Modifier.width(6.dp))
+            Text(
+                active?.name ?: if (state.store.connections.isEmpty()) "无连接" else "${online.size} 条在线",
+                fontSize = density.bodySize,
+                color = tokens.textMuted,
+            )
+        }
     }
 }
 

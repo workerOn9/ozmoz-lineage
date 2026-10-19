@@ -114,7 +114,7 @@ internal fun GraphPanel(
             // 不用 PanelHeader：它 fillMaxWidth，会把同一行的图例挤成一条竖线（离屏渲染实测）。
             // weight：图例先量（不带 weight 的子项先测），标题拿剩下的宽度并省略。
             Text(
-                "血缘图 · ${placed.size} 列 / ${analysis.flows.size} 边 · 点节点或边看详情",
+                "血缘图 · ${placed.size} 列 / ${analysis.flows.size} 边",
                 color = tokens.textFaint,
                 fontFamily = FontFamily.Monospace,
                 fontSize = uiDensity.bodySize,
