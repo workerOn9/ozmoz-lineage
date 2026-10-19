@@ -28,7 +28,10 @@ internal object Icons {
         rect(16f, 13f, 20f, 20f)
     }.build()
 
-    /** 连接：数据库圆柱（上椭圆 + 侧壁 + 两道环）。 */
+    /**
+     * 连接：数据库圆柱。**画成描边**——实心填充时，同样用黑色描边的两道环会被填色盖住，
+     * 24dp 下就是一个圆角方块（离屏渲染实测）。
+     */
     val Database: ImageVector = ImageVector.Builder(
         name = "Database",
         defaultWidth = 24.dp,
@@ -36,10 +39,34 @@ internal object Icons {
         viewportWidth = 24f,
         viewportHeight = 24f,
     ).apply {
-        ellipse(cx = 12f, cy = 6.2f, rx = 7.2f, ry = 3.2f)
-        rect(4.8f, 6.2f, 19.2f, 16.4f)
-        ring(cy = 10.6f, rx = 7.2f, ry = 3.2f)
-        ring(cy = 14.6f, rx = 7.2f, ry = 3.2f)
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.6f,
+            strokeLineCap = StrokeCap.Round,
+        ) {
+            // 上椭圆
+            moveTo(4.8f, 6.2f)
+            curveTo(4.8f, 4.43f, 8.02f, 3f, 12f, 3f)
+            curveTo(15.98f, 3f, 19.2f, 4.43f, 19.2f, 6.2f)
+            curveTo(19.2f, 7.97f, 15.98f, 9.4f, 12f, 9.4f)
+            curveTo(8.02f, 9.4f, 4.8f, 7.97f, 4.8f, 6.2f)
+            close()
+            // 左右侧壁
+            moveTo(4.8f, 6.2f)
+            lineTo(4.8f, 17.8f)
+            moveTo(19.2f, 6.2f)
+            lineTo(19.2f, 17.8f)
+            // 两道环
+            for (cy in listOf(10.6f, 15.0f)) {
+                moveTo(4.8f, cy)
+                curveTo(4.8f, cy + 1.77f, 8.02f, cy + 3.2f, 12f, cy + 3.2f)
+                curveTo(15.98f, cy + 3.2f, 19.2f, cy + 1.77f, 19.2f, cy)
+            }
+            // 底
+            moveTo(4.8f, 17.8f)
+            curveTo(4.8f, 19.57f, 8.02f, 21f, 12f, 21f)
+            curveTo(15.98f, 21f, 19.2f, 19.57f, 19.2f, 17.8f)
+        }
     }.build()
 
     /** Agent：对话气泡（圆角方框 + 左下小尾巴）。 */
@@ -154,25 +181,4 @@ private fun ImageVector.Builder.rect(x0: Float, y0: Float, x1: Float, y1: Float)
     }
 }
 
-private fun ImageVector.Builder.ellipse(cx: Float, cy: Float, rx: Float, ry: Float) {
-    val k = 0.5523f
-    path(fill = SolidColor(Color.Black)) {
-        moveTo(cx - rx, cy)
-        curveTo(cx - rx, cy - ry * k, cx - rx * k, cy - ry, cx, cy - ry)
-        curveTo(cx + rx * k, cy - ry, cx + rx, cy - ry * k, cx + rx, cy)
-        curveTo(cx + rx, cy + ry * k, cx + rx * k, cy + ry, cx, cy + ry)
-        curveTo(cx - rx * k, cy + ry, cx - rx, cy + ry * k, cx - rx, cy)
-        close()
-    }
-}
 
-private fun ImageVector.Builder.ring(cy: Float, rx: Float, ry: Float) {
-    path(
-        stroke = SolidColor(Color.Black),
-        strokeLineWidth = 1.2f,
-    ) {
-        moveTo(rx * 2f, cy)
-        curveTo(rx * 2f, cy + ry * 0.55f, rx * 1.55f, cy + ry, 12f, cy + ry)
-        curveTo(rx * 0.45f, cy + ry, 12f - rx, cy + ry * 0.55f, 12f - rx, cy)
-    }
-}

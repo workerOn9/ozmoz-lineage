@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.github.workeron9.ozmoz.lineage.desktop.model.Analysis
 import io.github.workeron9.ozmoz.lineage.desktop.model.FlowKind
-import io.github.workeron9.ozmoz.lineage.desktop.model.InputMode
 import io.github.workeron9.ozmoz.lineage.desktop.model.IssueView
 import io.github.workeron9.ozmoz.lineage.desktop.model.SeverityView
 import io.github.workeron9.ozmoz.lineage.desktop.model.visibleTreeRows

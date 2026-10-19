@@ -32,7 +32,7 @@ import kotlin.concurrent.thread
  */
 public actual object ConnectionGateway {
 
-    private val open = ConcurrentHashMap<String, Connection>()
+    private val connections = ConcurrentHashMap<String, Connection>()
     private val providers = ConcurrentHashMap<String, SchemaProvider>()
     private val externalDrivers: List<Driver> by lazy { loadExternalDrivers() }
 
@@ -52,7 +52,7 @@ public actual object ConnectionGateway {
 
     public actual fun close(profileId: String) {
         providers.remove(profileId)
-        open.remove(profileId)?.let { runCatching { it.close() } }
+        connections.remove(profileId)?.let { runCatching { it.close() } }
     }
 
     /**
@@ -62,7 +62,7 @@ public actual object ConnectionGateway {
     internal fun schemaProvider(profileId: String?): SchemaProvider? {
         if (profileId == null) return null
         providers[profileId]?.let { return it }
-        val connection = open[profileId] ?: return null
+        val connection = connections[profileId] ?: return null
         return JdbcSchemaProvider(connection, id = "jdbc:$profileId").also { providers[profileId] = it }
     }
 
@@ -73,14 +73,14 @@ public actual object ConnectionGateway {
     }.getOrElse { ConnectionResult(false, describe(it, profile)) to null }
 
     private fun reuseOrConnect(profile: ConnectionProfile, password: String): Pair<Connection, Boolean> {
-        open[profile.id]?.let { if (runCatching { it.isValid(2) }.getOrDefault(false)) return it to true }
+        connections[profile.id]?.let { if (runCatching { it.isValid(2) }.getOrDefault(false)) return it to true }
         val url = profile.resolvedUrl()
         val properties = Properties()
         if (profile.user.isNotBlank()) properties.setProperty("user", profile.user)
         if (password.isNotEmpty()) properties.setProperty("password", password)
         val connection = connect(url, properties)
         connection.autoCommit = true
-        open[profile.id] = connection
+        connections[profile.id] = connection
         return connection to false
     }
 

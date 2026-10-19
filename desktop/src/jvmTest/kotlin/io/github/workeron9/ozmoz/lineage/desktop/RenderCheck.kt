@@ -78,6 +78,28 @@ class RenderCheck {
     }
 
     @Test
+    fun renderSettingsComfortable() {
+        if (!enabled) return
+        val state = WorkbenchState(
+            OpenedFile("demo.sql", sql),
+            DesktopStoreState(theme = ThemeMode.LIGHT, density = io.github.workeron9.ozmoz.lineage.desktop.model.Density.COMFORTABLE),
+        )
+        state.agents = listOf(
+            io.github.workeron9.ozmoz.lineage.desktop.model.DiscoveredAgent(
+                id = "pi",
+                name = "pi",
+                executable = "/usr/local/bin/pi",
+                version = "1.3.0",
+                model = "example/model-b",
+                skills = List(12) { "skill-$it" },
+            ),
+        )
+        state.scanning = false
+        state.page = Page.SETTINGS
+        render("settings-comfortable", ThemeMode.LIGHT, state)
+    }
+
+    @Test
     fun renderConnectionPage() {
         if (!enabled) return
         val dir = Files.createTempDirectory("ozml-render-db")
