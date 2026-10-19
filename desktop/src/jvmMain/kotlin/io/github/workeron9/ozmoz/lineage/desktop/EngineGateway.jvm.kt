@@ -37,13 +37,24 @@ public actual object EngineGateway {
     public actual val engineIds: List<String>
         get() = LineagePipeline.ENGINE_IDS
 
-    public actual fun analyze(sql: String, engineId: String, tolerant: Boolean): Analysis {
+    public actual fun analyze(
+        sql: String,
+        engineId: String,
+        tolerant: Boolean,
+        connectionId: String?,
+    ): Analysis {
         val engine = LineagePipeline.engineById(engineId)
             ?: return Analysis(engineId = engineId, note = "未注册的引擎：$engineId")
 
         val started = System.nanoTime()
         val parseOutcome = LineagePipeline.parse(sql, engine, dialect = null)
-        val schema = LineagePipeline.autoSchema(listOf(sql))
+        // schema 优先级：连接的 JDBC 元数据（权威）> SQL 文本里顺手的 CREATE TABLE。
+        // shortcut: 分析仍在组合线程上同步跑；首次带连接分析会触发全库元数据快照，
+        // 大库会卡一帧。D3 连库时把 analyze 挪到后台调度并缓存快照。
+        val schema = LineagePipeline.composeSchema(
+            ConnectionGateway.schemaProvider(connectionId),
+            LineagePipeline.autoSchema(listOf(sql)),
+        )
 
         val columns = LinkedHashMap<String, ColumnView>()
         val flows = ArrayList<FlowView>()
@@ -80,6 +91,7 @@ public actual object EngineGateway {
 
         return Analysis(
             engineId = engine.id,
+            schemaId = connectionId,
             columns = columns.values.toList(),
             flows = flows,
             tree = listOf(toTreeNode(parseOutcome.root, "root")),

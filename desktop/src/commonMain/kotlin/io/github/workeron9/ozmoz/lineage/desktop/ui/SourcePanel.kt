@@ -19,17 +19,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * 源 SQL 的**只读插槽**：带行号 + 只读文本 + 当前行高亮。
  *
  * ADR-0022 D0 还没实测编辑器选型（自写 Compose 文本控件 vs 内嵌 WebView 装 Monaco），
  * 所以这一版故意什么都不做：能看、能滚到某一行（联动用）就够了。
- * 换实现时只换这个文件，[App] 的布局与状态都不动。
+ * 换实现时只换这个文件，工作区布局与状态都不动。
  */
 @Composable
 internal fun SourcePanel(sql: String, focusLine: Int?, modifier: Modifier) {
+    val tokens = LocalTokens.current
+    val density = LocalUiDensity.current
     val lines = remember(sql) { sql.split('\n') }
     val listState = rememberLazyListState()
 
@@ -38,32 +39,32 @@ internal fun SourcePanel(sql: String, focusLine: Int?, modifier: Modifier) {
         if (target != null) listState.animateScrollToItem(target)
     }
 
-    Column(modifier.background(Tokens.Surface)) {
+    Column(modifier.background(tokens.surface)) {
         PanelHeader("源 SQL · 只读插槽")
         LazyColumn(Modifier.fillMaxSize(), state = listState) {
             itemsIndexed(lines) { index, text ->
                 val focused = focusLine == index + 1
                 Row(
                     modifier = Modifier.fillMaxWidth()
-                        .background(if (focused) Tokens.Accent.copy(alpha = 0.12f) else Color.Transparent)
-                        .padding(vertical = 1.dp),
+                        .background(if (focused) tokens.accent.copy(alpha = 0.12f) else Color.Transparent)
+                        .padding(vertical = if (density.gap > 8.dp) 2.dp else 1.dp),
                 ) {
                     Text(
                         (index + 1).toString(),
                         modifier = Modifier.width(46.dp).padding(end = 10.dp),
-                        color = if (focused) Tokens.Accent else Tokens.TextFaint,
+                        color = if (focused) tokens.accent else tokens.textFaint,
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        lineHeight = 16.sp,
+                        fontSize = density.bodySize,
+                        lineHeight = density.bodyLineHeight,
                         textAlign = TextAlign.End,
                     )
                     Text(
                         text.ifEmpty { " " },
                         modifier = Modifier.weight(1f).padding(end = 8.dp),
-                        color = Tokens.Text,
+                        color = tokens.text,
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        lineHeight = 16.sp,
+                        fontSize = density.bodySize,
+                        lineHeight = density.bodyLineHeight,
                     )
                 }
             }

@@ -80,6 +80,8 @@
 
 > **仓库声明**：`desktop/` 模块自己声明了 `google()`（见 `desktop/build.gradle.kts` 注释）——`androidx.compose.runtime:runtime-desktop` 这类坐标**只发布在 Google Maven**，Maven Central 上没有（2026-10-16 实测 `runtime-desktop-1.12.1.pom` 在 repo1.maven.org 返回 404）。除这一处外，桌面模块的依赖都在 Maven Central。
 > 既有行已覆盖的 `kotlinx.coroutines`（桌面侧解析到 1.9.0）与 `kotlinx.serialization` 不重复登记。
+> D2（2026-10-19）起桌面**直接**依赖 `kotlinx-coroutines-core`（后台设备发现 / JDBC / agent 进程）与 `kotlinx-serialization-json`（本地设置落盘），版本与既有行一致；`sqlite-jdbc` 复用 `graph` 已登记的那一行（连接页的默认驱动）。
+> **不打包其它 JDBC 驱动**：PostgreSQL / MySQL / ClickHouse / DuckDB 的官方驱动由用户放进 `~/.ozml-lineage/drivers`，按未修改的独立依赖使用（不 fork、不内联）；分发时若改为随包携带，须逐条补登记。
 > **尚未做**：ProGuard/R8 收缩、三平台打包（D4）与随之而来的新依赖（keychain 库等）——引入时按本文规则补行。
 
 ## 前端运行时依赖（`web/`，2026-10-10 随 M4 引入）

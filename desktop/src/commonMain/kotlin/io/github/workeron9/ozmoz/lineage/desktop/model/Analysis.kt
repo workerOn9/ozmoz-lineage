@@ -95,6 +95,8 @@ public data class IssueView(
  */
 public data class Analysis(
     val engineId: String,
+    /** 本次分析用的连接（schema 来源）；null = 只用 SQL 文本里顺手的 DDL。 */
+    val schemaId: String? = null,
     val columns: List<ColumnView> = emptyList(),
     val flows: List<FlowView> = emptyList(),
     val tree: List<TreeNode> = emptyList(),

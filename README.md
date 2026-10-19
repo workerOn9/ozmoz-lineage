@@ -158,6 +158,37 @@ curl -s localhost:8765/api/validate -H 'Content-Type: application/json' \
 
 工具面（响应与对应 CLI / `/api` JSON **同形**）：`ozml_engines`（能力路由表）、`ozml_parse`、`ozml_lineage`（`aggregate: true` 多语句合并图）、`ozml_impact`、`ozml_path`、`ozml_validate`、`ozml_format`、`ozml_convert`。错误语义与 HTTP 镜像：语法错误 / unknown / 不可达是**数据**（`isError=false`）；缺参数 / 未知引擎 / 坏 DDL / 目标列不在图里才是 `isError=true`（内容为 `{error, reason}`）。stdout 是协议信道——运行期间勿把它重定向给别的消费方；v1 只做 stdio + sql 现建现查，图库与导出器有意不进工具面。
 
+### 桌面端（`desktop/`，D2 工作台）
+
+Compose Multiplatform 的桌面应用（ADR-0022），**进程内直调引擎**（不走 HTTP、不依赖 CLI）。
+D2 起是四目的地工作台：
+
+| 目的地 | 内容 |
+|---|---|
+| 工作区 | 源 SQL + 血缘图 / 归一化树 / **Agent 对话**（Tab 切换）+ 底部诊断条 |
+| 连接 | 连接管理 + Schema 树 + 对象检查器（**只读** JDBC 元数据；「在血缘图中打开」把连接 schema 喂给分析） |
+| Agent | 接入本机已配好的 `opencode` / `pi`（复用它们的模型、Key 与 skill），显示活动流 |
+| 设置 | 主题（跟随系统 / 浅色 / 深色）、密度、Provider 管理 |
+
+```bash
+./gradlew :desktop:run                       # 空窗
+./gradlew :desktop:run --args=/path/q.sql    # 带文件启动
+```
+
+- **Agent 不内置模型**：启动时扫 `PATH` 找 `opencode` / `pi`，读它们的配置与 skill 列表；
+  用户在卡片上点「启用」后才可选。对话经 CLI 子进程流式接入（`--format json` / `--mode json`）。
+- **连接**：SQLite 驱动随包；PostgreSQL / MySQL / ClickHouse / DuckDB 的官方 JDBC 驱动放进
+  `~/.ozml-lineage/drivers` 即可（不打包、不改驱动）。
+- **设置**存 `~/.ozml-lineage/desktop.json`，**不含密码与 API Key**（凭据存储是 D3 的事项）。
+- 明暗两套配色都按 Material 3 取值；血缘数据语义色在深浅下各自微调饱和度。
+
+手动检查（不进 CI，会起真 agent / 真渲染）：
+
+```bash
+./gradlew :desktop:jvmTest -PozmlManualChecks=true                 # 离屏渲染 PNG
+./gradlew :desktop:jvmTest -PozmlManualChecks=true -PozmlLiveProvider=pi   # 真跑一轮 agent
+```
+
 ### Web UI（`web/`，M4 起步）
 
 `web/` 是独立前端子项目（不进 Gradle 多模块）：Vite + React 19 + TypeScript + Tailwind 4 + Monaco + React Flow，三栏布局——左 SQL 编辑器，中归一化树，右列级血缘图（dagre 布局，支持上溯 / 下溯 / 短路径高亮与节点详情），底部诊断与 unknowns 面板。

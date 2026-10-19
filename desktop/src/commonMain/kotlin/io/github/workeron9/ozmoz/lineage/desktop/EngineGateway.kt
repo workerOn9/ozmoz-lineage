@@ -16,8 +16,11 @@ public expect object EngineGateway {
     /**
      * 一段 SQL（可含多条语句）→ 呈现状态。**不抛异常**：失败落在
      * [Analysis.note] 与 [Analysis.issues]（界面必须显式说出来，不能让空图冒充「没问题」）。
+     *
+     * [connectionId] 非空时，用那条已打开连接的 JDBC 元数据当**权威 schema**
+     * （`SELECT *` 展开、裸列消歧），SQL 文本里的 DDL 退为兜底。
      */
-    public fun analyze(sql: String, engineId: String, tolerant: Boolean): Analysis
+    public fun analyze(sql: String, engineId: String, tolerant: Boolean, connectionId: String? = null): Analysis
 
     /** 原生文件选择（AWT FileDialog）；取消 / headless 返回 null。 */
     public fun pickSqlFile(): OpenedFile?

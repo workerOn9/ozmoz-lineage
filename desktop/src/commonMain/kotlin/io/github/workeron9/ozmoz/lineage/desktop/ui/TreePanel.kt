@@ -11,16 +11,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.workeron9.ozmoz.lineage.desktop.model.Analysis
 import io.github.workeron9.ozmoz.lineage.desktop.model.TreeRow
 import io.github.workeron9.ozmoz.lineage.desktop.model.visibleTreeRows
@@ -36,14 +35,15 @@ internal fun TreePanel(
     onToggle: (String) -> Unit,
     onFocusLine: (Int?) -> Unit,
 ) {
+    val tokens = LocalTokens.current
     val rows = remember(analysis.tree, collapsed) { visibleTreeRows(analysis.tree, collapsed) }
 
     if (rows.isEmpty()) {
-        Centered(analysis.note ?: "这段 SQL 没有归一化树", if (analysis.note != null) Tokens.Danger else Tokens.TextMuted)
+        Centered(analysis.note ?: "这段 SQL 没有归一化树", if (analysis.note != null) tokens.danger else tokens.textMuted)
         return
     }
 
-    Column(Modifier.fillMaxSize().background(Tokens.Surface)) {
+    Column(Modifier.fillMaxSize().background(tokens.surface)) {
         PanelHeader("归一化树 · ${rows.size} 节点")
         LazyColumn(Modifier.fillMaxSize()) {
             items(rows.size, key = { rows[it].node.id }) { index ->
@@ -60,10 +60,17 @@ private fun TreeLine(
     onToggle: (String) -> Unit,
     onFocusLine: (Int?) -> Unit,
 ) {
+    val tokens = LocalTokens.current
+    val density = LocalUiDensity.current
     Row(
         modifier = Modifier.fillMaxWidth()
             .clickable { onFocusLine(row.node.line) }
-            .padding(start = (6 + row.depth * 14).dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+            .padding(
+                start = (6 + row.depth * 14).dp,
+                end = 10.dp,
+                top = if (density.gap > 8.dp) 4.dp else 3.dp,
+                bottom = if (density.gap > 8.dp) 4.dp else 3.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -74,24 +81,24 @@ private fun TreeLine(
             if (row.expandable) {
                 Text(
                     if (row.node.id in collapsed) "▸" else "▾",
-                    color = Tokens.TextMuted,
-                    fontSize = 10.sp,
+                    color = tokens.textMuted,
+                    fontSize = density.bodySize,
                 )
             }
         }
-        Text(row.node.type, color = Tokens.Accent, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+        Text(row.node.type, color = tokens.accent, fontFamily = FontFamily.Monospace, fontSize = density.bodySize)
         Spacer(Modifier.width(8.dp))
         Text(
             row.node.text.replace('\n', ' ').take(400),
             modifier = Modifier.weight(1f),
-            color = if (row.node.text.isBlank()) Tokens.TextFaint else Tokens.TextMuted,
+            color = if (row.node.text.isBlank()) tokens.textFaint else tokens.textMuted,
             fontFamily = FontFamily.Monospace,
-            fontSize = 11.sp,
+            fontSize = density.bodySize,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         row.node.line?.let {
-            Text("L$it", color = Color(0xFF5C6370), fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+            Text("L$it", color = tokens.textFaint, fontFamily = FontFamily.Monospace, fontSize = density.bodySize)
         }
     }
 }
