@@ -19,9 +19,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.WideNavigationRail
+import androidx.compose.material3.WideNavigationRailItem
+import androidx.compose.material3.WideNavigationRailState
+import androidx.compose.material3.WideNavigationRailValue
+import androidx.compose.material3.rememberWideNavigationRailState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,9 +45,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.workeron9.ozmoz.lineage.desktop.EngineGateway
@@ -44,230 +62,254 @@ import io.github.workeron9.ozmoz.lineage.desktop.model.SeverityView
 import io.github.workeron9.ozmoz.lineage.desktop.model.visibleTreeRows
 
 /**
- * 单窗口骨架：顶栏 + 左（源 SQL 插槽）右（血缘图 / 归一化树）+ 底部（详情 / 诊断）。
+ * 桌面外壳：M3 的 [WideNavigationRail]（可折叠）+ [TopAppBar]，**工作区 / 设置是两个「目的地」**。
  *
- * SQL 源文本栏是**将来会替换的插槽**（编辑器选型还没实测，见 ADR-0022 D0）：
- * 现在只是只读的带行号文本 + 当前行高亮，布局与状态都不依赖它的内部实现。
+ * 分工按 M3 的范式落：侧栏管**应用级**（分析缺省、关于），顶栏管**文档级**（文件名、统计、
+ * 打开文件）。引擎与容错因此从顶栏挪进设置——同一个开关只准出现在一个地方。
+ *
+ * 血缘图 / 归一化树 / 源文本仍是 D1 的自绘仪器层，这一版**不动**：图的可交互水平
+ * （平移缩放 / 虚拟化 / 聚簇）是 ADR-0022 D0-② 探针的事，换壳解决不了它。
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 public fun App(initial: OpenedFile? = null) {
     DesktopTheme {
+        val railExpandedValue = WideNavigationRailValue.Expanded
         var opened by remember { mutableStateOf(initial) }
         var analysis by remember { mutableStateOf<Analysis?>(null) }
-        var tab by remember { mutableStateOf(Tab.GRAPH) }
-        var collapsed by remember { mutableStateOf(emptySet<String>()) }
+        var view by remember { mutableStateOf(View.GRAPH) }
+        var collapsedNodes by remember { mutableStateOf(emptySet<String>()) }
         var selectedColumn by remember { mutableStateOf<String?>(null) }
         var selectedFlow by remember { mutableStateOf<Int?>(null) }
         var focusLine by remember { mutableStateOf<Int?>(null) }
         var engineId by remember { mutableStateOf(EngineGateway.engineIds.first()) }
         var tolerant by remember { mutableStateOf(true) }
+        var page by remember { mutableStateOf(Page.WORKSPACE) }
+        var railExpanded by remember { mutableStateOf(true) }
+        val railState = rememberWideNavigationRailState(WideNavigationRailValue.Expanded)
+        LaunchedEffect(railExpanded) {
+            // 用 expand/collapse（带过渡）而不是 toggle()：这里没有协程作用域，
+            // 而 LaunchedEffect 本身就是 suspend 的。
+            if (railExpanded) railState.expand() else railState.collapse()
+        }
+        val railIsExpanded = railState.currentValue == WideNavigationRailValue.Expanded
 
         // shortcut: 分析在组合线程上同步跑（小文件毫秒级）；超大文件会卡一帧，D2 挪到后台调度。
         LaunchedEffect(opened, engineId, tolerant) {
             analysis = opened?.let { EngineGateway.analyze(it.sql, engineId, tolerant) }
-            tab = Tab.GRAPH
-            collapsed = emptySet()
+            view = View.GRAPH
+            collapsedNodes = emptySet()
             selectedColumn = null
             selectedFlow = null
             focusLine = null
         }
 
-        Column(Modifier.fillMaxSize().background(Tokens.Background)) {
-            TopBar(
-                fileName = opened?.name,
-                analysis = analysis,
-                engineId = engineId,
-                tolerant = tolerant,
-                onEngine = { engineId = it },
-                onTolerant = { tolerant = it },
-                onOpen = { opened = EngineGateway.pickSqlFile() },
-            )
-            HDivider()
-
-            Row(Modifier.weight(1f)) {
-                val sql = opened?.sql
-                if (sql == null) {
-                    Welcome(Modifier.weight(1f)) { opened = EngineGateway.pickSqlFile() }
-                } else {
-                    SourcePanel(sql = sql, focusLine = focusLine, modifier = Modifier.weight(0.38f))
-                    VDivider()
-                    Column(Modifier.weight(0.62f)) {
-                        TabBar(tab = tab, analysis = analysis, onSelect = { tab = it })
-                        Box(Modifier.weight(1f)) {
-                            when (val current = analysis) {
-                                null -> Centered("分析中…", Tokens.TextMuted)
-                                else -> when (tab) {
-                                    Tab.GRAPH -> GraphPanel(
-                                        analysis = current,
-                                        selectedColumn = selectedColumn,
-                                        selectedFlow = selectedFlow,
-                                        onSelectColumn = { column, line ->
-                                            selectedColumn = column
-                                            selectedFlow = null
-                                            focusLine = line
-                                        },
-                                        onSelectFlow = { flow, line ->
-                                            selectedFlow = flow
-                                            selectedColumn = null
-                                            focusLine = line
-                                        },
-                                    )
-
-                                    Tab.TREE -> TreePanel(
-                                        analysis = current,
-                                        collapsed = collapsed,
-                                        onToggle = { id ->
-                                            collapsed = if (id in collapsed) collapsed - id else collapsed + id
-                                        },
-                                        onFocusLine = { focusLine = it },
-                                    )
-                                }
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Row(Modifier.fillMaxSize()) {
+                WideNavigationRail(
+                    state = railState,
+                    // 缺省是 Arrangement.Center：桌面侧栏里「目的地」要贴顶，不然窗口一高就飘在中间。
+                    arrangement = Arrangement.Top,
+                    header = { RailHeader(railIsExpanded) { railExpanded = !railExpanded } },
+                ) {
+                    for (destination in Page.entries) {
+                        WideNavigationRailItem(
+                            selected = page == destination,
+                            onClick = { page = destination },
+                            icon = { Icon(destination.icon, contentDescription = destination.label) },
+                            label = { Text(destination.label) },
+                            railExpanded = railIsExpanded,
+                        )
+                    }
+                }
+                VerticalDivider()
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    TopAppBar(
+                        title = {
+                            Column {
+                                Text(
+                                    opened?.name ?: "未打开文件",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    statLine(analysis),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
+                        },
+                        actions = {
+                            Button(
+                                onClick = { opened = EngineGateway.pickSqlFile() },
+                            ) { Text("打开 SQL 文件") }
+                            Spacer(Modifier.width(12.dp))
+                        },
+                    )
+                    when (page) {
+                        Page.WORKSPACE -> Workspace(
+                            opened = opened,
+                            analysis = analysis,
+                            view = view,
+                            onView = { view = it },
+                            collapsedNodes = collapsedNodes,
+                            onToggleNode = { id ->
+                                collapsedNodes = if (id in collapsedNodes) collapsedNodes - id else collapsedNodes + id
+                            },
+                            selectedColumn = selectedColumn,
+                            selectedFlow = selectedFlow,
+                            onSelectColumn = { column, line ->
+                                selectedColumn = column
+                                selectedFlow = null
+                                focusLine = line
+                            },
+                            onSelectFlow = { flow, line ->
+                                selectedFlow = flow
+                                selectedColumn = null
+                                focusLine = line
+                            },
+                            focusLine = focusLine,
+                            onFocusLine = { focusLine = it },
+                            onOpen = { opened = EngineGateway.pickSqlFile() },
+                        )
+
+                        Page.SETTINGS -> SettingsPage(
+                            engineId = engineId,
+                            tolerant = tolerant,
+                            onEngine = { engineId = it },
+                            onTolerant = { tolerant = it },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 两个目的地。将来加「对话」这类一等公民时，这里加一项 + 一个 `when` 分支。 */
+private enum class Page(val label: String, val icon: ImageVector) {
+    WORKSPACE("工作区", Icons.Workspace),
+    SETTINGS("设置", Icons.Settings),
+}
+
+/** 两个视图的切换：**不并排**——1200px 宽下并排会把图和树都压成废件。 */
+private enum class View { GRAPH, TREE }
+
+@Composable
+private fun RailHeader(expanded: Boolean, onToggle: () -> Unit) {
+    Box(Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) {
+        IconButton(onClick = onToggle) {
+            Icon(
+                Icons.Chevron,
+                contentDescription = if (expanded) "收起侧栏" else "展开侧栏",
+                modifier = Modifier.rotate(if (expanded) 0f else 180f),
+            )
+        }
+    }
+}
+
+/** 顶栏副标题：始终说清「这份结果是谁跑出来的」——空图不许冒充「没问题」。 */
+private fun statLine(analysis: Analysis?): String {
+    val current = analysis ?: return "未分析"
+    return buildString {
+        append(current.engineId)
+        append(" · 列 ").append(current.columns.size)
+        append(" · 边 ").append(current.flows.size)
+        append(" · 未知 ").append(current.unknowns.size)
+        append(" · 诊断 ").append(current.issues.size)
+        append(" · ").append(current.elapsedMillis).append("ms")
+    }
+}
+
+@Composable
+private fun Workspace(
+    opened: OpenedFile?,
+    analysis: Analysis?,
+    view: View,
+    onView: (View) -> Unit,
+    collapsedNodes: Set<String>,
+    onToggleNode: (String) -> Unit,
+    selectedColumn: String?,
+    selectedFlow: Int?,
+    onSelectColumn: (String?, Int?) -> Unit,
+    onSelectFlow: (Int?, Int?) -> Unit,
+    focusLine: Int?,
+    onFocusLine: (Int?) -> Unit,
+    onOpen: () -> Unit,
+) {
+    val sql = opened?.sql
+    if (sql == null) {
+        Welcome(onOpen)
+        return
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            SourcePanel(sql = sql, focusLine = focusLine, modifier = Modifier.weight(0.38f))
+            VerticalDivider()
+            Column(Modifier.weight(0.62f).fillMaxHeight()) {
+                ViewTabs(view = view, analysis = analysis, onSelect = onView)
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    when (val current = analysis) {
+                        null -> Centered("分析中…", Tokens.TextMuted)
+                        else -> when (view) {
+                            View.GRAPH -> GraphPanel(
+                                analysis = current,
+                                selectedColumn = selectedColumn,
+                                selectedFlow = selectedFlow,
+                                onSelectColumn = onSelectColumn,
+                                onSelectFlow = onSelectFlow,
+                            )
+
+                            View.TREE -> TreePanel(
+                                analysis = current,
+                                collapsed = collapsedNodes,
+                                onToggle = onToggleNode,
+                                onFocusLine = onFocusLine,
+                            )
                         }
                     }
                 }
             }
-
-            HDivider()
-            DetailStrip(
-                analysis = analysis,
-                selectedColumn = selectedColumn,
-                selectedFlow = selectedFlow,
-                onFocusLine = { focusLine = it },
-            )
         }
-    }
-}
-
-/** 两个视图的切换：**不并排**——1200px 宽下并排会把图和树都压成废件。 */
-private enum class Tab { GRAPH, TREE }
-
-@Composable
-private fun TopBar(
-    fileName: String?,
-    analysis: Analysis?,
-    engineId: String,
-    tolerant: Boolean,
-    onEngine: (String) -> Unit,
-    onTolerant: (Boolean) -> Unit,
-    onOpen: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            "ozml lineage",
-            color = Tokens.Accent,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
+        DetailStrip(
+            analysis = analysis,
+            selectedColumn = selectedColumn,
+            selectedFlow = selectedFlow,
+            onFocusLine = onFocusLine,
         )
-        Spacer(Modifier.width(10.dp))
-        Text("桌面 D1", color = Tokens.TextFaint, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-        Spacer(Modifier.weight(1f))
-
-        if (analysis != null) {
-            Stat("列", analysis.columns.size.toString())
-            Spacer(Modifier.width(8.dp))
-            Stat("边", analysis.flows.size.toString())
-            Spacer(Modifier.width(8.dp))
-            if (analysis.unknowns.isNotEmpty()) {
-                Stat("未知", analysis.unknowns.size.toString(), Tokens.Warning)
-                Spacer(Modifier.width(8.dp))
-            }
-            if (analysis.issues.isNotEmpty()) {
-                Stat("诊断", analysis.issues.size.toString(), Tokens.Danger)
-                Spacer(Modifier.width(8.dp))
-            }
-            Stat("引擎", analysis.engineId)
-            Spacer(Modifier.width(12.dp))
-        }
-
-        EnginePicker(engineId = engineId, onSelect = onEngine)
-        Spacer(Modifier.width(6.dp))
-        Chip(
-            text = if (tolerant) "容错 开" else "容错 关",
-            accent = tolerant,
-            onClick = { onTolerant(!tolerant) },
-        )
-        Spacer(Modifier.width(12.dp))
-
-        Text(
-            fileName ?: "未打开文件",
-            color = if (fileName == null) Tokens.TextFaint else Tokens.Text,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
-        Spacer(Modifier.width(12.dp))
-        Chip("打开 SQL 文件", accent = true, onClick = onOpen)
     }
 }
 
-/** 引擎选择题：切了重跑一次分析（注册面与 CLI 同一份 [EngineGateway.engineIds]）。 */
+/** 视图切换：M3 单选分段控件（D1 是自绘 chip）。 */
 @Composable
-private fun EnginePicker(engineId: String, onSelect: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        Chip("$engineId ▾", onClick = { open = true })
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            for (id in EngineGateway.engineIds) {
-                DropdownMenuItem(
-                    text = { Text(id, color = Tokens.Text, fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
-                    onClick = {
-                        onSelect(id)
-                        open = false
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun Stat(label: String, value: String, color: Color = Tokens.TextMuted) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = Tokens.TextFaint, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-        Spacer(Modifier.width(4.dp))
-        Text(value, color = color, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-    }
-}
-
-@Composable
-private fun TabBar(tab: Tab, analysis: Analysis?, onSelect: (Tab) -> Unit) {
+private fun ViewTabs(view: View, analysis: Analysis?, onSelect: (View) -> Unit) {
     val nodeCount = analysis?.let { visibleTreeRows(it.tree, emptySet()).size } ?: 0
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
-        TabLabel("血缘图", analysis?.flows?.size ?: 0, tab == Tab.GRAPH) { onSelect(Tab.GRAPH) }
-        Spacer(Modifier.width(4.dp))
-        TabLabel("归一化树", nodeCount, tab == Tab.TREE) { onSelect(Tab.TREE) }
-        Spacer(Modifier.weight(1f))
-        Legend()
-    }
-}
-
-@Composable
-private fun TabLabel(text: String, count: Int, active: Boolean, onClick: () -> Unit) {
     Row(
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .background(if (active) Tokens.SurfaceRaised else Tokens.Surface, RoundedCornerShape(4.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text,
-            color = if (active) Tokens.Text else Tokens.TextMuted,
-            fontSize = 12.sp,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(count.toString(), color = Tokens.TextFaint, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+        SingleChoiceSegmentedButtonRow {
+            val labels = listOf("血缘图" to (analysis?.flows?.size ?: 0), "归一化树" to nodeCount)
+            labels.forEachIndexed { index, (label, count) ->
+                val target = if (index == 0) View.GRAPH else View.TREE
+                SegmentedButton(
+                    selected = view == target,
+                    onClick = { onSelect(target) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = labels.size),
+                ) {
+                    Text("$label  $count", fontSize = 12.sp)
+                }
+            }
+        }
     }
 }
 
-/** 图例：颜色只说明边类型；变换种类（线型）在详情条里按选中项给出。 */
+/** 图例：颜色只说明边类型；变换种类（线型）在详情条里按选中项给出。挂在图的表头上（不是分段控件那一行——放那儿会被窗口宽度挤掉）。 */
 @Composable
-private fun Legend() {
+internal fun Legend() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         for (kind in FlowKind.entries) {
             Box(
@@ -295,9 +337,12 @@ private fun DetailStrip(
     selectedFlow: Int?,
     onFocusLine: (Int?) -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().height(104.dp).background(Tokens.Surface)) {
+    Row(
+        Modifier.fillMaxWidth().height(104.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
         Column(
-            modifier = Modifier.weight(1f).fillMaxHeight().padding(horizontal = 12.dp, vertical = 10.dp)
+            modifier = Modifier.weight(1f).fillMaxHeight().padding(horizontal = 16.dp, vertical = 12.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
             val current = analysis
@@ -346,20 +391,21 @@ private fun DetailStrip(
                     current.note?.let {
                         Text(it, color = Tokens.Danger, fontSize = 12.sp)
                     }
-                    Text(
-                        "列 ${current.columns.size} · 边 ${current.flows.size} · 未知 ${current.unknowns.size}" +
-                            " · 诊断 ${current.issues.size} · ${current.elapsedMillis}ms",
-                        color = Tokens.TextMuted,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                    )
-                    current.unknowns.take(3).forEach {
+                    // 列/边/诊断的计数在顶栏副标题里已经有了，这里只说顶栏说不下的：未知。
+                    current.unknowns.take(2).forEach {
                         Text("未知  $it", color = Tokens.Warning, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    }
+                    if (current.unknowns.isEmpty()) {
+                        Text(
+                            "点图上的节点或边看详情；颜色 = 边类型，线型 = 变换种类。",
+                            color = Tokens.TextFaint,
+                            fontSize = 11.sp,
+                        )
                     }
                 }
             }
         }
-        VDivider()
+        VerticalDivider()
         IssuesCell(analysis?.issues ?: emptyList(), Modifier.width(380.dp).fillMaxHeight(), onFocusLine)
     }
 }
@@ -414,41 +460,27 @@ private fun IssuesCell(issues: List<IssueView>, modifier: Modifier, onFocusLine:
     }
 }
 
+/** 空态：M3 Card，说清「解析在哪跑」与「怎么带文件启动」。 */
 @Composable
-private fun Welcome(modifier: Modifier, onOpen: () -> Unit) {
-    Column(
-        modifier = modifier.fillMaxHeight(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("打开一个 .sql 文件", color = Tokens.Text, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "解析在本机进程内完成，不上传、不连数据库",
-            color = Tokens.TextFaint,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 11.sp,
-        )
-        Spacer(Modifier.height(16.dp))
-        Chip("打开 SQL 文件", accent = true, onClick = onOpen)
-    }
-}
-
-@Composable
-private fun Chip(text: String, onClick: () -> Unit, accent: Boolean = false) {
-    Box(
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .background(if (accent) Tokens.Accent.copy(alpha = 0.14f) else Tokens.SurfaceRaised, RoundedCornerShape(4.dp))
-            .border(1.dp, if (accent) Tokens.Accent.copy(alpha = 0.5f) else Tokens.Border, RoundedCornerShape(4.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-    ) {
-        Text(
-            text,
-            color = if (accent) Tokens.Accent else Tokens.Text,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-        )
+private fun Welcome(onOpen: () -> Unit) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Card(Modifier.width(440.dp)) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("打开一个 .sql 文件", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "解析在本机进程内完成，不上传、不连数据库。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "./gradlew :desktop:run --args=/path/q.sql",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onOpen) { Text("打开 SQL 文件") }
+            }
+        }
     }
 }
 
@@ -462,19 +494,15 @@ internal fun Centered(text: String, color: Color) {
 @Composable
 internal fun PanelHeader(text: String) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(26.dp).padding(horizontal = 12.dp),
+        modifier = Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, color = Tokens.TextFaint, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+        Text(
+            text,
+            color = Tokens.TextFaint,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Normal,
+        )
     }
-}
-
-@Composable
-internal fun HDivider() {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Border))
-}
-
-@Composable
-internal fun VDivider() {
-    Box(Modifier.width(1.dp).fillMaxHeight().background(Tokens.Border))
 }

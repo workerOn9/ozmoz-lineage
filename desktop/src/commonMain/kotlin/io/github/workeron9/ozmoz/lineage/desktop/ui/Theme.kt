@@ -75,19 +75,42 @@ internal object Tokens {
     }
 }
 
+/**
+ * M3 配色。**取值仍只有 [Tokens] 一份**（画布 / 树 / 源文本吃的是它，不是 ColorScheme）——
+ * 这一层只把同一批颜色映射成 Material 的角色名，免得壳层与仪器层两套色各自漂移。
+ *
+ * `surfaceContainer*` 五档是 M3 的「高度」表达（Card 默认就吃它）：不填的话组件全落在
+ * 同一个平面上，观感就是「没有层次的深色」，正是这版要修的东西。
+ */
+private val OzmlDarkScheme = darkColorScheme(
+    primary = Tokens.Accent,
+    onPrimary = Color(0xFF04202A),
+    primaryContainer = Color(0xFF103A4A),
+    onPrimaryContainer = Color(0xFFCDEBF7),
+    secondary = Tokens.TextMuted,
+    onSecondary = Tokens.Background,
+    secondaryContainer = Tokens.SurfaceRaised,
+    onSecondaryContainer = Tokens.Text,
+    tertiary = Tokens.Warning,
+    onTertiary = Color(0xFF2A1C03),
+    background = Tokens.Background,
+    onBackground = Tokens.Text,
+    surface = Tokens.Background,
+    onSurface = Tokens.Text,
+    surfaceVariant = Tokens.SurfaceRaised,
+    onSurfaceVariant = Tokens.TextMuted,
+    surfaceContainerLowest = Color(0xFF101216),
+    surfaceContainerLow = Tokens.Background,
+    surfaceContainer = Tokens.Surface,
+    surfaceContainerHigh = Tokens.SurfaceRaised,
+    surfaceContainerHighest = Color(0xFF303540),
+    outline = Tokens.Border,
+    outlineVariant = Color(0xFF23272F),
+    error = Tokens.Danger,
+    onError = Color(0xFF3A1710),
+)
+
 @Composable
 internal fun DesktopTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            background = Tokens.Background,
-            surface = Tokens.Surface,
-            surfaceVariant = Tokens.SurfaceRaised,
-            onSurface = Tokens.Text,
-            onSurfaceVariant = Tokens.TextMuted,
-            outline = Tokens.Border,
-            primary = Tokens.Accent,
-            error = Tokens.Danger,
-        ),
-        content = content,
-    )
+    MaterialTheme(colorScheme = OzmlDarkScheme, content = content)
 }
