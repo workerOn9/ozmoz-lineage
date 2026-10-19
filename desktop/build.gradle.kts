@@ -73,14 +73,15 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "io.github.workeron9.ozmoz.lineage.desktop.MainKt"
+        // `:desktop:run` 的 `executable` 由插件设成**跑 Gradle 的那个 JVM**
+        // （`System.getProperty("java.home")`，本机 21），而模块按工具链 25 编译（class 69）⇒
+        // 缺省是 UnsupportedClassVersionError（KMP 的 `jvmToolchain` 不替 JavaExec 选 JVM）。
+        // 显式设 `javaLauncher` 也不行：Gradle 9 会拿它和插件设的 `executable` 对路径，
+        // 不一致直接报 "Toolchain from `executable` property does not match ..."。
+        // 所以钉插件自己的旋钮：run / jpackage / jlink 一律用工具链 JDK。
+        javaHome = javaToolchains
+            .launcherFor { languageVersion.set(JavaLanguageVersion.of(jdkVersion)) }
+            .get()
+            .metadata.installationPath.asFile.absolutePath
     }
-}
-
-// `:desktop:run` 是 JavaExec：缺省拿跑 Gradle 的那个 JVM（本机 21），而模块按工具链 25
-// 编译 ⇒ UnsupportedClassVersionError（class 69 > 65）。KMP 的 `jvmToolchain` 不替 JavaExec
-// 选 JVM（Kotlin JVM 插件会），所以这里显式把 launcher 指到工具链。
-tasks.withType<JavaExec>().configureEach {
-    javaLauncher.set(
-        javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(jdkVersion)) },
-    )
 }
