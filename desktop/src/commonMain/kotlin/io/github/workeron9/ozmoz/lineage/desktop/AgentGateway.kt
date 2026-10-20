@@ -15,6 +15,12 @@ public expect object AgentGateway {
     /** 扫 PATH + 读配置；**只读**，不写用户配置、不联网。[knownExecutables] 是设置里存过的绝对路径。 */
     public fun discover(knownExecutables: List<String> = emptyList(), onResult: (List<DiscoveredAgent>) -> Unit)
 
+    /**
+     * 现取某个 agent 的模型清单（打开模型下拉时用，比发现时的快照新）。
+     * 只读、不联网；读不到就给空列表，由界面如实说。
+     */
+    public fun models(provider: ProviderConfig, onResult: (List<String>) -> Unit)
+
     /** 起一次会话；返回的句柄可取消（杀进程）。[prompt] 的组装由调用方负责。 */
     public fun start(
         provider: ProviderConfig,

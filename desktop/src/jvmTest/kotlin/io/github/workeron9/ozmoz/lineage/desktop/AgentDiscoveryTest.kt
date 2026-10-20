@@ -55,6 +55,33 @@ class AgentDiscoveryTest {
         assertEquals(emptyList(), AgentDiscovery.piModels("not json"))
     }
 
+    /**
+     * opencode 的 `models` 偶发只打印一条 `ServiceUnavailableError: Location plugins…`
+     * 就退出（实测）。那些行不是模型 id，不能显示成模型，也不能让下拉直接空掉。
+     */
+    @Test
+    fun opencodeModelsDropsErrorLinesAndKeepsIds() {
+        val dir = Files.createTempDirectory("ozml-agent-models")
+        val exe = dir.resolve("opencode")
+        Files.writeString(
+            exe,
+            "#!/bin/sh\n" +
+                "echo 'ServiceUnavailableError: Location plugins did not finish activating'\n" +
+                "echo '    at k (/\$bunfs/root/chunk.js:13:27155)'\n" +
+                "echo 'opencode-go/deepseek-v4.1-flash'\n" +
+                "echo 'vercel/openai/gpt-5.6-terra'\n",
+        )
+        Files.setPosixFilePermissions(exe, PosixFilePermissions.fromString("rwxr-xr-x"))
+        try {
+            assertEquals(
+                listOf("opencode-go/deepseek-v4.1-flash", "vercel/openai/gpt-5.6-terra"),
+                AgentDiscovery.models("opencode", exe.toString()),
+            )
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
     /** 子进程 PATH 要含 macOS 上最常见的两个安装目录，否则 agent 的壳脚本找不到 node 等。 */
     @Test
     fun childPathContainsCommonInstallDirs() {

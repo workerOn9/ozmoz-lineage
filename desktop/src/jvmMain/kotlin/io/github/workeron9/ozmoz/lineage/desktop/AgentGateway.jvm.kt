@@ -21,6 +21,12 @@ public actual object AgentGateway {
         }
     }
 
+    public actual fun models(provider: ProviderConfig, onResult: (List<String>) -> Unit) {
+        thread(isDaemon = true, name = "ozml-agent-models-${provider.id}") {
+            onResult(AgentDiscovery.models(provider.id, provider.endpoint))
+        }
+    }
+
     public actual fun start(
         provider: ProviderConfig,
         sessionId: String,

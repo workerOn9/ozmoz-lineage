@@ -112,6 +112,24 @@ internal object AgentDiscovery {
     fun discover(knownExecutables: List<String> = emptyList()): List<DiscoveredAgent> =
         listOfNotNull(discoverOpencode(knownExecutables), discoverPi(knownExecutables))
 
+    /**
+     * 现取模型清单（不联网）。opencode 走子进程，pi 读配置。
+     *
+     * opencode 的 `models` 会偶发打印 `ServiceUnavailableError: Location plugins did not
+     * finish activating` 然后一行业务输出都没有（实测），所以：重试几次 + 只收「像模型 id」的行，
+     * 让错误行不会被当成模型，也让一次抖动不至于把下拉变空。
+     */
+    fun models(providerId: String, executable: String): List<String> = when (providerId) {
+        "opencode" -> modelIds(runLines(executable.ifBlank { "opencode" }, "models"))
+        "pi" -> piModels(readText(home(".pi/agent/settings.json")))
+        else -> emptyList()
+    }
+
+    private fun modelIds(lines: List<String>): List<String> =
+        lines.map { it.trim() }
+            .filter { it.contains('/') && !it.contains(' ') && !it.startsWith("at ") }
+            .distinct()
+
     /** 子进程用的 PATH：进程环境 + 常见安装目录（Finder 启动的 .app 里 agent 要靠它找到 node 等）。 */
     fun searchPath(): String =
         (System.getenv("PATH").orEmpty().split(File.pathSeparatorChar) + EXTRA_DIRS)
@@ -149,7 +167,7 @@ internal object AgentDiscovery {
             note = if (version == null) "找到了可执行文件，但 --version 没有输出" else null,
             // 不带 --model 时 opencode 会落到它自己的默认/免费额度（用户实测：
             // 「free tier can only be used from within OpenCode」），所以把可选模型都列出来。
-            models = runLines(exe, "models").take(500),
+            models = models("opencode", exe).take(500),
         )
     }
 
@@ -215,16 +233,23 @@ internal object AgentDiscovery {
             ?.let { line -> line.replace(Regex("^[^0-9]*"), "").ifBlank { line } }
     }.getOrNull()
 
-    /** 读多行输出（`opencode models`）；stderr 丢掉（里面的 warning 不是模型 id）。 */
-    private fun runLines(exe: String, arg: String): List<String> = runCatching {
-        val process = ProcessBuilder(exe, arg).redirectError(ProcessBuilder.Redirect.DISCARD).start()
-        val text = process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(10, TimeUnit.SECONDS)) {
-            process.destroyForcibly()
-            return emptyList()
+    /** 读多行输出（`opencode models`）；stderr 丢掉。空输出重试两次（opencode 的插件激活抖动）。 */
+    private fun runLines(exe: String, arg: String): List<String> {
+        repeat(3) { attempt ->
+            val lines = runCatching {
+                val process = ProcessBuilder(exe, arg).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+                val text = process.inputStream.bufferedReader().readText()
+                if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                    process.destroyForcibly()
+                    return emptyList()
+                }
+                text.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.toList()
+            }.getOrDefault(emptyList())
+            if (lines.isNotEmpty()) return lines
+            if (attempt < 2) Thread.sleep(300)
         }
-        text.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.toList()
-    }.getOrDefault(emptyList())
+        return emptyList()
+    }
 
     /** pi 的候选模型 = `settings.json` 的 `enabledModels`（`--model` 收这些 id 与模式）。 */
     internal fun piModels(settingsJson: String?): List<String> = runCatching {

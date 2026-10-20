@@ -49,6 +49,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import io.github.workeron9.ozmoz.lineage.desktop.AgentGateway
 import io.github.workeron9.ozmoz.lineage.desktop.OpenedFile
 import io.github.workeron9.ozmoz.lineage.desktop.model.Activity
 import io.github.workeron9.ozmoz.lineage.desktop.model.ActivityKind
@@ -443,15 +444,29 @@ private fun ProviderOnboarding(state: WorkbenchState) {
 private fun ModelPicker(state: WorkbenchState, provider: ProviderConfig, defaultModel: String?) {
     val tokens = LocalTokens.current
     val density = LocalUiDensity.current
-    val models = state.providerModels(provider.id)
     var open by remember { mutableStateOf(false) }
+    var fetched by remember(provider.id) { mutableStateOf<List<String>?>(null) }
+    var loading by remember(provider.id) { mutableStateOf(false) }
+    val models = fetched ?: state.providerModels(provider.id)
     val label = provider.model.ifBlank {
         defaultModel?.takeIf { it.isNotBlank() }?.let { "默认（$it）" } ?: "默认"
     }
 
-    TextButton(onClick = { open = true }, enabled = models.isNotEmpty()) {
+    // 打开时现取一次：发现阶段的清单可能是空的（opencode 的 models 会偶发失败），
+    // 而且用户也可能刚在 agent 侧加过模型。
+    LaunchedEffect(open) {
+        if (open) {
+            loading = true
+            AgentGateway.models(provider) { read ->
+                fetched = read
+                loading = false
+            }
+        }
+    }
+
+    TextButton(onClick = { open = true }) {
         Text("模型 · $label", fontFamily = FontFamily.Monospace, fontSize = density.bodySize)
-        if (models.isNotEmpty()) Text("  ▾", color = tokens.textFaint, fontSize = density.bodySize)
+        Text("  ▾", color = tokens.textFaint, fontSize = density.bodySize)
     }
     if (!open) return
     var filter by remember { mutableStateOf("") }
@@ -471,6 +486,16 @@ private fun ModelPicker(state: WorkbenchState, provider: ProviderConfig, default
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
+                if (loading && models.isEmpty()) {
+                    Text("正在读取模型清单…", color = tokens.textMuted, fontSize = density.bodySize)
+                }
+                if (!loading && models.isEmpty()) {
+                    Text(
+                        "没有读到模型：在终端跑一次 `${provider.id} models` 看看输出；装好/登录后重开这个下拉。",
+                        color = tokens.warning,
+                        fontSize = density.bodySize,
+                    )
+                }
                 LazyColumn(Modifier.fillMaxSize()) {
                     item {
                         PickRow("默认（跟随 agent 自己的配置）", provider.model.isBlank()) {
