@@ -4,12 +4,21 @@ import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionProfile
 import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionResult
 import io.github.workeron9.ozmoz.lineage.desktop.model.DbColumn
 import io.github.workeron9.ozmoz.lineage.desktop.model.DbTable
+import io.github.workeron9.ozmoz.lineage.desktop.model.DriverPlan
 import io.github.workeron9.ozmoz.lineage.desktop.model.SchemaSnapshot
 import io.github.workeron9.ozmoz.lineage.schema.JdbcSchemaProvider
 import io.github.workeron9.ozmoz.lineage.schema.SchemaProvider
+import java.net.URI
 import java.net.URLClassLoader
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
+import java.security.MessageDigest
+import java.time.Duration
 import java.sql.Connection
 import java.sql.Driver
 import java.sql.DriverManager
@@ -26,15 +35,48 @@ import kotlin.concurrent.thread
  *
  * 驱动来源三层（不打包重型驱动，也不假装能用没装的驱动）：
  * 1. classpath——SQLite 随包（已在 THIRD-PARTY 登记）；
- * 2. `~/.ozml-lineage/drivers` 下的 *.jar——PostgreSQL / MySQL / ClickHouse / DuckDB 的
- *    官方驱动放进来即可（放进来的 jar 不改、不 fork）；
+ * 2. `~/.ozml-lineage/drivers` 下的 *.jar——官方驱动可从 Maven Central 一键下载（[installDriver]），
+ *    也可以自己放进去（放进来的 jar 不改、不 fork）；
  * 3. 都没有时给出明确原因，而不是 `No suitable driver`。
  */
 public actual object ConnectionGateway {
 
+    private const val CENTRAL = "https://repo1.maven.org/maven2/"
+
     private val connections = ConcurrentHashMap<String, Connection>()
     private val providers = ConcurrentHashMap<String, SchemaProvider>()
-    private val externalDrivers: List<Driver> by lazy { loadExternalDrivers() }
+
+    /** 驱动目录里的 jar；下载新驱动后置空重载（`installDriver`）。 */
+    @Volatile
+    private var loadedDrivers: List<Driver>? = null
+
+    private fun externalDrivers(): List<Driver> =
+        loadedDrivers ?: synchronized(this) { loadedDrivers ?: loadExternalDrivers().also { loadedDrivers = it } }
+
+    /** 已知下载源：URL 前缀 → Maven Central 坐标。版本钉死，换版本就是改这里一行。 */
+    private class Artifact(
+        val prefix: String,
+        val name: String,
+        /** 不带 `.jar` 的仓库路径。 */
+        val path: String,
+        val sizeLabel: String,
+    ) {
+        val jarUrl: String get() = CENTRAL + path + ".jar"
+        val fileName: String get() = path.substringAfterLast('/') + ".jar"
+    }
+
+    private val artifacts = listOf(
+        Artifact("jdbc:sqlite:", "SQLite", "org/xerial/sqlite-jdbc/3.53.4.0/sqlite-jdbc-3.53.4.0", "12 MB"),
+        Artifact("jdbc:postgresql:", "PostgreSQL", "org/postgresql/postgresql/42.7.8/postgresql-42.7.8", "1.1 MB"),
+        Artifact("jdbc:mysql:", "MySQL", "com/mysql/mysql-connector-j/9.1.0/mysql-connector-j-9.1.0", "2.6 MB"),
+        Artifact(
+            "jdbc:clickhouse:",
+            "ClickHouse",
+            "com/clickhouse/clickhouse-jdbc/0.6.5/clickhouse-jdbc-0.6.5-all",
+            "7.8 MB",
+        ),
+        Artifact("jdbc:duckdb:", "DuckDB", "org/duckdb/duckdb_jdbc/1.1.3/duckdb_jdbc-1.1.3", "73 MB"),
+    )
 
     public actual fun open(
         profile: ConnectionProfile,
@@ -53,6 +95,90 @@ public actual object ConnectionGateway {
     public actual fun close(profileId: String) {
         providers.remove(profileId)
         connections.remove(profileId)?.let { runCatching { it.close() } }
+    }
+
+    public actual fun driverPlan(profile: ConnectionProfile): DriverPlan? {
+        val url = profile.resolvedUrl()
+        if (hasDriver(url)) return null
+        return plannedDriver(url)
+    }
+
+    /** URL → 已知下载源（不看本机装没装驱动）。测试与「驱动目录里已有 jar」的判断共用。 */
+    internal fun plannedDriver(url: String): DriverPlan? = artifactFor(url)?.let { DriverPlan(it.name, it.sizeLabel) }
+
+    public actual fun installDriver(profile: ConnectionProfile, onResult: (Boolean, String) -> Unit) {
+        val artifact = artifactFor(profile.resolvedUrl())
+        if (artifact == null) {
+            onResult(false, "这个 URL 没有已知的驱动下载源，请手动把驱动 jar 放进 ~/.ozml-lineage/drivers/。")
+            return
+        }
+        thread(isDaemon = true, name = "ozml-driver-${profile.id}") {
+            val result = runCatching {
+                val target = Storage.root().resolve("drivers").also { Files.createDirectories(it) }
+                    .resolve(artifact.fileName)
+                val temp = Files.createTempFile(target.parent, "driver-", ".jar.download")
+                try {
+                    fetch(artifact.jarUrl, temp)
+                    val expected = String(fetchBytes(artifact.jarUrl + ".sha1")).trim().take(40).lowercase()
+                    val actual = sha1(temp)
+                    if (expected.length != 40 || expected != actual) {
+                        error("SHA-1 校验失败（期望 ${expected.take(12)}，实际 ${actual.take(12)}），已丢弃下载文件")
+                    }
+                    Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING)
+                } finally {
+                    Files.deleteIfExists(temp)
+                }
+                loadedDrivers = loadExternalDrivers()
+                "已下载 ${artifact.name} 驱动（${artifact.fileName}）"
+            }
+            result.fold(
+                onSuccess = { onResult(true, it) },
+                onFailure = { onResult(false, "驱动下载失败：${it.message ?: it.javaClass.simpleName}") },
+            )
+        }
+    }
+
+    private fun artifactFor(url: String): Artifact? = artifacts.firstOrNull { url.startsWith(it.prefix) }
+
+    /** 本地是否已有能处理这条 URL 的驱动（classpath / 驱动目录都算）。 */
+    private fun hasDriver(url: String): Boolean =
+        runCatching { DriverManager.getDriver(url) != null }.getOrDefault(false) ||
+            externalDrivers().any { runCatching { it.acceptsURL(url) }.getOrDefault(false) }
+
+    private fun fetch(url: String, target: Path) {
+        val request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(5)).build()
+        val response = http.send(
+            request,
+            HttpResponse.BodyHandlers.ofFile(
+                target,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE,
+            ),
+        )
+        if (response.statusCode() != 200) error("HTTP ${response.statusCode()}：$url")
+    }
+
+    private fun fetchBytes(url: String): ByteArray {
+        val request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30)).build()
+        val response = http.send(request, HttpResponse.BodyHandlers.ofByteArray())
+        if (response.statusCode() != 200) error("HTTP ${response.statusCode()}：$url")
+        return response.body()
+    }
+
+    private val http: HttpClient by lazy { HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build() }
+
+    private fun sha1(path: Path): String {
+        val digest = MessageDigest.getInstance("SHA-1")
+        Files.newInputStream(path).use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     /**
@@ -75,6 +201,9 @@ public actual object ConnectionGateway {
     private fun reuseOrConnect(profile: ConnectionProfile, password: String): Pair<Connection, Boolean> {
         connections[profile.id]?.let { if (runCatching { it.isValid(2) }.getOrDefault(false)) return it to true }
         val url = profile.resolvedUrl()
+        missingSqliteDirectory(url)?.let {
+            throw SQLException("数据库文件所在目录不存在：$it（先建好目录，或把连接指到已有的 .db 文件）")
+        }
         val properties = Properties()
         if (profile.user.isNotBlank()) properties.setProperty("user", profile.user)
         if (password.isNotEmpty()) properties.setProperty("password", password)
@@ -84,16 +213,29 @@ public actual object ConnectionGateway {
         return connection to false
     }
 
+    /** SQLite 的绝对路径 + 不存在的父目录：比驱动那句 CANTOPEN 更能指路。null = 不用管。 */
+    private fun missingSqliteDirectory(url: String): String? {
+        if (!url.startsWith("jdbc:sqlite:")) return null
+        val path = runCatching { Path.of(url.removePrefix("jdbc:sqlite:")) }.getOrNull() ?: return null
+        if (!path.isAbsolute) return null
+        val parent = path.parent ?: return null
+        return if (Files.isDirectory(parent)) null else parent.toString()
+    }
+
     private fun connect(url: String, properties: Properties): Connection {
-        runCatching { return DriverManager.getConnection(url, properties) }
-        for (driver in externalDrivers) {
+        // 有驱动处理这条 URL 时，用它自己的错误原样往上抛（路径不存在 / 认证失败 / 库损坏…），
+        // 不能一律说成「没有驱动」——那样用户会去下载一个本来就在包里的驱动。
+        if (runCatching { DriverManager.getDriver(url) }.getOrNull() != null) {
+            return DriverManager.getConnection(url, properties)
+        }
+        for (driver in externalDrivers()) {
             if (runCatching { driver.acceptsURL(url) }.getOrDefault(false)) {
                 return driver.connect(url, properties)
                     ?: throw SQLException("驱动 ${driver.javaClass.name} 拒绝了该 URL")
             }
         }
         throw SQLException(
-            "没有可用的 JDBC 驱动（$url）。把对应驱动 jar 放进 ~/.ozml-lineage/drivers/ 后重试。",
+            "没有可用的 JDBC 驱动。放进 ~/.ozml-lineage/drivers/ 后重试，或用「下载驱动」自动补。",
         )
     }
 

@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionKind
 import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionProfile
@@ -56,6 +58,7 @@ internal fun ConnectionPage(state: WorkbenchState) {
     val density = LocalUiDensity.current
     var selectedId by remember { mutableStateOf<String?>(state.store.connections.firstOrNull()?.id) }
     var editing by remember { mutableStateOf<ConnectionProfile?>(null) }
+    var deleting by remember { mutableStateOf<ConnectionProfile?>(null) }
     val connections = state.store.connections
     val selected = connections.firstOrNull { it.id == selectedId } ?: connections.firstOrNull()
 
@@ -84,14 +87,24 @@ internal fun ConnectionPage(state: WorkbenchState) {
         VerticalDivider()
 
         if (editing != null) {
+            val isExisting = state.store.connections.any { it.id == editing!!.id }
             ConnectionForm(
                 initial = editing!!,
+                password = state.passwords[editing!!.id].orEmpty(),
                 onCancel = { editing = null },
-                onSave = { profile ->
+                onSave = { profile, password ->
                     state.saveConnection(profile)
+                    // 密码只活在内存里（设置文件不带凭据）；清空输入即清掉本次的密码。
+                    if (password.isNotEmpty()) {
+                        state.passwords[profile.id] = password
+                    } else {
+                        state.passwords.remove(profile.id)
+                    }
                     selectedId = profile.id
                     editing = null
                 },
+                // 删除放在编辑里：头部只留「连接」，窄窗口下不会把按钮挤出去。
+                onDelete = if (isExisting) ({ profile -> deleting = profile }) else null,
             )
         } else if (selected == null) {
             Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
@@ -109,8 +122,12 @@ internal fun ConnectionPage(state: WorkbenchState) {
             SchemaTree(
                 profile = selected,
                 runtime = runtime,
+                driverPlan = state.driverPlan(selected),
+                needsPassword = selected.kind != ConnectionKind.SQLITE && state.passwords[selected.id].isNullOrEmpty(),
                 onConnect = { state.connect(selected) },
+                onInstallDriver = { state.installDriver(selected) },
                 onDisconnect = { state.disconnect(selected) },
+                onEdit = { editing = selected },
                 onSelectTable = { table -> state.selectTable(selected, table) },
                 modifier = Modifier.weight(1f),
             )
@@ -119,6 +136,23 @@ internal fun ConnectionPage(state: WorkbenchState) {
                 state = state,
                 profile = selected,
                 modifier = Modifier.width(320.dp).fillMaxHeight(),
+            )
+        }
+
+        deleting?.let { profile ->
+            AlertDialog(
+                onDismissRequest = { deleting = null },
+                title = { Text("删除连接「${profile.name}」？") },
+                text = { Text("只删本地这条配置，不动数据库；密码也会一起清掉。", fontSize = density.bodySize) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        state.deleteConnection(profile)
+                        deleting = null
+                        editing = null
+                        selectedId = state.store.connections.firstOrNull()?.id
+                    }) { Text("删除", color = tokens.danger) }
+                },
+                dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } },
             )
         }
     }
@@ -167,16 +201,19 @@ private fun ConnectionRow(
     }
 }
 
-/** 新建 / 编辑表单。JDBC URL 是高级项，非空时覆盖 host/port/database。 */
+/** 新建 / 编辑表单。JDBC URL 是高级项，非空时覆盖 host/port/database。密码只写内存，不落盘。 */
 @Composable
 private fun ConnectionForm(
     initial: ConnectionProfile,
+    password: String,
     onCancel: () -> Unit,
-    onSave: (ConnectionProfile) -> Unit,
+    onSave: (ConnectionProfile, String) -> Unit,
+    onDelete: ((ConnectionProfile) -> Unit)?,
 ) {
     val tokens = LocalTokens.current
     val density = LocalUiDensity.current
     var draft by remember(initial.id) { mutableStateOf(initial) }
+    var secret by remember(initial.id) { mutableStateOf(password) }
     var kindMenu by remember { mutableStateOf(false) }
 
     Column(
@@ -217,7 +254,7 @@ private fun ConnectionForm(
                     onValueChange = { draft = draft.copy(host = it) },
                     label = { Text("Host") },
                     singleLine = true,
-                    modifier = Modifier.width(200.dp),
+                    modifier = Modifier.width(340.dp),
                 )
                 OutlinedTextField(
                     value = draft.port,
@@ -245,6 +282,15 @@ private fun ConnectionForm(
             modifier = Modifier.width(360.dp),
         )
         OutlinedTextField(
+            value = secret,
+            onValueChange = { secret = it },
+            label = { Text("密码") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            supportingText = { Text("只存在本次运行的内存里，不写入设置文件", fontSize = density.bodySize) },
+            modifier = Modifier.width(360.dp),
+        )
+        OutlinedTextField(
             value = draft.jdbcUrl,
             onValueChange = { draft = draft.copy(jdbcUrl = it) },
             label = { Text("JDBC URL（高级，非空覆盖以上字段）") },
@@ -258,8 +304,11 @@ private fun ConnectionForm(
             fontSize = density.bodySize,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onSave(draft) }) { Text("保存") }
+            Button(onClick = { onSave(draft, secret) }) { Text("保存") }
             TextButton(onClick = onCancel) { Text("取消") }
+            if (onDelete != null) {
+                TextButton(onClick = { onDelete(draft) }) { Text("删除这条连接", color = tokens.danger) }
+            }
         }
     }
 }
@@ -269,8 +318,12 @@ private fun ConnectionForm(
 private fun SchemaTree(
     profile: ConnectionProfile,
     runtime: io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionRuntime,
+    driverPlan: io.github.workeron9.ozmoz.lineage.desktop.model.DriverPlan?,
+    needsPassword: Boolean,
     onConnect: () -> Unit,
+    onInstallDriver: () -> Unit,
     onDisconnect: () -> Unit,
+    onEdit: () -> Unit,
     onSelectTable: (DbTable) -> Unit,
     modifier: Modifier,
 ) {
@@ -286,8 +339,9 @@ private fun SchemaTree(
             Text(
                 when (runtime.status) {
                     ConnectionStatus.ONLINE -> "已连接 · ${runtime.tables.size} 张表"
-                    ConnectionStatus.CONNECTING -> "连接中…"
-                    ConnectionStatus.ERROR -> runtime.message ?: "连接失败"
+                    ConnectionStatus.CONNECTING -> runtime.message ?: "连接中…"
+                    // 失败原因在下面单独一块给全，标题行只留状态，不把长错误挤进一行。
+                    ConnectionStatus.ERROR -> if (driverPlan != null) "连接失败 · 缺少驱动" else "连接失败"
                     ConnectionStatus.UNKNOWN -> "未连接"
                 },
                 color = when (runtime.status) {
@@ -303,19 +357,40 @@ private fun SchemaTree(
                 ConnectionStatus.CONNECTING -> Unit
                 else -> Button(onClick = onConnect) { Text("连接") }
             }
+            TextButton(onClick = onEdit) { Text("编辑") }
         }
         HorizontalDivider()
         if (runtime.tables.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    when (runtime.status) {
-                        ConnectionStatus.ERROR -> runtime.message ?: "连接失败"
-                        ConnectionStatus.ONLINE -> "这个库里没有表"
-                        else -> "连接后在这里浏览 schema（只读元数据）"
-                    },
-                    color = tokens.textMuted,
-                    fontSize = density.bodySize,
-                )
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        when (runtime.status) {
+                            ConnectionStatus.ERROR -> runtime.message ?: "连接失败"
+                            ConnectionStatus.ONLINE -> "这个库里没有表"
+                            else -> "连接后在这里浏览 schema（只读元数据）"
+                        },
+                        color = if (runtime.status == ConnectionStatus.ERROR) tokens.danger else tokens.textMuted,
+                        fontSize = density.bodySize,
+                    )
+                    if (runtime.status == ConnectionStatus.ERROR && needsPassword && driverPlan == null) {
+                        Text(
+                            "这条连接还没填密码（密码只存在本次运行的内存里，不写入设置文件）。",
+                            color = tokens.textMuted,
+                            fontSize = density.bodySize,
+                        )
+                        Button(onClick = onEdit) { Text("填写密码") }
+                    }
+                    if (runtime.status != ConnectionStatus.ONLINE && driverPlan != null) {
+                        Text(
+                            "缺少 ${driverPlan.name} 驱动。可以从 Maven Central 下载到 ~/.ozml-lineage/drivers（${driverPlan.sizeLabel}），下完自动重连。",
+                            color = tokens.textMuted,
+                            fontSize = density.bodySize,
+                        )
+                        Button(onClick = onInstallDriver) {
+                            Text("下载 ${driverPlan.name} 驱动（${driverPlan.sizeLabel}）")
+                        }
+                    }
+                }
             }
         } else {
             var collapsedSchemas by remember(profile.id) { mutableStateOf(emptySet<String>()) }

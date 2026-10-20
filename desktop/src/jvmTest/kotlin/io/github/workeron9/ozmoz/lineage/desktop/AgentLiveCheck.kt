@@ -38,13 +38,14 @@ class AgentLiveCheck {
     fun streamsOneTurnFromDiscoveredAgent() {
         if (!enabled) return
         val providerId = System.getProperty("ozml.live.provider")?.takeIf { it.isNotBlank() } ?: return
+        val model = System.getProperty("ozml.live.model").orEmpty()
         val prompt = System.getProperty("ozml.live.prompt") ?: "Reply with exactly: OK"
         val session = newAgentSessionId(providerId)
         val texts = StringBuilder()
         var failure: String? = null
         val done = CountDownLatch(1)
         AgentGateway.start(
-            ProviderConfig(id = providerId, name = providerId, kind = ProviderKind.NATIVE),
+            ProviderConfig(id = providerId, name = providerId, kind = ProviderKind.NATIVE, model = model),
             session,
             prompt,
         ) { event ->

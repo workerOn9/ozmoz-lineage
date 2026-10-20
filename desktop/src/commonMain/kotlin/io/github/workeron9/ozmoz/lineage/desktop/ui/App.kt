@@ -63,7 +63,8 @@ public fun App(initial: OpenedFile? = null, hiddenTitleBar: Boolean = false) {
     val state = remember { WorkbenchState(initial, StoreGateway.load()) }
     DesktopTheme(mode = state.store.theme) {
         CompositionLocalProvider(LocalUiDensity provides state.store.density) {
-            LaunchedEffect(state.opened, state.engineId, state.tolerant, state.activeConnectionId) {
+            // 文档内容由 openFile / 编辑防抖各自触发分析；这里只管文档级开关（换引擎 / 容错 / schema）。
+            LaunchedEffect(state.engineId, state.tolerant, state.activeConnectionId) {
                 state.runAnalysis()
             }
             LaunchedEffect(Unit) { state.scanAgents() }

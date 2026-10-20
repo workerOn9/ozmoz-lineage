@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -56,8 +57,49 @@ class ConnectionGatewayTest {
     }
 
     @Test
-    fun failedConnectionReportsReasonInsteadOfThrowing() {
+    fun driverPlanOnlyOffersKnownDownloadsWhenDriverIsMissing() {
+        // SQLite 随包 → 不缺，不给下载按钮（不许对已能用的驱动喊「下载」）。
+        assertNull(ConnectionGateway.driverPlan(sqliteProfile()))
+
+        // 注册表映射与「本机装没装」解耦：用户机器上可能已经下载过某个驱动。
+        assertEquals("PostgreSQL", ConnectionGateway.plannedDriver("jdbc:postgresql://h:5432/d")?.name)
+        assertEquals("MySQL", ConnectionGateway.plannedDriver("jdbc:mysql://h:3306/d")?.name)
+        assertEquals("DuckDB", ConnectionGateway.plannedDriver("jdbc:duckdb:/tmp/x.duckdb")?.name)
+        assertEquals("ClickHouse", ConnectionGateway.plannedDriver("jdbc:clickhouse://h:8123/d")?.name)
+        assertEquals("SQLite", ConnectionGateway.plannedDriver("jdbc:sqlite::memory:")?.name)
+
+        // 没有已知下载源：如实返回 null（界面只留「手动放 jar」的说明）。
+        val custom = ConnectionProfile(id = "c", name = "x", kind = ConnectionKind.CUSTOM, jdbcUrl = "jdbc:oracle:thin:@h:1521:x")
+        assertNull(ConnectionGateway.plannedDriver(custom.resolvedUrl()))
+        assertNull(ConnectionGateway.driverPlan(custom))
+    }
+
+    /**
+     * 驱动在、但库打不开（路径不存在）：错误必须是驱动自己的原因，
+     * **不能**说成「没有可用的 JDBC 驱动」——用户截图里就是这么被误导去下载 SQLite 驱动的。
+     */
+    @Test
+    fun driverPresentButPathBrokenReportsTheRealReason() {
         val profile = ConnectionProfile(
+            id = "test-broken-path",
+            name = "路径不存在",
+            kind = ConnectionKind.SQLITE,
+            database = tempDir.resolve("no-such-dir/demo.db").toString(),
+        )
+        val (result, snapshot) = ConnectionGateway.openBlocking(profile, "")
+        assertFalse(result.ok)
+        assertEquals(null, snapshot)
+        assertFalse(
+            result.message.contains("没有可用的 JDBC 驱动"),
+            "驱动明明在包里（SQLite），不能报缺驱动：${result.message}",
+        )
+        assertTrue(result.message.contains("jdbc:sqlite"), "错误里要带 URL：${result.message}")
+        assertTrue(result.message.contains("目录不存在"), "SQLite 要给比 CANTOPEN 更能指路的原因：${result.message}")
+        assertNull(ConnectionGateway.driverPlan(profile), "有驱动时不该出现「下载驱动」入口")
+    }
+
+    @Test
+    fun failedConnectionReportsReasonInsteadOfThrowing() {        val profile = ConnectionProfile(
             id = "test-missing",
             name = "连不上",
             kind = ConnectionKind.CUSTOM,
@@ -111,8 +153,7 @@ class ConnectionGatewayTest {
     }
 
     @Test
-    fun resolvedUrlCoversKinds() {
-        assertEquals(
+    fun resolvedUrlCoversKinds() {        assertEquals(
             "jdbc:postgresql://db.example:5433/analytics",
             ConnectionProfile(id = "p", name = "p", kind = ConnectionKind.POSTGRESQL, host = "db.example", port = "5433", database = "analytics").resolvedUrl(),
         )
@@ -143,6 +184,38 @@ class ConnectionGatewayTest {
             val raw = Files.readString(root.resolve("desktop.json"))
             assertFalse(raw.contains("password", ignoreCase = true), "设置文件不许出现 password 字段：$raw")
         } finally {
+            System.clearProperty("ozml.storage.root")
+        }
+    }
+
+    /**
+     * 真下载（手动检查，**不进 CI**）：`-PozmlManualChecks=true` 时把 SQLite 驱动下到临时目录，
+     * 再从驱动目录连一个真库。走的是用户点「下载驱动」时的同一条路径。
+     */
+    @Test
+    fun downloadsDriverFromMavenCentralAndUsesIt() {
+        if (System.getProperty("ozml.manual.checks") != "true") return
+        val root = Files.createDirectories(tempDir.resolve("driver-root"))
+        System.setProperty("ozml.storage.root", root.toString())
+        try {
+            val profile = sqliteProfile()
+            var done = false
+            var message = ""
+            ConnectionGateway.installDriver(profile) { ok, text ->
+                done = ok
+                message = text
+            }
+            var waited = 0
+            while (!done && waited < 120_000) {
+                Thread.sleep(100)
+                waited += 100
+            }
+            assertTrue(done, "下载应成功：$message")
+            assertTrue(Files.exists(root.resolve("drivers").resolve("sqlite-jdbc-3.53.4.0.jar")), message)
+            val (result, _) = ConnectionGateway.openBlocking(profile, "")
+            assertTrue(result.ok, result.message)
+        } finally {
+            ConnectionGateway.close("test-sqlite")
             System.clearProperty("ozml.storage.root")
         }
     }
