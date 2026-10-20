@@ -78,9 +78,32 @@ class ConnectionGatewayTest {
         assertNull(ConnectionGateway.driverPlan(custom))
     }
 
+    /**
+     * 驱动在、但库打不开（路径不存在）：错误必须是驱动自己的原因，
+     * **不能**说成「没有可用的 JDBC 驱动」——用户截图里就是这么被误导去下载 SQLite 驱动的。
+     */
     @Test
-    fun failedConnectionReportsReasonInsteadOfThrowing() {
+    fun driverPresentButPathBrokenReportsTheRealReason() {
         val profile = ConnectionProfile(
+            id = "test-broken-path",
+            name = "路径不存在",
+            kind = ConnectionKind.SQLITE,
+            database = tempDir.resolve("no-such-dir/demo.db").toString(),
+        )
+        val (result, snapshot) = ConnectionGateway.openBlocking(profile, "")
+        assertFalse(result.ok)
+        assertEquals(null, snapshot)
+        assertFalse(
+            result.message.contains("没有可用的 JDBC 驱动"),
+            "驱动明明在包里（SQLite），不能报缺驱动：${result.message}",
+        )
+        assertTrue(result.message.contains("jdbc:sqlite"), "错误里要带 URL：${result.message}")
+        assertTrue(result.message.contains("目录不存在"), "SQLite 要给比 CANTOPEN 更能指路的原因：${result.message}")
+        assertNull(ConnectionGateway.driverPlan(profile), "有驱动时不该出现「下载驱动」入口")
+    }
+
+    @Test
+    fun failedConnectionReportsReasonInsteadOfThrowing() {        val profile = ConnectionProfile(
             id = "test-missing",
             name = "连不上",
             kind = ConnectionKind.CUSTOM,

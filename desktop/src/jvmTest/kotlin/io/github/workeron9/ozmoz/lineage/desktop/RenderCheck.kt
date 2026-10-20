@@ -236,6 +236,25 @@ class RenderCheck {
         render("connection-missing-driver", ThemeMode.LIGHT, state)
     }
 
+    /** 驱动在、但路径不存在（用户截图里那种被误报成「缺驱动」的情况）：不给下载入口，说真原因。 */
+    @Test
+    fun renderConnectionBrokenPath() {
+        if (!enabled) return
+        val profile = ConnectionProfile(
+            id = "broken-demo",
+            name = "本地示例库",
+            kind = ConnectionKind.SQLITE,
+            database = "/nonexistent/ozml-render-db/demo.db",
+        )
+        val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.LIGHT))
+        state.runAnalysis()
+        state.saveConnection(profile)
+        state.connect(profile)
+        waitUntil { state.connectionRuntime(profile.id).status != ConnectionStatus.CONNECTING }
+        state.page = Page.CONNECTION
+        render("connection-broken-path", ThemeMode.LIGHT, state)
+    }
+
     @Test
     fun renderAgentPage() {
         if (!enabled) return

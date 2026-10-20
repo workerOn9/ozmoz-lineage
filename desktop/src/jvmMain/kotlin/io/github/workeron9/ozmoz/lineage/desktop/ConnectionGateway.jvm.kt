@@ -198,6 +198,9 @@ public actual object ConnectionGateway {
     private fun reuseOrConnect(profile: ConnectionProfile, password: String): Pair<Connection, Boolean> {
         connections[profile.id]?.let { if (runCatching { it.isValid(2) }.getOrDefault(false)) return it to true }
         val url = profile.resolvedUrl()
+        missingSqliteDirectory(url)?.let {
+            throw SQLException("数据库文件所在目录不存在：$it（先建好目录，或把连接指到已有的 .db 文件）")
+        }
         val properties = Properties()
         if (profile.user.isNotBlank()) properties.setProperty("user", profile.user)
         if (password.isNotEmpty()) properties.setProperty("password", password)
@@ -207,8 +210,21 @@ public actual object ConnectionGateway {
         return connection to false
     }
 
+    /** SQLite 的绝对路径 + 不存在的父目录：比驱动那句 CANTOPEN 更能指路。null = 不用管。 */
+    private fun missingSqliteDirectory(url: String): String? {
+        if (!url.startsWith("jdbc:sqlite:")) return null
+        val path = runCatching { Path.of(url.removePrefix("jdbc:sqlite:")) }.getOrNull() ?: return null
+        if (!path.isAbsolute) return null
+        val parent = path.parent ?: return null
+        return if (Files.isDirectory(parent)) null else parent.toString()
+    }
+
     private fun connect(url: String, properties: Properties): Connection {
-        runCatching { return DriverManager.getConnection(url, properties) }
+        // 有驱动处理这条 URL 时，用它自己的错误原样往上抛（路径不存在 / 认证失败 / 库损坏…），
+        // 不能一律说成「没有驱动」——那样用户会去下载一个本来就在包里的驱动。
+        if (runCatching { DriverManager.getDriver(url) }.getOrNull() != null) {
+            return DriverManager.getConnection(url, properties)
+        }
         for (driver in externalDrivers()) {
             if (runCatching { driver.acceptsURL(url) }.getOrDefault(false)) {
                 return driver.connect(url, properties)
