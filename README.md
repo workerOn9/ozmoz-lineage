@@ -188,6 +188,7 @@ macOS 上内容延伸到标题栏（红绿灯保留、标题栏隐藏）；jlink
 - **连接**：SQLite 驱动随包；PostgreSQL / MySQL / ClickHouse / DuckDB 缺驱动时连接页给
   「下载驱动」按钮，从 Maven Central 取官方 jar（校验 SHA-1）到 `~/.ozml-lineage/drivers`
   后自动重连；也可以手动把 jar 放进去（不打包、不改驱动）。
+  **密码在连接表单里填**，只存在本次运行的内存里；连接可编辑、可删除（删除只删本地配置）。
 - **工作区不要求先有文件**：空态可直接「新建 / 粘贴 SQL」，源面板也能在「编辑 / 粘贴」与只读间切换，
   停手 350ms 自动重跑分析。
 - **设置**存 `~/.ozml-lineage/desktop.json`，**不含密码与 API Key**（凭据存储是 D3 的事项）。

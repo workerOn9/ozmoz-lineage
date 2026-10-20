@@ -255,6 +255,40 @@ class RenderCheck {
         render("connection-broken-path", ThemeMode.LIGHT, state)
     }
 
+    /** 编辑表单（含密码字段）：窄窗口下也要能填密码 / 删除，不能被挤掉。 */
+    @Test
+    fun renderConnectionEditForm() {
+        if (!enabled) return
+        val profile = ConnectionProfile(
+            id = "pg-edit",
+            name = "holgres",
+            kind = ConnectionKind.POSTGRESQL,
+            host = "hgprecn-cn-nif1w1mk7012-cn-shanghai.hologres.aliyuncs.com",
+            port = "80",
+            database = "marketing",
+            user = "LTAI5tExample",
+            jdbcUrl = "jdbc:postgresql://hgprecn-cn-nif1w1mk7012-cn-shanghai.hologres.aliyuncs.com:80/marketing?stringtype=unspecified",
+        )
+        val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.LIGHT))
+        state.runAnalysis()
+        state.saveConnection(profile)
+        state.page = Page.CONNECTION
+        val out = File(System.getProperty("java.io.tmpdir"), "ozml-desktop-connection-form.png")
+        val scene = ImageComposeScene(width = 1280, height = 820, density = Density(1f)) {
+            DesktopTheme(mode = ThemeMode.LIGHT) { AppContent(state) }
+        }
+        try {
+            scene.render()
+            // 「编辑」在连接页头部右侧（与「连接」相邻）。
+            scene.sendPointerEvent(PointerEventType.Press, Offset(919f, 95f))
+            scene.sendPointerEvent(PointerEventType.Release, Offset(919f, 95f))
+            scene.render(1_000_000_000L).encodeToData()?.bytes?.let { out.writeBytes(it) }
+        } finally {
+            scene.close()
+        }
+        println("rendered: ${out.absolutePath} (${out.length()} bytes)")
+    }
+
     @Test
     fun renderAgentPage() {
         if (!enabled) return

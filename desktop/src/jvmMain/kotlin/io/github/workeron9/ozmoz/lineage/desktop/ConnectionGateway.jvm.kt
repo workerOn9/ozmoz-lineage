@@ -100,8 +100,11 @@ public actual object ConnectionGateway {
     public actual fun driverPlan(profile: ConnectionProfile): DriverPlan? {
         val url = profile.resolvedUrl()
         if (hasDriver(url)) return null
-        return artifactFor(url)?.let { DriverPlan(name = it.name, sizeLabel = it.sizeLabel) }
+        return plannedDriver(url)
     }
+
+    /** URL → 已知下载源（不看本机装没装驱动）。测试与「驱动目录里已有 jar」的判断共用。 */
+    internal fun plannedDriver(url: String): DriverPlan? = artifactFor(url)?.let { DriverPlan(it.name, it.sizeLabel) }
 
     public actual fun installDriver(profile: ConnectionProfile, onResult: (Boolean, String) -> Unit) {
         val artifact = artifactFor(profile.resolvedUrl())

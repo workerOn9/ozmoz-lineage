@@ -61,20 +61,16 @@ class ConnectionGatewayTest {
         // SQLite 随包 → 不缺，不给下载按钮（不许对已能用的驱动喊「下载」）。
         assertNull(ConnectionGateway.driverPlan(sqliteProfile()))
 
-        val postgres = ConnectionProfile(
-            id = "p", name = "pg", kind = ConnectionKind.POSTGRESQL,
-            host = "127.0.0.1", port = "1", database = "x",
-        )
-        assertEquals("PostgreSQL", ConnectionGateway.driverPlan(postgres)?.name)
-
-        val mysql = ConnectionProfile(id = "m", name = "my", kind = ConnectionKind.MYSQL, host = "h", database = "d")
-        assertEquals("MySQL", ConnectionGateway.driverPlan(mysql)?.name)
-
-        val duckdb = ConnectionProfile(id = "d", name = "duck", kind = ConnectionKind.DUCKDB, database = "/tmp/x.duckdb")
-        assertEquals("DuckDB", ConnectionGateway.driverPlan(duckdb)?.name)
+        // 注册表映射与「本机装没装」解耦：用户机器上可能已经下载过某个驱动。
+        assertEquals("PostgreSQL", ConnectionGateway.plannedDriver("jdbc:postgresql://h:5432/d")?.name)
+        assertEquals("MySQL", ConnectionGateway.plannedDriver("jdbc:mysql://h:3306/d")?.name)
+        assertEquals("DuckDB", ConnectionGateway.plannedDriver("jdbc:duckdb:/tmp/x.duckdb")?.name)
+        assertEquals("ClickHouse", ConnectionGateway.plannedDriver("jdbc:clickhouse://h:8123/d")?.name)
+        assertEquals("SQLite", ConnectionGateway.plannedDriver("jdbc:sqlite::memory:")?.name)
 
         // 没有已知下载源：如实返回 null（界面只留「手动放 jar」的说明）。
         val custom = ConnectionProfile(id = "c", name = "x", kind = ConnectionKind.CUSTOM, jdbcUrl = "jdbc:oracle:thin:@h:1521:x")
+        assertNull(ConnectionGateway.plannedDriver(custom.resolvedUrl()))
         assertNull(ConnectionGateway.driverPlan(custom))
     }
 
