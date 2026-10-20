@@ -105,7 +105,41 @@ internal object Icons {
         rect(15f, 14f, 18f, 20f)
     }.build()
 
-    /** 侧栏折叠：一个尖括号（收起态朝左）。 */
+    /**
+     * 侧栏开关：面板图标（圆角矩形 + 左侧分隔线）。和导航项的线性图标同一套笔触，
+     * 不再是漂在 header 中间的尖括号（用户对照 FlClash 后的反馈）。
+     */
+    val Sidebar: ImageVector = ImageVector.Builder(
+        name = "Sidebar",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.7f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            // 外框（圆角矩形）
+            moveTo(5f, 4f)
+            lineTo(19f, 4f)
+            curveTo(20.1f, 4f, 21f, 4.9f, 21f, 6f)
+            lineTo(21f, 18f)
+            curveTo(21f, 19.1f, 20.1f, 20f, 19f, 20f)
+            lineTo(5f, 20f)
+            curveTo(3.9f, 20f, 3f, 19.1f, 3f, 18f)
+            lineTo(3f, 6f)
+            curveTo(3f, 4.9f, 3.9f, 4f, 5f, 4f)
+            close()
+            // 左侧分隔线
+            moveTo(9f, 4f)
+            lineTo(9f, 20f)
+        }
+    }.build()
+
+    /** 侧栏折叠：一个尖括号（保留给别处用；侧栏开关已换成 [Sidebar]）。 */
     val Chevron: ImageVector = ImageVector.Builder(
         name = "Chevron",
         defaultWidth = 24.dp,

@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,21 +66,19 @@ public fun App(initial: OpenedFile? = null) {
     }
 }
 
-/**
- * 侧栏展开所需的最小窗口宽度。M3 的展开态侧栏固定 220dp 起（`NavigationRailExpandedTokens`
- * 的 ContainerWidthMinimum），窗口一窄就吃掉四分之一屏——所以窄窗强制收起（96dp，只剩图标）。
- */
-private val RailExpandMinWidth = 1024.dp
+/** 低于这个宽度时顶栏进入 compact（去掉文字标签），侧栏仍由用户自己决定展开 / 收起。 */
+private val CompactTopBarBelow = 1024.dp
 
 /** 壳层内容（主题与副作用在外面）：离屏渲染与 UI 测试直接驱动它。 */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-internal fun AppContent(state: WorkbenchState) {
+internal fun AppContent(state: WorkbenchState, initialRailExpanded: Boolean = true) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wideEnough = maxWidth >= RailExpandMinWidth
-        var userExpanded by remember { mutableStateOf(true) }
-        // 窄窗一律收起：展开态的 220dp 侧栏在小窗口里不协调（用户 2026-10-19 反馈的截图）。
-        val railExpanded = wideEnough && userExpanded
+        val fullTopBar = maxWidth >= CompactTopBarBelow
+        // 展开/收起由用户决定（FlClash 的做法）：窄窗也保留开关，不做强制收起——
+        // 强制收起会让「收起态」失去展开的入口。窄窗只把顶栏切到 compact。
+        var userExpanded by remember { mutableStateOf(initialRailExpanded) }
+        val railExpanded = userExpanded
         // 初值就按目标态：否则第一帧是展开的，窄窗上会闪一下 220dp 的侧栏。
         val railState = rememberWideNavigationRailState(
             if (railExpanded) WideNavigationRailValue.Expanded else WideNavigationRailValue.Collapsed,
@@ -94,8 +95,8 @@ internal fun AppContent(state: WorkbenchState) {
                     // 缺省是 Arrangement.Center：桌面侧栏里「目的地」要贴顶。
                     arrangement = Arrangement.Top,
                     header = {
-                        // 窄窗下折叠按钮点了也没用（展开会被宽度规则收回去），直接不画。
-                        if (wideEnough) RailHeader(railIsExpanded) { userExpanded = !userExpanded }
+                        // 展开 / 收起态都保留这个入口（FlClash 同款）；窄窗也允许手动展开。
+                        RailHeader(railIsExpanded) { userExpanded = !userExpanded }
                     },
                 ) {
                     for (destination in Page.entries) {
@@ -103,6 +104,8 @@ internal fun AppContent(state: WorkbenchState) {
                             selected = state.page == destination,
                             onClick = { state.page = destination },
                             icon = { Icon(destination.icon, contentDescription = destination.label) },
+                            // 收起态保留 M3 的文字标签：96dp 里标签与图标垂直居中，
+                            // 去掉标签反而会让项左对齐（M3 的 48dp 项落在 8dp 处）。
                             label = { Text(destination.label) },
                             railExpanded = railIsExpanded,
                         )
@@ -110,7 +113,7 @@ internal fun AppContent(state: WorkbenchState) {
                 }
                 VerticalDivider()
                 Column(Modifier.weight(1f).fillMaxHeight()) {
-                    OzmlTopBar(state, compact = !wideEnough)
+                    OzmlTopBar(state, compact = !fullTopBar)
                     when (state.page) {
                         Page.WORKSPACE -> WorkspacePage(state)
                         Page.CONNECTION -> ConnectionPage(state)
@@ -127,15 +130,26 @@ internal fun AppContent(state: WorkbenchState) {
 private fun RailHeader(expanded: Boolean, onToggle: () -> Unit) {
     // **不能** fillMaxWidth：WideNavigationRail 用最宽子项算展开宽度，header 撑满整窗时
     // 侧栏会一路涨到 360dp 上限（D2 首版实测）。限制在展开态最小宽度 220dp。
+    //
+    // 对齐：展开态和导航项图标同一条竖线（item 的水平内边距是 20dp，48dp 按钮的中心
+    // 因此落在 44dp）；收起态整条 96dp，按钮居中。图标也用同一套线性笔触（FlClash 的
+    // 参照：顶部是面板图标，不漂在中间）。
+    // 宽度必须跟着侧栏状态走：收起态若仍按 220dp 量，图标会被 96dp 的容器裁掉
+    // （第一版收起态顶部空白就是这个原因）。
+    val headerWidth by animateDpAsState(if (expanded) 220.dp else 96.dp, label = "railHeaderWidth")
+    // 与导航项图标同一条竖线：展开态图标中心 ≈44dp（item 水平内边距 20 + 图标半径），
+    // 收起态整条 96dp、项居中（图标中心 48）。
     Box(
-        Modifier.widthIn(max = 220.dp).fillMaxWidth().height(56.dp),
-        contentAlignment = Alignment.Center,
+        Modifier.width(headerWidth).height(48.dp),
+        contentAlignment = if (expanded) Alignment.CenterStart else Alignment.Center,
     ) {
-        IconButton(onClick = onToggle) {
+        IconButton(
+            onClick = onToggle,
+            modifier = Modifier.padding(start = if (expanded) 20.dp else 0.dp),
+        ) {
             Icon(
-                Icons.Chevron,
+                Icons.Sidebar,
                 contentDescription = if (expanded) "收起侧栏" else "展开侧栏",
-                modifier = Modifier.rotate(if (expanded) 0f else 180f),
             )
         }
     }

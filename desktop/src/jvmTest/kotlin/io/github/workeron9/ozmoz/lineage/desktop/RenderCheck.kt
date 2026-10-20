@@ -77,13 +77,22 @@ class RenderCheck {
         render("workspace-agent", ThemeMode.DARK, state)
     }
 
-    /** 窄窗：侧栏应自动收起（用户 2026-10-19 反馈展开态 220dp 在窄窗里不协调）。 */
+    /** 窄窗：侧栏仍是用户可展开的，顶栏进入 compact。 */
     @Test
     fun renderWorkspaceNarrow() {
         if (!enabled) return
         val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.LIGHT))
         state.runAnalysis()
         render("workspace-narrow", ThemeMode.LIGHT, state, width = 900, height = 760)
+    }
+
+    /** 收起态：顶部开关要留在（与图标同一条竖线），不能消失。 */
+    @Test
+    fun renderWorkspaceRailCollapsed() {
+        if (!enabled) return
+        val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.LIGHT))
+        state.runAnalysis()
+        render("workspace-collapsed", ThemeMode.LIGHT, state, width = 1280, height = 820, railExpanded = false)
     }
 
     /** 最小窗口（960×640）：侧栏收起后三栏仍要能看。 */
@@ -185,10 +194,11 @@ class RenderCheck {
         state: WorkbenchState,
         width: Int = 1280,
         height: Int = 820,
+        railExpanded: Boolean = true,
     ) {
         val out = File(System.getProperty("java.io.tmpdir"), "ozml-desktop-$name.png")
         val scene = ImageComposeScene(width = width, height = height, density = Density(1f)) {
-            DesktopTheme(mode = mode) { AppContent(state) }
+            DesktopTheme(mode = mode) { AppContent(state, initialRailExpanded = railExpanded) }
         }
         try {
             scene.render().encodeToData()?.bytes?.let { out.writeBytes(it) }
