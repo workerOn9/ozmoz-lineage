@@ -19,6 +19,7 @@ cd "$(dirname "$0")"
 
 DOCS=../../site/docs/public
 WEB=../../web/public
+DESKTOP=../../desktop/packaging
 
 for c in rsvg-convert magick node; do
   command -v "$c" >/dev/null 2>&1 || {
@@ -60,7 +61,31 @@ magick dist/android-chrome-512.png \
      -draw "circle 256,256 256,6" -alpha off \) \
   -alpha off -compose CopyOpacity -composite dist/maskable-circle-preview.png
 
-# 3) 分发：站点静态目录（文件名用站点约定）+ Web UI
+# 3) 桌面安装包图标（Compose Desktop / jpackage）
+#    macOS 要 .icns、Windows 要 .ico（必须含 256px 帧）、Linux 要 512px PNG。
+#    iconutil 是 macOS 自带；这三份产物入库（打包链不希望依赖本机装没装 ImageMagick）。
+rm -rf dist/app-icon.iconset
+mkdir -p dist/app-icon.iconset "$DESKTOP"
+# macOS 的图标网格：内容方块约占画布 80%（1024 里 824），四周留透明边。
+# 不留边的话 Dock 里会比系统图标大一圈（用户 2026-10-20 指出）。
+app_icon() {
+  local size=$1 out=$2 inner=$(( $1 * 4 / 5 ))
+  r src/icon.svg "$inner" dist/app-icon-inner.png
+  magick -size "${size}x${size}" canvas:none dist/app-icon-inner.png -gravity center -composite "$out"
+}
+for s in 16 32 128 256 512; do
+  app_icon "$s" "dist/app-icon.iconset/icon_${s}x${s}.png"
+  app_icon "$((s * 2))" "dist/app-icon.iconset/icon_${s}x${s}@2x.png"
+done
+rm -f dist/app-icon-inner.png
+iconutil -c icns dist/app-icon.iconset -o dist/app-icon.icns
+r src/icon.svg 512 dist/app-icon-512.png
+magick dist/app-icon-512.png -define icon:auto-resize=256,128,64,48,32,16 dist/app-icon.ico
+cp dist/app-icon.icns      "$DESKTOP/app-icon.icns"
+cp dist/app-icon.ico       "$DESKTOP/app-icon.ico"
+cp dist/app-icon-512.png   "$DESKTOP/app-icon-512.png"
+
+# 4) 分发：站点静态目录（文件名用站点约定）+ Web UI
 cp src/icon.svg            "$DOCS/favicon.svg"
 cp src/icon-16.svg         "$DOCS/favicon-16.svg"
 cp src/site.webmanifest    "$DOCS/site.webmanifest"
@@ -77,7 +102,7 @@ cp src/icon-16.svg         "$WEB/favicon-16.svg"
 cp dist/favicon.ico        "$WEB/favicon.ico"
 cp dist/apple-touch-icon.png "$WEB/apple-touch-icon.png"
 
-# 4) 预览页 + 锁版宽度实测（字标用系统字体，跨机器字宽会漂移）
+# 5) 预览页 + 锁版宽度实测（字标用系统字体，跨机器字宽会漂移）
 node preview.mjs
 echo "--- 锁版内容实测宽度（上限 ${LOCKUP_WIDTH:-288}）---"
 for v in logo-lockup logo-lockup-inverse; do

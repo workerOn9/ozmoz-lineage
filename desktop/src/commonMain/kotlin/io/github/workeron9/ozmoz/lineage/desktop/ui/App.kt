@@ -59,7 +59,7 @@ import io.github.workeron9.ozmoz.lineage.desktop.StoreGateway
  */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-public fun App(initial: OpenedFile? = null) {
+public fun App(initial: OpenedFile? = null, hiddenTitleBar: Boolean = false) {
     val state = remember { WorkbenchState(initial, StoreGateway.load()) }
     DesktopTheme(mode = state.store.theme) {
         CompositionLocalProvider(LocalUiDensity provides state.store.density) {
@@ -67,7 +67,7 @@ public fun App(initial: OpenedFile? = null) {
                 state.runAnalysis()
             }
             LaunchedEffect(Unit) { state.scanAgents() }
-            AppContent(state)
+            AppContent(state, hiddenTitleBar = hiddenTitleBar)
         }
     }
 }
@@ -78,7 +78,11 @@ private val CompactTopBarBelow = 1024.dp
 /** 壳层内容（主题与副作用在外面）：离屏渲染与 UI 测试直接驱动它。 */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-internal fun AppContent(state: WorkbenchState, initialRailExpanded: Boolean = true) {
+internal fun AppContent(
+    state: WorkbenchState,
+    initialRailExpanded: Boolean = true,
+    hiddenTitleBar: Boolean = false,
+) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val fullTopBar = maxWidth >= CompactTopBarBelow
         var userExpanded by remember { mutableStateOf(initialRailExpanded) }
@@ -87,11 +91,14 @@ internal fun AppContent(state: WorkbenchState, initialRailExpanded: Boolean = tr
                 OzmlRail(
                     expanded = userExpanded,
                     page = state.page,
+                    hiddenTitleBar = hiddenTitleBar,
                     onToggle = { userExpanded = !userExpanded },
                     onPage = { state.page = it },
                 )
                 VerticalDivider()
                 Column(Modifier.weight(1f).fillMaxHeight()) {
+                    // 红绿灯条高度（28dp）让出来：顶栏的按钮不要压在标题栏的可拖拽区域上。
+                    if (hiddenTitleBar) Spacer(Modifier.height(28.dp))
                     OzmlTopBar(state, compact = !fullTopBar)
                     when (state.page) {
                         Page.WORKSPACE -> WorkspacePage(state)
@@ -117,6 +124,7 @@ internal fun AppContent(state: WorkbenchState, initialRailExpanded: Boolean = tr
 private fun OzmlRail(
     expanded: Boolean,
     page: Page,
+    hiddenTitleBar: Boolean,
     onToggle: () -> Unit,
     onPage: (Page) -> Unit,
 ) {
@@ -130,6 +138,11 @@ private fun OzmlRail(
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(Modifier.fillMaxSize()) {
+            if (hiddenTitleBar) {
+                // 顶部整行让给红绿灯（用户 2026-10-20 的要求）：开关下移一行，
+                // 展开 / 收起态都从这里开始。
+                Spacer(Modifier.height(36.dp))
+            }
             RailHeader(expanded, onToggle)
             Spacer(Modifier.height(8.dp))
             for (destination in Page.entries) {
@@ -154,6 +167,7 @@ private fun RailHeader(expanded: Boolean, onToggle: () -> Unit) {
     ) {
         IconButton(
             onClick = onToggle,
+            // 展开态与项胶囊同一条竖线（20dp）；收起态居中。
             modifier = Modifier.padding(start = if (expanded) 20.dp else 0.dp),
         ) {
             Icon(
@@ -217,20 +231,21 @@ private fun RailDestination(
             horizontalArrangement = if (expanded) Arrangement.Start else Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.width(if (expanded) 22.dp else 24.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.width(if (expanded) 20.dp else 24.dp), contentAlignment = Alignment.Center) {
                 Icon(
                     destination.icon,
                     contentDescription = destination.label,
                     tint = contentColor,
-                    modifier = Modifier.size(if (expanded) 22.dp else 24.dp),
+                    modifier = Modifier.size(if (expanded) 20.dp else 24.dp),
                 )
             }
             if (expanded) {
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
                 Text(
                     destination.label,
                     color = contentColor,
-                    fontSize = density.bodySize,
+                    // 与图标同一视觉重量：之前 11sp 配 22dp 图标显得「图标大、文字小」。
+                    fontSize = density.titleSize,
                     maxLines = 1,
                 )
             }

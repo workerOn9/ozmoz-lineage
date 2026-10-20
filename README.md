@@ -173,7 +173,12 @@ D2 起是四目的地工作台：
 ```bash
 ./gradlew :desktop:run                       # 空窗
 ./gradlew :desktop:run --args=/path/q.sql    # 带文件启动
+./gradlew :desktop:packageDmg                # macOS 安装包（app 名 Lineage）
 ```
+
+安装包图标来自 `design/logo/src/`（`./design/logo/build.sh` 派生到 `desktop/packaging/`）。
+macOS 上内容延伸到标题栏（红绿灯保留、标题栏隐藏）；jlink runtime 显式带 `java.sql` / `java.naming`
+（JDBC 是运行期反射加载的，不会被依赖图自动收集）。
 
 - **Agent 不内置模型**：启动时扫 `PATH` 找 `opencode` / `pi`，读它们的配置与 skill 列表；
   用户在卡片上点「启用」后才可选。对话经 CLI 子进程流式接入（`--format json` / `--mode json`）。

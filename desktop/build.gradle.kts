@@ -1,4 +1,5 @@
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -102,5 +103,38 @@ compose.desktop {
             .launcherFor { languageVersion.set(JavaLanguageVersion.of(jdkVersion)) }
             .get()
             .metadata.installationPath.asFile.absolutePath
+
+        // 安装包：三平台各建各的（D4 的发布链）。图标由 design/logo/build.sh 生成后入库
+        // （desktop/packaging/），打包不依赖本机有没有装 ImageMagick。
+        nativeDistributions {
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            packageName = "Lineage"
+            // jpackage 只认「数字 + 点」，且 macOS 要求**主版本不能是 0**（实测：
+            // project version 0.1.0 会被拒）。安装包版本与应用版本（`ozml --version`）
+            // 是两件事；D4 发版时统一。这里先给一个合法的 1.0.0。
+            packageVersion = "1.0.0"
+            // jlink 只自动收集依赖图里出现过的模块；JDBC 是运行期经 DriverManager 反射加载的，
+            // 不声明就会在打包版里抛 NoClassDefFoundError: java/sql/SQLException（实测）。
+            // java.naming 是 PostgreSQL 等驱动常见的间接依赖。
+            modules("java.sql", "java.naming")
+            description = "SQL lineage workbench"
+            vendor = "ozmoz-lineage"
+            copyright = "© 2026 ozmoz-lineage contributors"
+
+            macOS {
+                iconFile.set(project.file("packaging/app-icon.icns"))
+                bundleID = "io.github.workeron9.ozmoz.lineage"
+            }
+            windows {
+                iconFile.set(project.file("packaging/app-icon.ico"))
+                menuGroup = "ozml-lineage"
+                // 让安装向导允许用户选择目录；后续 D4 再接签名。
+                dirChooser = true
+            }
+            linux {
+                iconFile.set(project.file("packaging/app-icon-512.png"))
+                menuGroup = "ozml-lineage"
+            }
+        }
     }
 }

@@ -109,6 +109,26 @@ class RenderCheck {
         println("rendered: ${out.absolutePath} (${out.length()} bytes)")
     }
 
+    /** 隐藏标题栏（macOS 全窗内容）：开关要避开红绿灯。 */
+    @Test
+    fun renderHiddenTitleBar() {
+        if (!enabled) return
+        val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.LIGHT))
+        state.runAnalysis()
+        val out = File(System.getProperty("java.io.tmpdir"), "ozml-desktop-hidden-title.png")
+        val scene = ImageComposeScene(width = 1280, height = 820, density = Density(1f)) {
+            DesktopTheme(mode = ThemeMode.LIGHT) {
+                AppContent(state, hiddenTitleBar = true)
+            }
+        }
+        try {
+            scene.render().encodeToData()?.bytes?.let { out.writeBytes(it) }
+        } finally {
+            scene.close()
+        }
+        println("rendered: ${out.absolutePath} (${out.length()} bytes)")
+    }
+
     /** 收起态：顶部开关要留在（与图标同一条竖线），不能消失。 */
     @Test
     fun renderWorkspaceRailCollapsed() {

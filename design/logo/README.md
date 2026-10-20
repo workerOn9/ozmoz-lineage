@@ -27,8 +27,11 @@ open dist/preview.html
 |---|---|
 | `site/docs/public/` | `favicon.svg`、`favicon-16.svg`、`favicon-32.png`、`favicon.ico`、`apple-touch-icon.png`、`android-chrome-{192,512}.png`、`og.svg` + `og.png`、`site.webmanifest` |
 | `web/public/` | `favicon.svg`、`favicon-16.svg`、`favicon.ico`、`apple-touch-icon.png` |
+| `desktop/packaging/` | `app-icon.icns`（macOS 安装包）、`app-icon.ico`（Windows，含 256px 帧）、`app-icon-512.png`（Linux） |
 
-> `site/docs/public/` 与 `web/public/` 里的图标文件都是**构建输出**。不要手改那两个目录里的图标 —— 改 `src/` 再重跑。
+> `site/docs/public/`、`web/public/` 与 `desktop/packaging/` 里的图标文件都是**构建输出**。不要手改那几个目录里的图标 —— 改 `src/` 再重跑。
+>
+> macOS 安装包图标按系统网格留了 20% 透明边（1024 里内容 824）——不留边的话 Dock 里会比系统图标大一圈。
 
 ## 为什么是啄木鸟
 
