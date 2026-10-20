@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,10 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
-import androidx.compose.material3.WideNavigationRail
 
-import androidx.compose.material3.WideNavigationRailValue
-import androidx.compose.material3.rememberWideNavigationRailState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
@@ -47,7 +47,7 @@ import io.github.workeron9.ozmoz.lineage.desktop.OpenedFile
 import io.github.workeron9.ozmoz.lineage.desktop.StoreGateway
 
 /**
- * 桌面外壳（D2）：M3 [WideNavigationRail]（可折叠）+ 顶栏 + **四个目的地**
+ * 桌面外壳（D2）：可折叠侧栏（自绘容器，见 [OzmlRail]）+ 顶栏 + **四个目的地**
  * WORKSPACE / CONNECTION / AGENT / SETTINGS。
  *
  * 分工：侧栏管应用级路由，顶栏管文档级信息与开关（引擎 / 容错 / 连接指示），
@@ -81,39 +81,15 @@ private val CompactTopBarBelow = 1024.dp
 internal fun AppContent(state: WorkbenchState, initialRailExpanded: Boolean = true) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val fullTopBar = maxWidth >= CompactTopBarBelow
-        // 展开/收起由用户决定（FlClash 的做法）：窄窗也保留开关，不做强制收起——
-        // 强制收起会让「收起态」失去展开的入口。窄窗只把顶栏切到 compact。
         var userExpanded by remember { mutableStateOf(initialRailExpanded) }
-        val railExpanded = userExpanded
-        // 初值就按目标态：否则第一帧是展开的，窄窗上会闪一下 220dp 的侧栏。
-        val railState = rememberWideNavigationRailState(
-            if (railExpanded) WideNavigationRailValue.Expanded else WideNavigationRailValue.Collapsed,
-        )
-        LaunchedEffect(railExpanded) {
-            if (railExpanded) railState.expand() else railState.collapse()
-        }
-        val railIsExpanded = railState.currentValue == WideNavigationRailValue.Expanded
-
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Row(Modifier.fillMaxSize()) {
-                WideNavigationRail(
-                    state = railState,
-                    // 缺省是 Arrangement.Center：桌面侧栏里「目的地」要贴顶。
-                    arrangement = Arrangement.Top,
-                    header = {
-                        // 展开 / 收起态都保留这个入口（FlClash 同款）；窄窗也允许手动展开。
-                        RailHeader(railIsExpanded) { userExpanded = !userExpanded }
-                    },
-                ) {
-                    for (destination in Page.entries) {
-                        RailDestination(
-                            destination = destination,
-                            selected = state.page == destination,
-                            expanded = railIsExpanded,
-                            onClick = { state.page = destination },
-                        )
-                    }
-                }
+                OzmlRail(
+                    expanded = userExpanded,
+                    page = state.page,
+                    onToggle = { userExpanded = !userExpanded },
+                    onPage = { state.page = it },
+                )
                 VerticalDivider()
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     OzmlTopBar(state, compact = !fullTopBar)
@@ -129,26 +105,56 @@ internal fun AppContent(state: WorkbenchState, initialRailExpanded: Boolean = tr
     }
 }
 
+/**
+ * 侧栏容器。**不再用 M3 的 [WideNavigationRail]**：它的展开宽度按子项自适应、项指示器
+ * 只包内容、收起动画又和内容各自独立——三件事叠在一起会出现「内容已收起、栏还宽着」
+ * 的中间帧（用户截图抓到的就是这个）。
+ *
+ * 这里宽度与内容由**同一个** `animateDpAsState` 驱动：任何一帧的比例都是对的。
+ * 颜色、命中语义仍取 M3（`surface` / `secondaryContainer` / `selectable` + `Tab`）。
+ */
+@Composable
+private fun OzmlRail(
+    expanded: Boolean,
+    page: Page,
+    onToggle: () -> Unit,
+    onPage: (Page) -> Unit,
+) {
+    val width by animateDpAsState(
+        targetValue = if (expanded) 220.dp else 96.dp,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "railWidth",
+    )
+    Surface(
+        modifier = Modifier.width(width).fillMaxHeight(),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            RailHeader(expanded, onToggle)
+            Spacer(Modifier.height(8.dp))
+            for (destination in Page.entries) {
+                RailDestination(
+                    destination = destination,
+                    selected = page == destination,
+                    expanded = expanded,
+                    railWidth = width,
+                    onClick = { onPage(destination) },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun RailHeader(expanded: Boolean, onToggle: () -> Unit) {
-    // **不能** fillMaxWidth：WideNavigationRail 用最宽子项算展开宽度，header 撑满整窗时
-    // 侧栏会一路涨到 360dp 上限（D2 首版实测）。限制在展开态最小宽度 220dp。
-    //
-    // 对齐：展开态和导航项图标同一条竖线（item 的水平内边距是 20dp，48dp 按钮的中心
-    // 因此落在 44dp）；收起态整条 96dp，按钮居中。图标也用同一套线性笔触（FlClash 的
-    // 参照：顶部是面板图标，不漂在中间）。
-    // 宽度必须跟着侧栏状态走：收起态若仍按 220dp 量，图标会被 96dp 的容器裁掉
-    // （第一版收起态顶部空白就是这个原因）。
-    val headerWidth by animateDpAsState(if (expanded) 220.dp else 96.dp, label = "railHeaderWidth")
-    // 与导航项图标同一条竖线：展开态图标中心 ≈44dp（item 水平内边距 20 + 图标半径），
-    // 收起态整条 96dp、项居中（图标中心 48）。
+    // 横向：展开态 20dp 起（与导航项胶囊同一条竖线），收起态居中。
     Box(
-        Modifier.width(headerWidth).height(48.dp),
+        Modifier.fillMaxWidth().height(48.dp),
         contentAlignment = if (expanded) Alignment.CenterStart else Alignment.Center,
     ) {
         IconButton(
             onClick = onToggle,
-            modifier = Modifier.padding(start = if (expanded) 23.dp else 0.dp),
+            modifier = Modifier.padding(start = if (expanded) 20.dp else 0.dp),
         ) {
             Icon(
                 Icons.Sidebar,
@@ -174,27 +180,41 @@ private fun RailDestination(
     destination: Page,
     selected: Boolean,
     expanded: Boolean,
+    railWidth: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val density = LocalUiDensity.current
-    val contentColor = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant
-    val indicator = if (selected) colors.secondaryContainer else Color.Transparent
-    val itemWidth = if (expanded) 200.dp else 96.dp
+    // FlClash 的选中态：中性灰胶囊 + 左缘一条主色小竖条（不是整块主色容器）。
+    val contentColor = if (selected) colors.onSurface else colors.onSurfaceVariant
+    val indicator = if (selected) colors.surfaceContainerHighest else Color.Transparent
+    // 胶囊始终占「栏宽 - 40dp」：展开态 180dp（左右各 20dp），收起态 56dp（居中）。
+    // 宽度跟着容器的动画走，所以收起过程中不会出现「内容先窄、栏还宽」的空档。
     val itemHeight = if (expanded) 52.dp else 44.dp
-    // 展开态：item 200dp + rail 预留的 20dp = 220dp 总宽；胶囊从 20dp 起、到 item 末尾，
-    // 于是 220dp 里左右各留 20dp。收起态：item 96dp，胶囊 56×40 居中。
-    val outerStart = 20.dp
-    val outerEnd = if (expanded) 0.dp else 20.dp
-    val shape = if (expanded) RoundedCornerShape(24.dp) else RoundedCornerShape(14.dp)
+    val shape = if (expanded) RoundedCornerShape(24.dp) else RoundedCornerShape(16.dp)
 
-    Box(Modifier.width(itemWidth).height(itemHeight)) {
+    Box(Modifier.width(railWidth).height(itemHeight)) {
+        // 选中竖条：贴栏左缘，始终在胶囊之外（FlClash 的视觉锚点）。
+        if (selected) {
+            Box(
+                Modifier.align(Alignment.CenterStart)
+                    .padding(start = 4.dp)
+                    .width(3.dp)
+                    .height(24.dp)
+                    .background(colors.primary, RoundedCornerShape(2.dp)),
+            )
+        }
         Row(
             modifier = Modifier.fillMaxSize()
-                .padding(start = outerStart, end = outerEnd, top = 2.dp, bottom = 2.dp)
+                .padding(horizontal = 20.dp, vertical = 2.dp)
+                // clip 必须在 selectable 之前：hover / ripple 是 selectable 的 indication，
+                // 不裁的话胶囊外会多出一个方形高亮框（用户 2026-10-20 截图）。
+                .clip(shape)
                 .background(indicator, shape)
                 .selectable(selected = selected, onClick = onClick, role = Role.Tab)
                 .padding(horizontal = if (expanded) 16.dp else 0.dp),
+            // 收起态图标在胶囊里**居中**（不能在 Row 里靠 Start 排，会偏左）。
+            horizontalArrangement = if (expanded) Arrangement.Start else Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(if (expanded) 22.dp else 24.dp), contentAlignment = Alignment.Center) {

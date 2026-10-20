@@ -2,6 +2,8 @@ package io.github.workeron9.ozmoz.lineage.desktop
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.unit.Density
 import io.github.workeron9.ozmoz.lineage.desktop.model.Activity
 import io.github.workeron9.ozmoz.lineage.desktop.model.ActivityKind
@@ -84,6 +86,27 @@ class RenderCheck {
         val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.LIGHT))
         state.runAnalysis()
         render("workspace-narrow", ThemeMode.LIGHT, state, width = 900, height = 760)
+    }
+
+    /** 悬停态：高亮必须被裁成胶囊，不能在外面多一个方形框（用户 2026-10-20 指出）。 */
+    @Test
+    fun renderRailHover() {
+        if (!enabled) return
+        val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.LIGHT))
+        state.runAnalysis()
+        val out = File(System.getProperty("java.io.tmpdir"), "ozml-desktop-rail-hover.png")
+        val scene = ImageComposeScene(width = 1280, height = 820, density = Density(1f)) {
+            DesktopTheme(mode = ThemeMode.LIGHT) { AppContent(state) }
+        }
+        try {
+            scene.render()
+            // 悬停在「工作区」（选中项）上：y≈170、x≈100。
+            scene.sendPointerEvent(PointerEventType.Move, Offset(100f, 170f))
+            scene.render(1_000_000_000L).encodeToData()?.bytes?.let { out.writeBytes(it) }
+        } finally {
+            scene.close()
+        }
+        println("rendered: ${out.absolutePath} (${out.length()} bytes)")
     }
 
     /** 收起态：顶部开关要留在（与图标同一条竖线），不能消失。 */
