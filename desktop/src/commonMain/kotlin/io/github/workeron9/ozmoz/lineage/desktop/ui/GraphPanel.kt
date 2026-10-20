@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -33,7 +34,6 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,15 +48,14 @@ private val ColumnGap = 64.dp
 private val RowGap = 8.dp
 private val GraphPadding = 16.dp
 private val EdgeHitThreshold = 6.dp
-private val LabelStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Tokens.Text)
 
 /**
  * 血缘图：**Canvas 自绘**（Compose 侧没有 React Flow 的等价物）。
  *
- * 编码：颜色 = 边类型，线型 = 变换种类（见 [Tokens]）；方向一律左 → 右（`depth` 即第几跳）。
+ * 编码：颜色 = 边类型，线型 = 变换种类（见 [OzmlTokens]）；方向一律左 → 右（`depth` 即第几跳）。
  *
  * shortcut: D1 不做平移缩放与聚簇——内容画满后靠**双向滚动**看，点选做命中测试。
- * 节点/边到几百个时滚动与重绘都会变钝；D2 再上视口裁剪 + 按 scope 聚簇。
+ * 节点/边到几百个时滚动与重绘都会变钝；D2 图的可交互水平是 ADR-0022 D0-② 探针的事。
  */
 @Composable
 internal fun GraphPanel(
@@ -66,16 +65,18 @@ internal fun GraphPanel(
     onSelectColumn: (String?, Int?) -> Unit,
     onSelectFlow: (Int?, Int?) -> Unit,
 ) {
+    val tokens = LocalTokens.current
     val placed = remember(analysis.columns, analysis.flows) { layeredLayout(analysis.columns, analysis.flows) }
     if (placed.isEmpty()) {
         Centered(
             analysis.note ?: "这段 SQL 没有可建模的列级血缘（可能只含 DDL / MERGE 这类不产出列级血缘的语句）",
-            if (analysis.note != null) Tokens.Danger else Tokens.TextMuted,
+            if (analysis.note != null) tokens.danger else tokens.textMuted,
         )
         return
     }
 
     val density = LocalDensity.current
+    val uiDensity = LocalUiDensity.current
     val measurer = rememberTextMeasurer()
     val nodeWidth = with(density) { NodeWidth.toPx() }
     val nodeHeight = with(density) { NodeHeight.toPx() }
@@ -90,11 +91,14 @@ internal fun GraphPanel(
     val boxes = remember(placed, density) {
         placed.associate { it.column.id to boxOf(it, nodeWidth, nodeHeight, gapX, gapY, padding) }
     }
-    val labels = remember(placed, density) {
+    val labelStyle = remember(tokens, density) {
+        TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = tokens.text)
+    }
+    val labels = remember(placed, density, labelStyle) {
         placed.associate { placedColumn ->
             placedColumn.column.id to measurer.measure(
                 text = placedColumn.column.qualifiedName,
-                style = LabelStyle,
+                style = labelStyle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 constraints = Constraints(maxWidth = (nodeWidth - 14 * density.density).toInt()),
@@ -102,13 +106,22 @@ internal fun GraphPanel(
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Tokens.Surface)) {
+    Column(Modifier.fillMaxSize().background(tokens.surface)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PanelHeader("血缘图 · ${placed.size} 列 / ${analysis.flows.size} 边 · 点节点或边看详情")
-            Spacer(Modifier.weight(1f))
+            // 不用 PanelHeader：它 fillMaxWidth，会把同一行的图例挤成一条竖线（离屏渲染实测）。
+            // weight：图例先量（不带 weight 的子项先测），标题拿剩下的宽度并省略。
+            Text(
+                "血缘图 · ${placed.size} 列 / ${analysis.flows.size} 边",
+                color = tokens.textFaint,
+                fontFamily = FontFamily.Monospace,
+                fontSize = uiDensity.bodySize,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
             Legend()
         }
         Box(
@@ -168,29 +181,29 @@ internal fun GraphPanel(
                     val to = boxes[flow.to] ?: return@forEachIndexed
                     val points = edgePoints(from, to)
                     val dimmed = selectedFlow != null && selectedFlow != index
-                    val color = Tokens.flowColor(flow.kind).copy(alpha = if (dimmed) 0.18f else 0.85f)
+                    val color = tokens.flowColor(flow.kind).copy(alpha = if (dimmed) 0.18f else 0.85f)
                     val path = Path().apply {
                         moveTo(points.first().x, points.first().y)
                         for (i in 1..points.lastIndex) lineTo(points[i].x, points[i].y)
                     }
-                    drawPath(path, color, style = Tokens.flowStroke(flow.transform, density))
+                    drawPath(path, color, style = tokens.flowStroke(flow.transform, density))
                     if (!dimmed) drawArrow(points.last(), color)
                 }
 
                 placed.forEach { placedColumn ->
                     val box = boxes.getValue(placedColumn.column.id)
                     val selected = placedColumn.column.id == selectedColumn
-                    drawRoundRect(Tokens.SurfaceRaised, box.topLeft, box.size, corner)
+                    drawRoundRect(tokens.surfaceRaised, box.topLeft, box.size, corner)
                     if (placedColumn.column.isOutput) {
                         drawRoundRect(
-                            color = Tokens.Accent.copy(alpha = 0.85f),
+                            color = tokens.accent.copy(alpha = 0.85f),
                             topLeft = box.topLeft,
                             size = Size(3.dp.toPx(), box.height),
                             cornerRadius = corner,
                         )
                     }
                     drawRoundRect(
-                        color = if (selected) Tokens.Accent else Tokens.Border,
+                        color = if (selected) tokens.accent else tokens.border,
                         topLeft = box.topLeft,
                         size = box.size,
                         cornerRadius = corner,

@@ -1,0 +1,66 @@
+name: desktop
+
+# 桌面安装包轴（D4 的一部分）：**只在 macOS 上构建 dmg**，产物进 Actions artifact。
+#
+# 为什么不进 release：ADR-0022 决定 6——签名 / 公证只在发布者本机做，不进 CI。
+# 未签名的 dmg 一旦进 Releases，用户下载后会被 Gatekeeper 拦下，等于发了个坏包。
+# 签名链路落地后再把这个 job 接进 release.yml。
+#
+# 触发：手动（workflow_dispatch）+ 改动桌面模块的 PR。macOS runner 计费是 Linux 的 10 倍，
+# 所以不做每次 push 的全量构建。
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "design/logo/src/**"
+      - "gradle/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - ".github/workflows/desktop.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dmg:
+    name: package dmg (macos-arm64)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: 桌面测试
+        run: ./gradlew :desktop:jvmTest
+
+      - name: 构建 dmg
+        run: ./gradlew :desktop:packageDmg
+
+      # 冒烟不启动 GUI（runner 上没有可靠的窗口服务器）：验 app 结构、图标与 dmg 可挂载。
+      - name: 冒烟（app 结构 / 图标 / dmg 挂载）
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="desktop/build/compose/binaries/main/app/Lineage.app"
+          test -d "$APP"
+          test "$(plutil -extract CFBundleName raw "$APP/Contents/Info.plist")" = "Lineage"
+          test "$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")" = "io.github.workeron9.ozmoz.lineage"
+          shasum -a 256 desktop/packaging/app-icon.icns "$APP/Contents/Resources/Lineage.icns"
+
+          DMG="$(ls desktop/build/compose/binaries/main/dmg/*.dmg)"
+          echo "dmg: $DMG ($(du -h "$DMG" | cut -f1))"
+          hdiutil attach -nobrowse -readonly "$DMG"
+          trap 'hdiutil detach "/Volumes/Lineage" >/dev/null 2>&1 || true' EXIT
+          test -d "/Volumes/Lineage/Lineage.app"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lineage-desktop-macos-arm64
+          path: desktop/build/compose/binaries/main/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 7

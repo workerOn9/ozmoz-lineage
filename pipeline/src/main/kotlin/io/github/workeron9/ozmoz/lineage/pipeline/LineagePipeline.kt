@@ -17,6 +17,7 @@ import io.github.workeron9.ozmoz.lineage.ir.LineageModel
 import io.github.workeron9.ozmoz.lineage.ir.Resolved
 import io.github.workeron9.ozmoz.lineage.ir.map
 import io.github.workeron9.ozmoz.lineage.lineage.LineageBuilder
+import io.github.workeron9.ozmoz.lineage.schema.CompositeSchemaProvider
 import io.github.workeron9.ozmoz.lineage.schema.DdlFileSchemaProvider
 import io.github.workeron9.ozmoz.lineage.schema.SchemaProvider
 import java.nio.file.Files
@@ -172,6 +173,19 @@ public object LineagePipeline {
             id = "ddl:${files.first().fileName}",
             *files.toTypedArray(),
         )
+    }
+
+    /**
+     * 多来源 schema 组合：**先给出的优先**（JDBC 元数据 > 文本里的 DDL），全空返回 null。
+     * 桌面端「连库 + 当前 SQL」同时可用时走它。
+     */
+    public fun composeSchema(vararg providers: SchemaProvider?): SchemaProvider? {
+        val present = providers.filterNotNull()
+        return when {
+            present.isEmpty() -> null
+            present.size == 1 -> present.first()
+            else -> CompositeSchemaProvider(present)
+        }
     }
 
     /**
