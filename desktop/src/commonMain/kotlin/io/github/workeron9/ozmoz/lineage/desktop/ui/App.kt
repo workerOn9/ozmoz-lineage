@@ -1,5 +1,6 @@
 package io.github.workeron9.ozmoz.lineage.desktop.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -9,9 +10,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -21,7 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.WideNavigationRail
-import androidx.compose.material3.WideNavigationRailItem
+
 import androidx.compose.material3.WideNavigationRailValue
 import androidx.compose.material3.rememberWideNavigationRailState
 import androidx.compose.runtime.Composable
@@ -35,8 +39,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.workeron9.ozmoz.lineage.desktop.OpenedFile
 import io.github.workeron9.ozmoz.lineage.desktop.StoreGateway
 
@@ -100,14 +106,11 @@ internal fun AppContent(state: WorkbenchState, initialRailExpanded: Boolean = tr
                     },
                 ) {
                     for (destination in Page.entries) {
-                        WideNavigationRailItem(
+                        RailDestination(
+                            destination = destination,
                             selected = state.page == destination,
+                            expanded = railIsExpanded,
                             onClick = { state.page = destination },
-                            icon = { Icon(destination.icon, contentDescription = destination.label) },
-                            // 收起态保留 M3 的文字标签：96dp 里标签与图标垂直居中，
-                            // 去掉标签反而会让项左对齐（M3 的 48dp 项落在 8dp 处）。
-                            label = { Text(destination.label) },
-                            railExpanded = railIsExpanded,
                         )
                     }
                 }
@@ -145,12 +148,72 @@ private fun RailHeader(expanded: Boolean, onToggle: () -> Unit) {
     ) {
         IconButton(
             onClick = onToggle,
-            modifier = Modifier.padding(start = if (expanded) 20.dp else 0.dp),
+            modifier = Modifier.padding(start = if (expanded) 23.dp else 0.dp),
         ) {
             Icon(
                 Icons.Sidebar,
                 contentDescription = if (expanded) "收起侧栏" else "展开侧栏",
             )
+        }
+    }
+}
+
+/**
+ * 侧栏目的地：**自绘的整行胶囊**，不是 M3 的 [WideNavigationRailItem]。
+ *
+ * 原因：M3 的 `WideNavigationRailItem` 指示器只包住图标 + 文字，展开态右侧会留出一大块
+ * 空白（用户 2026-10-20 看截图指出「右边太多留白」）；FlClash 那种参照是整行胶囊。
+ * 这里保留 M3 的颜色角色（`secondaryContainer` / `onSurfaceVariant`）与语义（selectable + Tab），
+ * 只把「指示器宽度」改成随行宽。
+ *
+ * 宽度：展开态 200dp（rail 用「最宽子项 + 20dp」算总宽 → 220dp，右侧预留的 20dp 用
+ * 起始内边距抵消，胶囊左右各留 20dp）；收起态 96dp（rail 固定 96dp），图标居中、不挂文字。
+ */
+@Composable
+private fun RailDestination(
+    destination: Page,
+    selected: Boolean,
+    expanded: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val density = LocalUiDensity.current
+    val contentColor = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant
+    val indicator = if (selected) colors.secondaryContainer else Color.Transparent
+    val itemWidth = if (expanded) 200.dp else 96.dp
+    val itemHeight = if (expanded) 52.dp else 44.dp
+    // 展开态：item 200dp + rail 预留的 20dp = 220dp 总宽；胶囊从 20dp 起、到 item 末尾，
+    // 于是 220dp 里左右各留 20dp。收起态：item 96dp，胶囊 56×40 居中。
+    val outerStart = 20.dp
+    val outerEnd = if (expanded) 0.dp else 20.dp
+    val shape = if (expanded) RoundedCornerShape(24.dp) else RoundedCornerShape(14.dp)
+
+    Box(Modifier.width(itemWidth).height(itemHeight)) {
+        Row(
+            modifier = Modifier.fillMaxSize()
+                .padding(start = outerStart, end = outerEnd, top = 2.dp, bottom = 2.dp)
+                .background(indicator, shape)
+                .selectable(selected = selected, onClick = onClick, role = Role.Tab)
+                .padding(horizontal = if (expanded) 16.dp else 0.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.width(if (expanded) 22.dp else 24.dp), contentAlignment = Alignment.Center) {
+                Icon(
+                    destination.icon,
+                    contentDescription = destination.label,
+                    tint = contentColor,
+                    modifier = Modifier.size(if (expanded) 22.dp else 24.dp),
+                )
+            }
+            if (expanded) {
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    destination.label,
+                    color = contentColor,
+                    fontSize = density.bodySize,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
