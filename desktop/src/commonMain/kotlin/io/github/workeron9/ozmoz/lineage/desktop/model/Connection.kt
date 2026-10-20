@@ -54,6 +54,15 @@ public data class ConnectionResult(
     val message: String,
 )
 
+/**
+ * 可自动补的 JDBC 驱动（连接因缺驱动失败时由 [io.github.workeron9.ozmoz.lineage.desktop.ConnectionGateway.driverPlan] 给出）。
+ * [sizeLabel] 是下载体积的量级，给用户点之前一个预期（DuckDB 的驱动有几十 MB）。
+ */
+public data class DriverPlan(
+    val name: String,
+    val sizeLabel: String,
+)
+
 /** Schema 树里的一张表 / 视图。 */
 public data class DbTable(
     val schema: String?,

@@ -99,6 +99,7 @@ private fun AgentHeader(state: WorkbenchState) {
         Box {
             TextButton(onClick = { menuOpen = true }, enabled = providers.isNotEmpty()) {
                 Text(current?.name ?: "未选择 Agent", fontSize = density.titleSize)
+                if (current != null && agent == null) Text(" 未发现", color = tokens.warning, fontSize = density.bodySize)
                 Text("  ▾", color = tokens.textFaint)
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {

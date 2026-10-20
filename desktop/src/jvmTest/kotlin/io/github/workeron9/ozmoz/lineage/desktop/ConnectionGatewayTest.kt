@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -53,6 +54,28 @@ class ConnectionGatewayTest {
         val orders = snapshot.columns.getValue("orders")
         assertEquals(listOf("id", "amount"), orders.map { it.name })
         assertEquals(false, orders.first { it.name == "amount" }.nullable, "NOT NULL 要如实给出 false")
+    }
+
+    @Test
+    fun driverPlanOnlyOffersKnownDownloadsWhenDriverIsMissing() {
+        // SQLite 随包 → 不缺，不给下载按钮（不许对已能用的驱动喊「下载」）。
+        assertNull(ConnectionGateway.driverPlan(sqliteProfile()))
+
+        val postgres = ConnectionProfile(
+            id = "p", name = "pg", kind = ConnectionKind.POSTGRESQL,
+            host = "127.0.0.1", port = "1", database = "x",
+        )
+        assertEquals("PostgreSQL", ConnectionGateway.driverPlan(postgres)?.name)
+
+        val mysql = ConnectionProfile(id = "m", name = "my", kind = ConnectionKind.MYSQL, host = "h", database = "d")
+        assertEquals("MySQL", ConnectionGateway.driverPlan(mysql)?.name)
+
+        val duckdb = ConnectionProfile(id = "d", name = "duck", kind = ConnectionKind.DUCKDB, database = "/tmp/x.duckdb")
+        assertEquals("DuckDB", ConnectionGateway.driverPlan(duckdb)?.name)
+
+        // 没有已知下载源：如实返回 null（界面只留「手动放 jar」的说明）。
+        val custom = ConnectionProfile(id = "c", name = "x", kind = ConnectionKind.CUSTOM, jdbcUrl = "jdbc:oracle:thin:@h:1521:x")
+        assertNull(ConnectionGateway.driverPlan(custom))
     }
 
     @Test
@@ -111,8 +134,7 @@ class ConnectionGatewayTest {
     }
 
     @Test
-    fun resolvedUrlCoversKinds() {
-        assertEquals(
+    fun resolvedUrlCoversKinds() {        assertEquals(
             "jdbc:postgresql://db.example:5433/analytics",
             ConnectionProfile(id = "p", name = "p", kind = ConnectionKind.POSTGRESQL, host = "db.example", port = "5433", database = "analytics").resolvedUrl(),
         )
@@ -143,6 +165,38 @@ class ConnectionGatewayTest {
             val raw = Files.readString(root.resolve("desktop.json"))
             assertFalse(raw.contains("password", ignoreCase = true), "设置文件不许出现 password 字段：$raw")
         } finally {
+            System.clearProperty("ozml.storage.root")
+        }
+    }
+
+    /**
+     * 真下载（手动检查，**不进 CI**）：`-PozmlManualChecks=true` 时把 SQLite 驱动下到临时目录，
+     * 再从驱动目录连一个真库。走的是用户点「下载驱动」时的同一条路径。
+     */
+    @Test
+    fun downloadsDriverFromMavenCentralAndUsesIt() {
+        if (System.getProperty("ozml.manual.checks") != "true") return
+        val root = Files.createDirectories(tempDir.resolve("driver-root"))
+        System.setProperty("ozml.storage.root", root.toString())
+        try {
+            val profile = sqliteProfile()
+            var done = false
+            var message = ""
+            ConnectionGateway.installDriver(profile) { ok, text ->
+                done = ok
+                message = text
+            }
+            var waited = 0
+            while (!done && waited < 120_000) {
+                Thread.sleep(100)
+                waited += 100
+            }
+            assertTrue(done, "下载应成功：$message")
+            assertTrue(Files.exists(root.resolve("drivers").resolve("sqlite-jdbc-3.53.4.0.jar")), message)
+            val (result, _) = ConnectionGateway.openBlocking(profile, "")
+            assertTrue(result.ok, result.message)
+        } finally {
+            ConnectionGateway.close("test-sqlite")
             System.clearProperty("ozml.storage.root")
         }
     }

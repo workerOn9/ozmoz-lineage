@@ -109,7 +109,9 @@ internal fun ConnectionPage(state: WorkbenchState) {
             SchemaTree(
                 profile = selected,
                 runtime = runtime,
+                driverPlan = state.driverPlan(selected),
                 onConnect = { state.connect(selected) },
+                onInstallDriver = { state.installDriver(selected) },
                 onDisconnect = { state.disconnect(selected) },
                 onSelectTable = { table -> state.selectTable(selected, table) },
                 modifier = Modifier.weight(1f),
@@ -269,7 +271,9 @@ private fun ConnectionForm(
 private fun SchemaTree(
     profile: ConnectionProfile,
     runtime: io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionRuntime,
+    driverPlan: io.github.workeron9.ozmoz.lineage.desktop.model.DriverPlan?,
     onConnect: () -> Unit,
+    onInstallDriver: () -> Unit,
     onDisconnect: () -> Unit,
     onSelectTable: (DbTable) -> Unit,
     modifier: Modifier,
@@ -286,8 +290,9 @@ private fun SchemaTree(
             Text(
                 when (runtime.status) {
                     ConnectionStatus.ONLINE -> "已连接 · ${runtime.tables.size} 张表"
-                    ConnectionStatus.CONNECTING -> "连接中…"
-                    ConnectionStatus.ERROR -> runtime.message ?: "连接失败"
+                    ConnectionStatus.CONNECTING -> runtime.message ?: "连接中…"
+                    // 失败原因在下面单独一块给全，标题行只留状态，不把长错误挤进一行。
+                    ConnectionStatus.ERROR -> if (driverPlan != null) "连接失败 · 缺少驱动" else "连接失败"
                     ConnectionStatus.UNKNOWN -> "未连接"
                 },
                 color = when (runtime.status) {
@@ -306,16 +311,28 @@ private fun SchemaTree(
         }
         HorizontalDivider()
         if (runtime.tables.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    when (runtime.status) {
-                        ConnectionStatus.ERROR -> runtime.message ?: "连接失败"
-                        ConnectionStatus.ONLINE -> "这个库里没有表"
-                        else -> "连接后在这里浏览 schema（只读元数据）"
-                    },
-                    color = tokens.textMuted,
-                    fontSize = density.bodySize,
-                )
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        when (runtime.status) {
+                            ConnectionStatus.ERROR -> runtime.message ?: "连接失败"
+                            ConnectionStatus.ONLINE -> "这个库里没有表"
+                            else -> "连接后在这里浏览 schema（只读元数据）"
+                        },
+                        color = if (runtime.status == ConnectionStatus.ERROR) tokens.danger else tokens.textMuted,
+                        fontSize = density.bodySize,
+                    )
+                    if (runtime.status != ConnectionStatus.ONLINE && driverPlan != null) {
+                        Text(
+                            "缺少 ${driverPlan.name} 驱动。可以从 Maven Central 下载到 ~/.ozml-lineage/drivers（${driverPlan.sizeLabel}），下完自动重连。",
+                            color = tokens.textMuted,
+                            fontSize = density.bodySize,
+                        )
+                        Button(onClick = onInstallDriver) {
+                            Text("下载 ${driverPlan.name} 驱动（${driverPlan.sizeLabel}）")
+                        }
+                    }
+                }
             }
         } else {
             var collapsedSchemas by remember(profile.id) { mutableStateOf(emptySet<String>()) }

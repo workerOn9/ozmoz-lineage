@@ -126,6 +126,16 @@ internal fun SettingsPage(state: WorkbenchState) {
                 if (state.agents.isEmpty() && !state.scanning) {
                     Text("未发现 opencode / pi。", color = tokens.textMuted, fontSize = density.bodySize)
                 }
+                // 设置里存过、这次没扫到：把路径说出来，别让用户对着「未发现」反复点重扫。
+                val stale = state.store.providers.filter { config -> state.agents.none { it.id == config.id } }
+                if (stale.isNotEmpty() && !state.scanning) {
+                    Text(
+                        "设置里存过的 Provider 这次没扫到：" +
+                            stale.joinToString("、") { "${it.name}（${it.endpoint.ifBlank { "未记录路径" }}）" },
+                        color = tokens.warning,
+                        fontSize = density.bodySize,
+                    )
+                }
                 TextButton(onClick = { state.scanAgents() }) { Text("重新扫描") }
             }
         }

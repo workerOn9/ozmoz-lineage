@@ -54,7 +54,10 @@ internal object NativeAgentProvider {
             }
         }
         return runCatching {
-            ProcessBuilder(command).redirectErrorStream(false).start().also {
+            ProcessBuilder(command)
+                // Finder 启动的 .app 只有 launchd 的极简 PATH；agent 自己的壳脚本要靠它找 node 等。
+                .also { it.environment()["PATH"] = AgentDiscovery.searchPath() }
+                .redirectErrorStream(false).start().also {
                 // 立即关掉子进程的 stdin：print 模式不读输入，但打开的管道会让某些 agent
                 // 等 EOF（实测 pi 在测试 JVM 里 120s 不出字，shell 里 9s 答完）。
                 it.outputStream.close()
@@ -94,13 +97,37 @@ internal object NativeAgentProvider {
  *
  * **只读**：不改用户配置、不写 skill、不联网。探测失败也返回条目（带 [DiscoveredAgent.note]），
  * 因为「装是装了但读不出模型」与「没装」是两件事，界面要说清。
+ *
+ * PATH 不只信进程环境：从 Finder 启动的 .app 只有 launchd 的 `/usr/bin:/bin:/usr/sbin:/sbin`，
+ * Homebrew / ~/.local/bin 里的 agent 会「装了却扫不到」。所以再扫一组常见安装目录，
+ * 并把调用方传进来的已知可执行文件路径（设置文件里存的 provider.endpoint）当候选。
  */
 internal object AgentDiscovery {
 
-    fun discover(): List<DiscoveredAgent> = listOfNotNull(discoverOpencode(), discoverPi())
+    fun discover(knownExecutables: List<String> = emptyList()): List<DiscoveredAgent> =
+        listOfNotNull(discoverOpencode(knownExecutables), discoverPi(knownExecutables))
 
-    private fun discoverOpencode(): DiscoveredAgent? {
-        val exe = findOnPath("opencode") ?: return null
+    /** 子进程用的 PATH：进程环境 + 常见安装目录（Finder 启动的 .app 里 agent 要靠它找到 node 等）。 */
+    fun searchPath(): String =
+        (System.getenv("PATH").orEmpty().split(File.pathSeparatorChar) + EXTRA_DIRS)
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(File.pathSeparator)
+
+    private val EXTRA_DIRS by lazy {
+        listOf(
+            "/opt/homebrew/bin",
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+        ) + listOf(".local/bin", "bin", ".bun/bin", ".npm-global/bin", ".opencode/bin", ".volta/bin").map {
+            Path.of(System.getProperty("user.home"), it).toString()
+        }
+    }
+
+    private fun discoverOpencode(known: List<String>): DiscoveredAgent? {
+        val exe = resolve("opencode", known) ?: return null
         val version = run(exe, "--version")
         val configDir = home(".config/opencode")
         val config = configDir.resolve("opencode.jsonc").takeIf { Files.isRegularFile(it) }
@@ -118,8 +145,8 @@ internal object AgentDiscovery {
         )
     }
 
-    private fun discoverPi(): DiscoveredAgent? {
-        val exe = findOnPath("pi") ?: return null
+    private fun discoverPi(known: List<String>): DiscoveredAgent? {
+        val exe = resolve("pi", known) ?: return null
         val version = run(exe, "--version")
         val configDir = home(".pi/agent")
         val settings = configDir.resolve("settings.json").takeIf { Files.isRegularFile(it) }
@@ -141,9 +168,17 @@ internal object AgentDiscovery {
         )
     }
 
+    /** 设置里存过的绝对路径优先（它绕开 PATH），其次才扫 PATH 与常见目录。 */
+    private fun resolve(name: String, known: List<String>): String? =
+        known.firstOrNull { candidate ->
+            val file = File(candidate)
+            candidate.isNotBlank() && file.isFile && file.canExecute() &&
+                file.name.substringBeforeLast('.').equals(name, ignoreCase = true)
+        } ?: findOnPath(name)
+
     /** PATH 里的可执行文件；Windows 补 `.exe` / `.cmd` / `.bat`。 */
     private fun findOnPath(name: String): String? {
-        val path = System.getenv("PATH").orEmpty().split(File.pathSeparatorChar)
+        val path = searchPath().split(File.pathSeparatorChar)
         val suffixes = if (System.getProperty("os.name").lowercase().contains("win")) {
             listOf("", ".exe", ".cmd", ".bat")
         } else {

@@ -2,6 +2,7 @@ package io.github.workeron9.ozmoz.lineage.desktop
 
 import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionProfile
 import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionResult
+import io.github.workeron9.ozmoz.lineage.desktop.model.DriverPlan
 import io.github.workeron9.ozmoz.lineage.desktop.model.SchemaSnapshot
 
 /**
@@ -19,4 +20,16 @@ public expect object ConnectionGateway {
 
     /** 关闭并移除已缓存的连接（幂等）。 */
     public fun close(profileId: String)
+
+    /**
+     * 这条连接**缺少驱动、且该驱动有已知下载源**时给出计划；否则 null。
+     * 只做本地判断（不联网），可随时调。
+     */
+    public fun driverPlan(profile: ConnectionProfile): DriverPlan?
+
+    /**
+     * 下载 [driverPlan] 指向的驱动 jar 到 `~/.ozml-lineage/drivers`（校验 SHA-1 后落盘），
+     * 后台线程；完成后调用方自行重连。装不上的原因是给人看的，不是异常。
+     */
+    public fun installDriver(profile: ConnectionProfile, onResult: (Boolean, String) -> Unit)
 }

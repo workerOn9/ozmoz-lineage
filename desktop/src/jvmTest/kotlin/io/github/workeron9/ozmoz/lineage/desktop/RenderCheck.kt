@@ -32,6 +32,14 @@ class RenderCheck {
 
     private val enabled = System.getProperty("ozml.manual.checks") == "true"
 
+    init {
+        // 这些渲染会 saveConnection / enableProvider：不指到临时目录就会改用户真实的
+        // ~/.ozml-lineage/desktop.json（用户截图里那条指向临时目录的「本地示例库」就是这么来的）。
+        if (enabled) {
+            System.setProperty("ozml.storage.root", Files.createTempDirectory("ozml-render-store").toString())
+        }
+    }
+
     private val sql = """
         CREATE TABLE orders (id INT, customer_id INT, amount DECIMAL(10, 2));
         CREATE TABLE customers (id INT, name VARCHAR(64));
@@ -195,6 +203,37 @@ class RenderCheck {
         state.page = Page.CONNECTION
         render("connection", ThemeMode.LIGHT, state)
         dir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun renderWorkspaceDraftEditing() {
+        if (!enabled) return
+        val state = WorkbenchState(OpenedFile("未命名.sql", ""), DesktopStoreState(theme = ThemeMode.LIGHT))
+        state.editing = true
+        state.editSql(sql)
+        state.runAnalysis()
+        render("workspace-draft", ThemeMode.LIGHT, state)
+    }
+
+    /** 缺驱动：标题行只说状态，中间给「下载驱动」的入口（用户截图里那一屏）。 */
+    @Test
+    fun renderConnectionMissingDriver() {
+        if (!enabled) return
+        val profile = ConnectionProfile(
+            id = "pg-demo",
+            name = "报表库",
+            kind = ConnectionKind.POSTGRESQL,
+            host = "127.0.0.1",
+            port = "1",
+            database = "analytics",
+        )
+        val state = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState(theme = ThemeMode.LIGHT))
+        state.runAnalysis()
+        state.saveConnection(profile)
+        state.connect(profile)
+        waitUntil { state.connectionRuntime(profile.id).status != ConnectionStatus.CONNECTING }
+        state.page = Page.CONNECTION
+        render("connection-missing-driver", ThemeMode.LIGHT, state)
     }
 
     @Test

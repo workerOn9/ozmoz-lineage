@@ -15,6 +15,7 @@ import io.github.workeron9.ozmoz.lineage.desktop.model.ActivityKind
 import io.github.workeron9.ozmoz.lineage.desktop.model.AgentEvent
 import io.github.workeron9.ozmoz.lineage.desktop.model.Analysis
 import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionProfile
+import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionResult
 import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionRuntime
 import io.github.workeron9.ozmoz.lineage.desktop.model.ConnectionStatus
 import io.github.workeron9.ozmoz.lineage.desktop.model.DbColumn
@@ -25,8 +26,12 @@ import io.github.workeron9.ozmoz.lineage.desktop.model.DiscoveredAgent
 import io.github.workeron9.ozmoz.lineage.desktop.model.InputMode
 import io.github.workeron9.ozmoz.lineage.desktop.model.ProviderConfig
 import io.github.workeron9.ozmoz.lineage.desktop.model.ProviderKind
+import io.github.workeron9.ozmoz.lineage.desktop.model.SchemaSnapshot
 import io.github.workeron9.ozmoz.lineage.desktop.model.ThemeMode
 import io.github.workeron9.ozmoz.lineage.desktop.model.newAgentSessionId
+
+/** 新建文档的显示名（不落盘，纯展示）。 */
+internal const val DRAFT_NAME = "未命名.sql"
 
 /** 四个目的地。侧栏项数控制在 4–5 个以内（超过就该换 NavigationDrawer 了）。 */
 internal enum class Page(val label: String, val icon: ImageVector) {
@@ -65,6 +70,14 @@ internal class WorkbenchState(
         private set
     var analysis by mutableStateOf<Analysis?>(null)
         private set
+
+    /** 源面板是否处于编辑态（新建 / 粘一段 SQL 时直接进来）。 */
+    var editing by mutableStateOf(false)
+
+    /** 编辑一次 +1：[SourcePanel] 用它做「停手 350ms 再分析」的 debounce 键。 */
+    var sqlRevision by mutableStateOf(0)
+        private set
+
     var workspaceTab by mutableStateOf(WorkspaceTab.GRAPH)
     var collapsedNodes by mutableStateOf(emptySet<String>())
     var selectedColumn by mutableStateOf<String?>(null)
@@ -104,16 +117,35 @@ internal class WorkbenchState(
 
     fun openFile(file: OpenedFile?) {
         opened = file
+        editing = false
         runAnalysis()
+    }
+
+    /** 新建空白文档：不要求先有 .sql 文件，直接粘 / 打字。 */
+    fun newDocument() {
+        opened = OpenedFile(DRAFT_NAME, "")
+        editing = true
+        runAnalysis()
+    }
+
+    fun editSql(sql: String) {
+        val current = opened ?: return
+        opened = current.copy(sql = sql)
+        sqlRevision++
     }
 
     fun pickFile() {
         openFile(EngineGateway.pickSqlFile())
     }
 
-    /** 重跑分析。UI 在 `LaunchedEffect(opened, engineId, tolerant, activeConnectionId)` 里调。 */
+    /** 重跑分析。UI 在引擎 / 容错 / 连接变化时调；编辑态由 [sqlRevision] 防抖后调。 */
     fun runAnalysis() {
-        analysis = opened?.let { EngineGateway.analyze(it.sql, engineId, tolerant, activeConnectionId) }
+        val file = opened
+        analysis = if (file == null || file.sql.isBlank()) {
+            null
+        } else {
+            EngineGateway.analyze(file.sql, engineId, tolerant, activeConnectionId)
+        }
         collapsedNodes = emptySet()
         selectedColumn = null
         selectedFlow = null
@@ -123,6 +155,9 @@ internal class WorkbenchState(
     // ————————————————————————————— 连接 —————————————————————————————
 
     fun connectionRuntime(profileId: String): ConnectionRuntime = runtimes[profileId] ?: ConnectionRuntime()
+
+    /** 这条连接缺驱动且可自动补时，给 UI 一个下载入口；否则 null。 */
+    fun driverPlan(profile: ConnectionProfile) = ConnectionGateway.driverPlan(profile)
 
     fun saveConnection(profile: ConnectionProfile) {
         updateStore { state -> state.copy(connections = state.connections.filterNot { it.id == profile.id } + profile) }
@@ -139,16 +174,35 @@ internal class WorkbenchState(
     fun connect(profile: ConnectionProfile) {
         runtimes = runtimes + (profile.id to ConnectionRuntime(status = ConnectionStatus.CONNECTING))
         ConnectionGateway.open(profile, passwords[profile.id].orEmpty()) { result, snapshot ->
-            runtimes = runtimes + (
-                profile.id to ConnectionRuntime(
-                    status = if (result.ok) ConnectionStatus.ONLINE else ConnectionStatus.ERROR,
-                    message = result.message,
-                    tables = snapshot?.tables.orEmpty(),
-                    schemaColumns = snapshot?.columns.orEmpty(),
-                )
-                )
-            if (result.ok) activeConnectionId = profile.id
+            applyConnection(profile.id, result, snapshot)
         }
+    }
+
+    /** 缺驱动时的自动补：下载到 ~/.ozml-lineage/drivers 后自动重连。 */
+    fun installDriver(profile: ConnectionProfile) {
+        val plan = ConnectionGateway.driverPlan(profile) ?: return
+        runtimes = runtimes + (
+            profile.id to ConnectionRuntime(status = ConnectionStatus.CONNECTING, message = "正在下载 ${plan.name} 驱动（${plan.sizeLabel}）…")
+            )
+        ConnectionGateway.installDriver(profile) { ok, message ->
+            if (ok) {
+                connect(profile)
+            } else {
+                runtimes = runtimes + (profile.id to ConnectionRuntime(status = ConnectionStatus.ERROR, message = message))
+            }
+        }
+    }
+
+    private fun applyConnection(profileId: String, result: ConnectionResult, snapshot: SchemaSnapshot?) {
+        runtimes = runtimes + (
+            profileId to ConnectionRuntime(
+                status = if (result.ok) ConnectionStatus.ONLINE else ConnectionStatus.ERROR,
+                message = result.message,
+                tables = snapshot?.tables.orEmpty(),
+                schemaColumns = snapshot?.columns.orEmpty(),
+            )
+            )
+        if (result.ok) activeConnectionId = profileId
     }
 
     fun disconnect(profile: ConnectionProfile) {
@@ -180,10 +234,11 @@ internal class WorkbenchState(
 
     // ————————————————————————————— Agent —————————————————————————————
 
-    /** 启动时扫描一次；结果经回调回来（后台线程）。 */
+    /** 启动时扫描一次；结果经回调回来（后台线程）。已保存的 Provider 路径也当候选——
+     *  从 Finder 启动的 .app 只有 launchd 的极简 PATH，扫不到 /opt/homebrew/bin。 */
     fun scanAgents() {
         scanning = true
-        AgentGateway.discover { found ->
+        AgentGateway.discover(store.providers.map { it.endpoint }) { found ->
             agents = found
             if (agentProviderId == null) agentProviderId = enabledProviders().firstOrNull()?.id
             scanning = false

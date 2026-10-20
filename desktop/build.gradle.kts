@@ -115,8 +115,9 @@ compose.desktop {
             packageVersion = "1.0.0"
             // jlink 只自动收集依赖图里出现过的模块；JDBC 是运行期经 DriverManager 反射加载的，
             // 不声明就会在打包版里抛 NoClassDefFoundError: java/sql/SQLException（实测）。
-            // java.naming 是 PostgreSQL 等驱动常见的间接依赖。
-            modules("java.sql", "java.naming")
+            // java.naming 是 PostgreSQL 等驱动常见的间接依赖；java.net.http 是「下载驱动」用的客户端
+            // （不打进 runtime，打包版点下载按钮会直接 NoClassDefFoundError）。
+            modules("java.sql", "java.naming", "java.net.http")
             description = "SQL lineage workbench"
             vendor = "ozmoz-lineage"
             copyright = "© 2026 ozmoz-lineage contributors"

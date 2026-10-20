@@ -25,6 +25,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -49,20 +50,23 @@ internal fun WorkspacePage(state: WorkbenchState) {
     val density = LocalUiDensity.current
     val opened = state.opened
     if (opened == null) {
-        Welcome(onOpen = { state.pickFile() })
+        Welcome(onNew = { state.newDocument() }, onOpen = { state.pickFile() })
         return
     }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
-            SourcePanel(sql = opened.sql, focusLine = state.focusLine, modifier = Modifier.weight(0.38f))
+            SourcePanel(state = state, modifier = Modifier.weight(0.38f))
             VerticalDivider()
             Column(Modifier.weight(0.62f).fillMaxHeight()) {
                 WorkspaceTabs(state)
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (state.workspaceTab) {
                         WorkspaceTab.GRAPH, WorkspaceTab.TREE -> when (val current = state.analysis) {
-                            null -> Centered("分析中…", tokens.textMuted)
+                            null -> Centered(
+                                if (opened.sql.isBlank()) "粘贴或输入 SQL，停手后自动分析" else "分析中…",
+                                tokens.textMuted,
+                            )
                             else -> when (state.workspaceTab) {
                                 WorkspaceTab.GRAPH -> GraphPanel(
                                     analysis = current,
@@ -315,14 +319,14 @@ private fun IssuesCell(issues: List<IssueView>, modifier: Modifier, onFocusLine:
     }
 }
 
-/** 空态：M3 Card，说清「解析在哪跑」与「怎么带文件启动」。 */
+/** 空态：M3 Card，说清「解析在哪跑」与两条入口（直接粘 SQL / 打开文件）。 */
 @Composable
-private fun Welcome(onOpen: () -> Unit) {
+private fun Welcome(onNew: () -> Unit, onOpen: () -> Unit) {
     val tokens = LocalTokens.current
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Card(Modifier.width(440.dp)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("打开一个 .sql 文件", style = MaterialTheme.typography.titleMedium)
+                Text("输入或打开 SQL", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "解析在本机进程内完成，不上传；连库与对话也只走本机。",
                     style = MaterialTheme.typography.bodySmall,
@@ -334,7 +338,10 @@ private fun Welcome(onOpen: () -> Unit) {
                     fontFamily = FontFamily.Monospace,
                     color = tokens.textMuted,
                 )
-                Button(onClick = onOpen) { Text("打开 SQL 文件") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onNew) { Text("新建 / 粘贴 SQL") }
+                    TextButton(onClick = onOpen) { Text("打开 .sql 文件") }
+                }
             }
         }
     }

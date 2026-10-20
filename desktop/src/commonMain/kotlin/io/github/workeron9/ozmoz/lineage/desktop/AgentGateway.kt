@@ -12,8 +12,8 @@ import io.github.workeron9.ozmoz.lineage.desktop.model.ProviderConfig
  */
 public expect object AgentGateway {
 
-    /** 扫 PATH + 读配置；**只读**，不写用户配置、不联网。 */
-    public fun discover(onResult: (List<DiscoveredAgent>) -> Unit)
+    /** 扫 PATH + 读配置；**只读**，不写用户配置、不联网。[knownExecutables] 是设置里存过的绝对路径。 */
+    public fun discover(knownExecutables: List<String> = emptyList(), onResult: (List<DiscoveredAgent>) -> Unit)
 
     /** 起一次会话；返回的句柄可取消（杀进程）。[prompt] 的组装由调用方负责。 */
     public fun start(

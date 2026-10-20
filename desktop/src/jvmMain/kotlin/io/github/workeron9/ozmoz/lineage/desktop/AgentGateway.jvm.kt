@@ -15,9 +15,9 @@ import kotlin.concurrent.thread
  */
 public actual object AgentGateway {
 
-    public actual fun discover(onResult: (List<DiscoveredAgent>) -> Unit) {
+    public actual fun discover(knownExecutables: List<String>, onResult: (List<DiscoveredAgent>) -> Unit) {
         thread(isDaemon = true, name = "ozml-agent-discovery") {
-            onResult(AgentDiscovery.discover())
+            onResult(AgentDiscovery.discover(knownExecutables))
         }
     }
 
