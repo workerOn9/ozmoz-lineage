@@ -3,6 +3,11 @@ package io.github.workeron9.ozmoz.lineage.desktop.service
 import io.github.workeron9.ozmoz.lineage.desktop.model.AgentEvent
 import io.github.workeron9.ozmoz.lineage.desktop.model.DiscoveredAgent
 import io.github.workeron9.ozmoz.lineage.desktop.model.ProviderConfig
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -37,16 +42,12 @@ internal object NativeAgentProvider {
             "opencode" -> listOf(
                 provider.endpoint.ifBlank { "opencode" },
                 "run", "--format", "json", "--standalone",
-                "--session", sessionId,
-                prompt,
-            )
+            ) + modelFlag(provider.model) + listOf("--session", sessionId, prompt)
 
             "pi" -> listOf(
                 provider.endpoint.ifBlank { "pi" },
                 "-p", "--mode", "json",
-                "--session-id", sessionId,
-                prompt,
-            )
+            ) + modelFlag(provider.model) + listOf("--session-id", sessionId, prompt)
 
             else -> {
                 onFailure("未知的本地 agent：${provider.id}")
@@ -67,6 +68,10 @@ internal object NativeAgentProvider {
             null
         }
     }
+
+    /** `--model` 只在用户选过模型时传：空 = 跟随 agent 自己的默认配置。 */
+    private fun modelFlag(model: String): List<String> =
+        if (model.isBlank()) emptyList() else listOf("--model", model)
 
     /** 读 stdout 直到进程结束；结束前把 stderr 作为失败原因交出去。 */
     fun consume(process: Process, onEvent: (AgentEvent) -> Unit) {
@@ -142,6 +147,9 @@ internal object AgentDiscovery {
             model = model,
             skills = skills,
             note = if (version == null) "找到了可执行文件，但 --version 没有输出" else null,
+            // 不带 --model 时 opencode 会落到它自己的默认/免费额度（用户实测：
+            // 「free tier can only be used from within OpenCode」），所以把可选模型都列出来。
+            models = runLines(exe, "models").take(500),
         )
     }
 
@@ -157,6 +165,8 @@ internal object AgentDiscovery {
                 listOfNotNull(provider, name).joinToString("/").ifBlank { null }
             }
         val skills = (listSkills(home(".pi/skills")) + listSkills(home(".agents/skills"))).distinct().sorted()
+        val models = piModels(settings?.let { readText(it) })
+            .let { ids -> if (model != null && model !in ids) listOf(model) + ids else ids }
         return DiscoveredAgent(
             id = "pi",
             name = "pi",
@@ -165,6 +175,7 @@ internal object AgentDiscovery {
             model = model,
             skills = skills,
             note = if (version == null) "找到了可执行文件，但 --version 没有输出" else null,
+            models = models,
         )
     }
 
@@ -203,6 +214,26 @@ internal object AgentDiscovery {
             .firstOrNull { it.isNotBlank() }
             ?.let { line -> line.replace(Regex("^[^0-9]*"), "").ifBlank { line } }
     }.getOrNull()
+
+    /** 读多行输出（`opencode models`）；stderr 丢掉（里面的 warning 不是模型 id）。 */
+    private fun runLines(exe: String, arg: String): List<String> = runCatching {
+        val process = ProcessBuilder(exe, arg).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        val text = process.inputStream.bufferedReader().readText()
+        if (!process.waitFor(10, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            return emptyList()
+        }
+        text.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.toList()
+    }.getOrDefault(emptyList())
+
+    /** pi 的候选模型 = `settings.json` 的 `enabledModels`（`--model` 收这些 id 与模式）。 */
+    internal fun piModels(settingsJson: String?): List<String> = runCatching {
+        val root = Json.parseToJsonElement(settingsJson ?: return emptyList()).jsonObject
+        root["enabledModels"]?.jsonArray
+            ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+    }.getOrDefault(emptyList())
 
     private fun listSkills(dir: Path): List<String> =
         if (!Files.isDirectory(dir)) {

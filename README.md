@@ -182,7 +182,9 @@ macOS 上内容延伸到标题栏（红绿灯保留、标题栏隐藏）；jlink
 
 - **Agent 不内置模型**：启动时扫 `PATH` 找 `opencode` / `pi`（设置里存过的绝对路径也会当候选，
   因为从 Finder 启动的 `.app` 只有 launchd 的极简 PATH），读它们的配置与 skill 列表；
-  用户在卡片上点「启用」后才可选。对话经 CLI 子进程流式接入（`--format json` / `--mode json`）。
+  用户在卡片上点「启用」后才可选。**模型可在 Agent 页头部的下拉里自己选**（写进 provider 配置，
+  发消息时作为 `--model` 传给子进程；选「默认」就跟随 agent 自己的配置——opencode 不指定模型会落到
+  它的免费额度）。对话经 CLI 子进程流式接入（`--format json` / `--mode json`）。
 - **连接**：SQLite 驱动随包；PostgreSQL / MySQL / ClickHouse / DuckDB 缺驱动时连接页给
   「下载驱动」按钮，从 Maven Central 取官方 jar（校验 SHA-1）到 `~/.ozml-lineage/drivers`
   后自动重连；也可以手动把 jar 放进去（不打包、不改驱动）。
@@ -196,6 +198,8 @@ macOS 上内容延伸到标题栏（红绿灯保留、标题栏隐藏）；jlink
 ```bash
 ./gradlew :desktop:jvmTest -PozmlManualChecks=true                 # 离屏渲染 PNG
 ./gradlew :desktop:jvmTest -PozmlManualChecks=true -PozmlLiveProvider=pi   # 真跑一轮 agent
+./gradlew :desktop:jvmTest -PozmlManualChecks=true -PozmlLiveProvider=opencode \
+  -PozmlLiveModel=opencode-go/deepseek-v4.1-flash                  # 指定模型真跑一轮
 ```
 
 ### Web UI（`web/`，M4 起步）

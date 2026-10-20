@@ -270,6 +270,21 @@ internal class WorkbenchState(
         }
     }
 
+    /** 已启用 Provider 的可切换模型（发现阶段从 agent 自己的清单里读的）。 */
+    fun providerModels(providerId: String?): List<String> =
+        agents.firstOrNull { it.id == providerId }?.models.orEmpty()
+
+    /** 选模型（空串 = 跟随 agent 自己的默认）；落设置，下一次发消息即生效。 */
+    fun selectModel(providerId: String, model: String) {
+        updateStore { state ->
+            state.copy(
+                providers = state.providers.map {
+                    if (it.id == providerId) it.copy(model = model) else it
+                },
+            )
+        }
+    }
+
     fun newAgentSession() {
         run?.cancel()
         run = null

@@ -48,11 +48,13 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import io.github.workeron9.ozmoz.lineage.desktop.OpenedFile
 import io.github.workeron9.ozmoz.lineage.desktop.model.Activity
 import io.github.workeron9.ozmoz.lineage.desktop.model.ActivityKind
 import io.github.workeron9.ozmoz.lineage.desktop.model.DiscoveredAgent
 import io.github.workeron9.ozmoz.lineage.desktop.model.InputMode
+import io.github.workeron9.ozmoz.lineage.desktop.model.ProviderConfig
 
 /**
  * AGENT 目的地：长期会话空间。
@@ -114,12 +116,12 @@ private fun AgentHeader(state: WorkbenchState) {
                 }
             }
         }
-        agent?.model?.takeIf { it.isNotBlank() }?.let {
-            Text(it, color = tokens.textMuted, fontFamily = FontFamily.Monospace, fontSize = density.bodySize)
+        if (current != null) {
+            ModelPicker(state, current, agent?.model)
         }
         agent?.let {
             Text(
-                "  · ${it.skills.size} 个 skills",
+                "· ${it.skills.size} 个 skills",
                 color = tokens.textMuted,
                 fontSize = density.bodySize,
             )
@@ -428,6 +430,80 @@ private fun ProviderOnboarding(state: WorkbenchState) {
         }
         TextButton(onClick = { state.scanAgents() }) { Text("重新扫描") }
     }
+}
+
+/**
+ * 模型选择：本机 agent 自己的模型清单（opencode `models` / pi `enabledModels`），
+ * 选中的 id 落进 ProviderConfig.model，发消息时作为 `--model` 传给子进程。
+ *
+ * 为什么要有它：opencode 不带 `--model` 会落到它自己的默认额度（实测报
+ * 「free tier can only be used from within OpenCode」），用户必须能自己挑模型。
+ */
+@Composable
+private fun ModelPicker(state: WorkbenchState, provider: ProviderConfig, defaultModel: String?) {
+    val tokens = LocalTokens.current
+    val density = LocalUiDensity.current
+    val models = state.providerModels(provider.id)
+    var open by remember { mutableStateOf(false) }
+    val label = provider.model.ifBlank {
+        defaultModel?.takeIf { it.isNotBlank() }?.let { "默认（$it）" } ?: "默认"
+    }
+
+    TextButton(onClick = { open = true }, enabled = models.isNotEmpty()) {
+        Text("模型 · $label", fontFamily = FontFamily.Monospace, fontSize = density.bodySize)
+        if (models.isNotEmpty()) Text("  ▾", color = tokens.textFaint, fontSize = density.bodySize)
+    }
+    if (!open) return
+    var filter by remember { mutableStateOf("") }
+    val shown = remember(models, filter) {
+        if (filter.isBlank()) models else models.filter { it.contains(filter, ignoreCase = true) }
+    }
+    Dialog(onDismissRequest = { open = false }) {
+        Surface(shape = RoundedCornerShape(12.dp), tonalElevation = 4.dp) {
+            Column(Modifier.width(520.dp).height(480.dp).padding(16.dp)) {
+                Text("选择 ${provider.name} 的模型", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = filter,
+                    onValueChange = { filter = it },
+                    placeholder = { Text("筛选（共 ${models.size} 个）", fontSize = density.bodySize) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        PickRow("默认（跟随 agent 自己的配置）", provider.model.isBlank()) {
+                            state.selectModel(provider.id, "")
+                            open = false
+                        }
+                    }
+                    items(shown.size) { index ->
+                        val model = shown[index]
+                        PickRow(model, model == provider.model) {
+                            state.selectModel(provider.id, model)
+                            open = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickRow(text: String, selected: Boolean, onClick: () -> Unit) {
+    val tokens = LocalTokens.current
+    val density = LocalUiDensity.current
+    Text(
+        text,
+        color = if (selected) tokens.accent else tokens.text,
+        fontFamily = FontFamily.Monospace,
+        fontSize = density.bodySize,
+        modifier = Modifier.fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+    )
 }
 
 @Composable

@@ -248,6 +248,7 @@ class RenderCheck {
                 version = "2.0.29",
                 model = "example/model-a",
                 skills = List(8) { "skill-$it" },
+                models = listOf("opencode-go/deepseek-v4.1-flash", "claude-code/claude-opus-5-5"),
             ),
             io.github.workeron9.ozmoz.lineage.desktop.model.DiscoveredAgent(
                 id = "pi",
@@ -261,6 +262,15 @@ class RenderCheck {
         state.scanning = false
         state.page = Page.AGENT
         render("agent-onboarding", ThemeMode.LIGHT, state)
+
+        // 已启用 + 选过模型：头部要能看出当前模型并可切换。
+        val chatting = WorkbenchState(OpenedFile("demo.sql", sql), DesktopStoreState())
+        chatting.agents = state.agents
+        chatting.enableProvider(state.agents.first())
+        chatting.selectModel("opencode", "opencode-go/deepseek-v4.1-flash")
+        chatting.scanning = false
+        chatting.page = Page.AGENT
+        render("agent-chat", ThemeMode.LIGHT, chatting)
     }
 
     private fun waitUntil(condition: () -> Boolean) {

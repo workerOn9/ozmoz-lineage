@@ -22,6 +22,8 @@ public data class DiscoveredAgent(
     val skills: List<String>,
     /** 探测失败的原因（装是装了，但 --version 或配置读不出来）。 */
     val note: String? = null,
+    /** 这个 agent 可选的模型 id（opencode 的 `models` 输出 / pi 的 enabledModels）。空 = 枚举不到。 */
+    val models: List<String> = emptyList(),
 )
 
 /**

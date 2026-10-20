@@ -86,6 +86,8 @@ tasks.withType<Test>().configureEach {
     systemProperty("ozml.manual.checks", providers.gradleProperty("ozmlManualChecks").getOrElse("false"))
     // 真 agent 联调（-PozmlLiveProvider=opencode）也走 Gradle 属性，测试 JVM 才看得到。
     systemProperty("ozml.live.provider", providers.gradleProperty("ozmlLiveProvider").getOrElse(""))
+    // 指定模型（-PozmlLiveModel=provider/model）：不指定就跟随 agent 自己的默认。
+    systemProperty("ozml.live.model", providers.gradleProperty("ozmlLiveModel").getOrElse(""))
     systemProperty("ozml.live.prompt", providers.gradleProperty("ozmlLivePrompt").getOrElse("Reply with exactly: OK"))
 }
 
